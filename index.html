@@ -2,241 +2,87 @@
 <html lang="it">
 <head>
 <!-- Playables SDK -->
-<script>// Playables SDK v1.0.0
-// Game lifecycle bridge: rAF-based game-ready detection + event communication
+<script>
 (function() {
   'use strict';
-
-  // Idempotency: skip if already initialized (e.g., server-side injection
-  // followed by client-side inject-javascript via the Bloks webview component).
   if (window.playablesSDK) return;
-
   var HANDLER_NAME = 'playablesGameEventHandler';
   var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
   var RAF_FRAME_THRESHOLD = 3;
-
   var gameReadySent = false;
   var firstInteractionSent = false;
-  var errorSent = false;
   var frameCount = 0;
   var originalRAF = window.requestAnimationFrame;
-
-  // --- Transport Layer ---
-
-  function hasIOSBridge() {
-    return !!(window.webkit &&
-              window.webkit.messageHandlers &&
-              window.webkit.messageHandlers[HANDLER_NAME]);
-  }
-
-  function hasAndroidBridge() {
-    return !!(window[ANDROID_BRIDGE_NAME] &&
-              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
-  }
-
-  function isInIframe() {
-    return !!(window.parent && window.parent !== window);
-  }
-
-  function sendEvent(eventName, payload) {
-    var message = {
-      type: eventName,
-      payload: payload || {},
-      timestamp: Date.now()
-    };
-
-    if (hasIOSBridge()) {
-      try {
-        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
-      } catch (e) { /* ignore */ }
-      return;
-    }
-
-    if (hasAndroidBridge()) {
-    try {
-      var p = payload || {};
-      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
-      p.timestamp = message.timestamp;
-      window[ANDROID_BRIDGE_NAME].postEvent(
-        eventName,
-        JSON.stringify(p)
-      );
-    } catch (e) { /* ignore */ }
-    return;
-  }
-
-    if (isInIframe()) {
-      try {
-        window.parent.postMessage(message, '*');
-      } catch (e) { /* ignore */ }
-      return;
-    }
-  }
-
-  // --- rAF Game-Ready Detection ---
-
-  function onFrame() {
-    if (gameReadySent) return;
-
-    frameCount++;
-    if (frameCount >= RAF_FRAME_THRESHOLD) {
-      gameReadySent = true;
-      sendEvent('game_ready', {
-        frame_count: frameCount,
-        detected_at: Date.now()
-      });
-      return;
-    }
-
-    originalRAF.call(window, onFrame);
-  }
-
-  if (originalRAF) {
-    window.requestAnimationFrame = function(callback) {
-      if (!gameReadySent) {
-        return originalRAF.call(window, function(timestamp) {
-          frameCount++;
-          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
-            gameReadySent = true;
-            sendEvent('game_ready', {
-              frame_count: frameCount,
-              detected_at: Date.now()
-            });
-          }
-          callback(timestamp);
-        });
-      }
-      return originalRAF.call(window, callback);
-    };
-  }
-
-  // --- First User Interaction Detection ---
-
-  function setupFirstInteractionDetection() {
-    var events = ['touchstart', 'mousedown', 'keydown'];
-
-    function onFirstInteraction() {
-      if (firstInteractionSent) return;
-      firstInteractionSent = true;
-      sendEvent('user_interaction_start', null);
-
-      for (var i = 0; i < events.length; i++) {
-        document.removeEventListener(events[i], onFirstInteraction, true);
-      }
-    }
-
-    for (var i = 0; i < events.length; i++) {
-      document.addEventListener(events[i], onFirstInteraction, true);
-    }
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
-  } else {
-    setupFirstInteractionDetection();
-  }
-
-  // --- Auto Error Capture ---
-
-  window.addEventListener('error', function(event) {
-    if (errorSent) return;
-    errorSent = true;
-    sendEvent('error', {
-      message: event.message || 'Unknown error',
-      source: event.filename || '',
-      lineno: event.lineno || 0,
-      colno: event.colno || 0,
-      auto_captured: true
-    });
-  });
-
-  window.addEventListener('unhandledrejection', function(event) {
-    if (errorSent) return;
-    errorSent = true;
-    var reason = event.reason;
-    sendEvent('error', {
-      message: (reason instanceof Error) ? reason.message : String(reason),
-      type: 'unhandled_promise_rejection',
-      auto_captured: true
-    });
-  });
-
-  // --- Public API ---
-
-  window.playablesSDK = {
-    complete: function(score) {
-      sendEvent('game_ended', {
-        score: score,
-        completed: true
-      });
-    },
-
-    error: function(message) {
-      if (errorSent) return;
-      errorSent = true;
-      sendEvent('error', {
-        message: message || 'Unknown error',
-        auto_captured: false
-      });
-    },
-
-    sendEvent: function(eventName, payload) {
-      if (!eventName || typeof eventName !== 'string') return;
-      sendEvent(eventName, payload);
-    }
-  };
-
-  // Kick off rAF detection in case no game code calls rAF immediately
-  if (originalRAF) {
-    originalRAF.call(window, onFrame);
-  }
-})();</script>
-<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
-(function() {
-  if (window.__playableTouchPatchInstalled) return;
-  window.__playableTouchPatchInstalled = true;
-  var origAdd = EventTarget.prototype.addEventListener;
-  var blockedTypes = { touchstart: 1, touchmove: 1, wheel: 1 };
-  EventTarget.prototype.addEventListener = function(type, listener, options) {
-    if (blockedTypes[type]) {
-      if (options === undefined || options === null) {
-        options = { passive: true };
-      } else if (typeof options === 'boolean') {
-        options = { capture: options, passive: true };
-      } else {
-        options = Object.assign({}, options, { passive: true });
-      }
-    }
-    return origAdd.call(this, type, listener, options);
-  };
+  function sendEvent(n,p){var m={type:n,payload:p||{},timestamp:Date.now()};if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers[HANDLER_NAME]){try{window.webkit.messageHandlers[HANDLER_NAME].postMessage(m)}catch(e){}return}if(window[ANDROID_BRIDGE_NAME]&&typeof window[ANDROID_BRIDGE_NAME].postEvent==='function'){try{var q=p||{};q.__secureToken=window.__fbAndroidBridgeAuthToken||'';q.timestamp=m.timestamp;window[ANDROID_BRIDGE_NAME].postEvent(n,JSON.stringify(q))}catch(e){}return}if(window.parent&&window.parent!==window){try{window.parent.postMessage(m,'*')}catch(e){}}}
+  function onFrame(){if(gameReadySent)return;frameCount++;if(frameCount>=RAF_FRAME_THRESHOLD){gameReadySent=true;sendEvent('game_ready',{frame_count:frameCount,detected_at:Date.now()});return}originalRAF.call(window,onFrame)}
+  if(originalRAF){window.requestAnimationFrame=function(cb){if(!gameReadySent){return originalRAF.call(window,function(t){frameCount++;if(frameCount>=RAF_FRAME_THRESHOLD&&!gameReadySent){gameReadySent=true;sendEvent('game_ready',{frame_count:frameCount,detected_at:Date.now()})}cb(t)})}return originalRAF.call(window,cb)}}
+  function setup(){var ev=['touchstart','mousedown','keydown'];function first(){if(firstInteractionSent)return;firstInteractionSent=true;sendEvent('user_interaction_start',null);ev.forEach(e=>document.removeEventListener(e,first,true))}ev.forEach(e=>document.addEventListener(e,first,true))}
+  if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',setup)}else{setup()}
+  window.playablesSDK={complete:s=>sendEvent('game_ended',{score:s,completed:true}),error:m=>sendEvent('error',{message:m||'Unknown'}),sendEvent:sendEvent};
+  if(originalRAF)originalRAF.call(window,onFrame);
 })();
-</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
-<script>
-(function(){'use strict';if(window.playablesSDK)return;var n='playablesGameEventHandler',a='_MetaPlayablesBridge',t=3,s=!1,i=!1,o=0,r=window.requestAnimationFrame;function e(n,t){var e={type:n,payload:t||{},timestamp:Date.now()};if(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers[n]){try{window.webkit.messageHandlers[n].postMessage(e)}catch(n){}return}if(window[a]&&'function'==typeof window[a].postEvent){try{var i=t||{};i.__secureToken=window.__fbAndroidBridgeAuthToken||'',i.timestamp=e.timestamp,window[a].postEvent(n,JSON.stringify(i))}catch(n){}return}window.parent&&window.parent!==window&&window.parent.postMessage(e,'*')}function d(){s||(o++,o>=t&&(s=!0,e('game_ready',{frame_count:o,detected_at:Date.now()})),r&&r.call(window,d))}r&&(window.requestAnimationFrame=function(n){return s?r.call(window,n):r.call(window,function(t){o++,o>=t&&!s&&(s=!0,e('game_ready',{frame_count:o,detected_at:Date.now()})),n(t)})});var l=['touchstart','mousedown','keydown'];function c(){i||(i=!0,e('user_interaction_start',null),l.forEach(function(n){document.removeEventListener(n,c,!0)}))}l.forEach(function(n){document.addEventListener(n,c,!0)}),window.playablesSDK={complete:function(n){e('game_ended',{score:n,completed:!0})},error:function(n){e('error',{message:n||'Unknown'})},sendEvent:e},r&&r.call(window,d)})();
 </script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Chess Evolution v2.0</title>
+<title>Chess RPG: Evolution Stage 1</title>
 <style>
-*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:#0b0f14;color:#e5e7eb;font-family:Inter,system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px;overscroll-behavior:none;touch-action:manipulation}
-#root{width:100%;max-width:760px}.app{background:#121821;border:1px solid #1f2937;border-radius:16px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.4);position:relative}
-h1{margin:0 0 4px;text-align:center;font-size:22px}.info{text-align:center;color:#9ca3af;margin-bottom:8px;font-size:14px}
-.energy-bar{display:flex;justify-content:space-between;max-width:520px;margin:0 auto 8px;font-size:13px;color:#cbd5e1}.dots{letter-spacing:2px}
-.board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;max-width:520px;aspect-ratio:1/1;margin:0 auto;border-radius:12px;overflow:hidden;border:2px solid #1f2937}
-.cell{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;font-size:clamp(26px,6.5vw,42px);cursor:pointer;user-select:none}
-.cell.light{background:#ebecd0}.cell.dark{background:#739552}.cell.sel{box-shadow:inset 0 0 0 3px #f59e0b}
-.cell.valid::after{content:"";position:absolute;width:26%;height:26%;border-radius:50%;background:rgba(16,185,129,.8)}
-.cell.valid.has-piece::after{width:78%;height:78%;border-radius:10px;background:rgba(239,68,68,.75)}
-.piece.w{color:#fff;text-shadow:0 1px 2px #000}.piece.b{color:#111827}
-.evo{position:absolute;top:3px;right:4px;font-size:14px}.double{position:absolute;bottom:3px;left:4px;font-size:12px;opacity:.8}
-.panel{margin:12px auto 0;max-width:520px;background:#0e141c;border:1px solid #1f2937;border-radius:12px;padding:12px;display:grid;gap:8px;min-height:110px}
-.row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.btn{background:#10b981;color:#fff;border:none;padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer}
-.btn:disabled{opacity:.4;cursor:not-allowed}
-.hint{color:#9ca3af;font-size:12px}
-.abil{font-size:13px;color:#cbd5e1;min-height:40px}
-.game-over{position:absolute;inset:0;background:rgba(11,15,20,.95);display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:16px;z-index:10}
-.game-over h2{font-size:30px;color:#f59e0b;margin-bottom:8px}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:#060913; color:#f1f5f9;
+    font-family:system-ui,-apple-system,sans-serif;
+    display:flex; align-items:center; justify-content:center; padding:12px;
+    overscroll-behavior:none; touch-action:manipulation;
+  }
+  #root{width:100%;max-width:760px}
+  
+  .app{ 
+    background:#0b0f19; border:2px solid #1e293b; border-radius:20px; padding:16px; 
+    box-shadow:0 0 30px rgba(56,189,248,0.15); position:relative; 
+  }
+  h1{margin:0 0 4px;text-align:center;font-size:24px;color:#38bdf8;text-shadow:0 0 10px rgba(56,189,248,0.4);font-weight:800}
+  .info{text-align:center;color:#64748b;margin-bottom:12px;font-size:13px;font-weight:500}
+  
+  .board{
+    display:grid; grid-template-columns:repeat(8,1fr); width:100%; max-width:520px;
+    aspect-ratio:1/1; margin:0 auto; border-radius:12px; overflow:hidden; 
+    border:3px solid #334155; box-shadow:0 0 25px rgba(0,0,0,0.6);
+  }
+  .cell{position:relative; display:flex; align-items:center; justify-content:center; aspect-ratio:1/1; font-size:clamp(28px,7vw,46px); cursor:pointer; user-select:none;}
+  .cell.light{background:#1e293b}
+  .cell.dark{background:#0f172a}
+  
+  .cell.sel{box-shadow:inset 0 0 0 3px #a855f7; background:rgba(168,85,247,0.15)}
+  .cell.valid::after{content:""; position:absolute; width:24%; height:24%; border-radius:50%; background:#22c55e; box-shadow:0 0 10px #22c55e;}
+  .cell.valid.has-piece::after{width:75%; height:75%; border-radius:50%; background:transparent; border:3px solid #f43f5e; box-shadow:0 0 8px #f43f5e;}
+  
+  .piece.w{color:#38bdf8; text-shadow:0 0 12px rgba(56,189,248,0.7), 0 2px 4px rgba(0,0,0,0.5)}
+  .piece.b{color:#f43f5e; text-shadow:0 0 12px rgba(244,63,94,0.7), 0 2px 4px rgba(0,0,0,0.5)}
+  
+  /* Badge di Livello Grafico sul pezzo */
+  .lvl-badge{
+    position:absolute; top:2px; right:4px; font-size:10px; font-weight:800;
+    padding:1px 4px; border-radius:4px; background:#1e293b; border:1px solid #475569;
+  }
+  .lvl-badge.l2{color:#eab308; border-color:#eab308; box-shadow:0 0 4px rgba(234,179,8,0.3)}
+  .lvl-badge.l3{color:#a855f7; border-color:#a855f7; box-shadow:0 0 6px rgba(168,85,247,0.5)}
+  
+  .panel{margin:14px auto 0; max-width:520px; background:#030712; border:1px solid #1e293b; border-radius:14px; padding:12px; display:grid; gap:6px; min-height:90px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .turn-indicator{font-size:13px; font-weight:700; padding:4px 10px; border-radius:6px; background:#1e293b}
+  .turn-indicator.w{color:#38bdf8; border:1px solid rgba(56,189,248,0.3)}
+  .turn-indicator.b{color:#f43f5e; border:1px solid rgba(244,63,94,0.3)}
+  
+  .btn{
+    background:#22c55e; color:#fff; border:none; padding:8px 16px; border-radius:8px; 
+    font-weight:700; cursor:pointer; box-shadow:0 0 10px rgba(34,197,94,0.3);
+  }
+  .abil{font-size:13px; color:#cbd5e1; line-height:1.4}
+  .xp-bar-container{width:120px; height:6px; background:#1e293b; border-radius:3px; overflow:hidden; margin-top:4px}
+  .xp-bar-fill{height:100%; background:#22c55e; box-shadow:0 0 5px #22c55e; transition:width 0.3s}
+  
+  .game-over{position:absolute;inset:0;background:rgba(3,7,18,0.95);display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:20px;z-index:10}
+  .game-over h2{font-size:32px;color:#eab308;margin-bottom:12px;text-shadow:0 0 15px rgba(234,179,8,0.4)}
 </style>
 </head>
 <body>
@@ -248,50 +94,99 @@ h1{margin:0 0 4px;text-align:center;font-size:22px}.info{text-align:center;color
 const {useState}=React;
 const P='P',R='R',N='N',B='B',Q='Q',K='K',W='w',BK='b';
 const ICONS={w:{K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙'},b:{K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟'}};
-const mk=(t,c)=>({type:t,color:c,evolved:false,doubleUsed:false});
-const clone=b=>b.map(r=>r.map(p=>p?{...p}:null));
-function init(){const b=Array(8).fill(0).map(()=>Array(8).fill(null));const o=[R,N,B,Q,K,B,N,R];o.forEach((t,c)=>{b[0][c]=mk(t,BK);b[7][c]=mk(t,W)});for(let c=0;c<8;c++){b[1][c]=mk(P,BK);b[6][c]=mk(P,W)}return b}
+const NAMES={P:'Pedone Core',R:'Torre',N:'Cavallo',B:'Alfiere',Q:'Regina',K:'Re'};
+const EVOLVED_NAMES={
+  P:{ 1:'Pedone Core', 2:'Soldato ★', 3:'Cavaliere Reale ★★' }
+};
 
-function pawnMoves(b,r,c){
+const mk=(t,c)=>({type:t,color:c,level:1,xp:0});
+const clone=b=>b.map(r=>r.map(p=>p?{...p}:null));
+
+function init(){
+  const b=Array(8).fill(0).map(()=>Array(8).fill(null));
+  const o=[R,N,B,Q,K,B,N,R];
+  o.forEach((t,c)=>{b[0][c]=mk(t,BK);b[7][c]=mk(t,W)});
+  for(let c=0;c<8;c++){b[1][c]=mk(P,BK);b[6][c]=mk(P,W)}
+  return b;
+}
+
+// Calcolo mosse condizionato dal livello (Fase 1: Focus Pedone)
+function pawnMoves(b,r,c,level){
   const p=b[r][c],d=p.color===W?-1:1,m=[];
   const f=r+d;
+  
+  // LIVELLO 3: Cavaliere Reale (Muove ovunque a 1 casella di distanza)
+  if(level===3){
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if(dr||dc){
+      const nr=r+dr,nc=c+dc;
+      if(nr>=0&&nr<8&&nc>=0&&nc<8){
+        const t=b[nr][nc];
+        if(!t||t.color!==p.color)m.push({r:nr,c:nc});
+      }
+    }
+    return m;
+  }
+
+  // LIVELLO 1 e 2: Movimenti base avanti
   if(f>=0&&f<8){
     if(!b[f][c])m.push({r:f,c});
-    for(const dc of[-1,1]){const nc=c+dc;if(nc>=0&&nc<8&&b[f][nc]&&b[f][nc].color!==p.color)m.push({r:f,c:nc})}
-  }
-  if(!p.evolved){
-    const start=p.color===W?6:1;
-    if(r===start&&!b[f][c]&&!b[f+d]?.[c])m.push({r:f+d,c});
-  }else{
-    // indietro 1
-    const back=r-d;
-    if(back>=0&&back<8&&!b[back][c])m.push({r:back,c});
-    // avanti 2 una volta
-    if(!p.doubleUsed&&f>=0&&f<8&&!b[f][c]){
-      const f2=r+2*d;
-      if(f2>=0&&f2<8&&!b[f2][c])m.push({r:f2,c,special:'double'});
+    for(const dc of[-1,1]){
+      const nc=c+dc;
+      if(nc>=0&&nc<8&&b[f][nc]&&b[f][nc].color!==p.color)m.push({r:f,c:nc});
     }
   }
+  
+  // LIVELLO 1: Doppio passo iniziale
+  if(level===1){
+    const start=p.color===W?6:1;
+    if(r===start&&!b[f][c]&&!b[f+d]?.[c])m.push({r:f+d,c});
+  }
+  
+  // LIVELLO 2: Soldato (Aggiunge passo indietro se libero)
+  if(level===2){
+    const back=r-d;
+    if(back>=0&&back<8&&!b[back][c])m.push({r:back,c});
+  }
+
   return m;
 }
+
 function moves(b,r,c){
   const p=b[r][c];if(!p)return[];
-  if(p.type===P)return pawnMoves(b,r,c);
+  if(p.type===P) return pawnMoves(b,r,c,p.level);
+  
+  // Altri pezzi (Standard per la Fase 1)
+  if(p.type===K){
+    const m=[];
+    for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if(dr||dc){
+      const nr=r+dr,nc=c+dc;if(nr>=0&&nr<8&&nc>=0&&nc<8){const t=b[nr][nc];if(!t||t.color!==p.color)m.push({r:nr,c:nc})}
+    }
+    return m;
+  }
   const dirs={R:[[1,0],[-1,0],[0,1],[0,-1]],B:[[1,1],[1,-1],[-1,1],[-1,-1]],Q:[[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]};
-  if(p.type===N){const m=[];[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(([dr,dc])=>{const nr=r+dr,nc=c+dc;if(nr>=0&&nr<8&&nc>=0&&nc<8){const t=b[nr][nc];if(!t||t.color!==p.color)m.push({r:nr,c:nc})}});return m}
-  if(p.type===K){const m=[];for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if(dr||dc){const nr=r+dr,nc=c+dc;if(nr>=0&&nr<8&&nc>=0&&nc<8){const t=b[nr][nc];if(!t||t.color!==p.color)m.push({r:nr,c:nc})}}return m}
-  const ds=dirs[p.type]||[];const m=[];ds.forEach(([dr,dc])=>{for(let i=1;i<8;i++){const nr=r+dr*i,nc=c+dc*i;if(nr<0||nr>=8||nc<0||nc>=8)break;const t=b[nr][nc];if(!t)m.push({r:nr,c:nc});else{if(t.color!==p.color)m.push({r:nr,c:nc});break}}});return m;
+  if(p.type===N){
+    const m=[];
+    [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(([dr,dc])=>{
+      const nr=r+dr,nc=c+dc;if(nr>=0&&nr<8&&nc>=0&&nc<8){const t=b[nr][nc];if(!t||t.color!==p.color)m.push({r:nr,c:nc})}
+    });
+    return m;
+  }
+  const ds=dirs[p.type]||[];const m=[];
+  ds.forEach(([dr,dc])=>{
+    for(let i=1;i<8;i++){
+      const nr=r+dr*i,nc=c+dc*i;if(nr<0||nr>=8||nc<0||nc>=8)break;
+      const t=b[nr][nc];if(!t)m.push({r:nr,c:nc});else{if(t.color!==p.color)m.push({r:nr,c:nc});break}
+    }
+  });
+  return m;
 }
 
 function App(){
   const[board,setBoard]=useState(init);
   const[turn,setTurn]=useState(W);
-  const[energy,setEnergy]=useState({w:0,b:0});
   const[sel,setSel]=useState(null);
   const[valid,setValid]=useState([]);
   const[win,setWin]=useState(null);
-
-  const gain=()=>setEnergy(e=>({...e,[turn]:Math.min(3,e[turn]+1)}));
 
   const click=(r,c)=>{
     if(win)return;
@@ -299,40 +194,77 @@ function App(){
     if(sel){
       const [sr,sc]=sel;const s=board[sr][sc];const v=valid.find(m=>m.r===r&&m.c===c);
       if(v&&s&&s.color===turn){
-        const nb=clone(board);const mover=nb[sr][sc];
-        if(board[r][c]?.type===K){setWin(turn===W?'Bianco':'Nero');window.playablesSDK?.complete(100)}
-        nb[r][c]=mover;nb[sr][sc]=null;
-        if(mover.type===P&&mover.evolved&&v.special==='double')mover.doubleUsed=true;
-        setBoard(nb);setTurn(turn===W?BK:W);gain();setSel(null);setValid([]);return;
+        const nb=clone(board);
+        const attacker=nb[sr][sc];
+        const target=board[r][c];
+        
+        // CONDIZIONE VITTORIA ARCADE: Cattura del Re
+        if(target?.type===K){
+          setWin(turn===W?'Cyber-Cyan (Bianco)':'Hacker-Crimson (Nero)');
+          window.playablesSDK?.complete(100);
+        }
+        
+        // GESTIONE SISTEMA XP (Solo se c'è una cattura)
+        if(target && target.color !== turn){
+          attacker.xp += 1;
+          if(attacker.xp >= 3 && attacker.level < 3){
+            attacker.level += 1;
+            attacker.xp = 0;
+          }
+        }
+        
+        nb[r][c]=attacker;
+        nb[sr][sc]=null;
+        
+        setBoard(nb);
+        setTurn(turn===W?BK:W);
+        setSel(null);
+        setValid([]);
+        return;
       }
     }
     if(p&&p.color===turn){setSel([r,c]);setValid(moves(board,r,c))}else{setSel(null);setValid([])}
   };
 
-  const evolve=()=>{
-    if(!sel||energy[turn]<3)return;
-    const [r,c]=sel;const p=board[r][c];if(!p||p.evolved||p.color!==turn)return;
-    const nb=clone(board);nb[r][c].evolved=true;
-    setBoard(nb);setTurn(turn===W?BK:W);gain();setSel(null);setValid([]);
-  };
-
-  const restart=()=>{setBoard(init());setTurn(W);setEnergy({w:0,b:0});setSel(null);setValid([]);setWin(null)};
-  const dots=n=>'●'.repeat(n)+'○'.repeat(3-n);
+  const restart=()=>{setBoard(init());setTurn(W);setSel(null);setValid([]);setWin(null)};
   const sp=sel?board[sel[0]][sel[1]]:null;
 
+  // Determina il nome da mostrare in base al livello
+  const getPieceName=(piece)=>{
+    if(piece.type===P) return EVOLVED_NAMES[P][piece.level];
+    return NAMES[piece.type] + (piece.level > 1 ? ` Lvl.${piece.level}` : '');
+  };
+
   return(<div className="app">
-    {win&&<div className="game-over"><h2>🏆 {win} vince!</h2><button className="btn" onClick={restart}>Nuova partita</button></div>}
-    <h1>♟️ Chess Evolution v2</h1>
-    <div className="info">Ogni mossa = +1 energia. A 3 puoi evolvere.</div>
-    <div className="energy-bar"><div>Bianco: <span className="dots">{dots(energy.w)}</span></div><div>Nero: <span className="dots">{dots(energy.b)}</span></div></div>
-    <div className="board">{board.map((row,r)=>row.map((p,c)=>{const isSel=sel&&sel[0]===r&&sel[1]===c;const vm=valid.find(m=>m.r===r&&m.c===c);const isV=!!vm;const dark=(r+c)%2;return(<div key={r+'-'+c} onClick={()=>click(r,c)} className={`cell ${dark?'dark':'light'} ${isSel?'sel':''} ${isV?'valid':''} ${isV&&p?'has-piece':''}`}>{p&&<><span className={`piece ${p.color}`}>{ICONS[p.color][p.type]}</span>{p.evolved&&<span className="evo">★</span>}{p.type===P&&p.evolved&&!p.doubleUsed&&<span className="double">2x</span>}</>}</div>)}))}</div>
+    {win&&<div className="game-over"><h2>🏆 {win} vince!</h2><button className="btn" onClick={restart}>Riavvia Arena</button></div>}
+    <h1>♟️ Chess RPG: Evolution Arena</h1>
+    <div className="info">Fase 1: Sconfiggi il Re nemico. Cattura unità per ottenere XP ed evolverti!</div>
+    
+    <div className="board">{board.map((row,r)=>row.map((p,c)=>{
+      const isSel=sel&&sel[0]===r&&sel[1]===c;
+      const vm=valid.find(m=>m.r===r&&m.c===c);
+      const isV=!!vm;const dark=(r+c)%2;
+      return(<div key={r+'-'+c} onClick={()=>click(r,c)} className={`cell ${dark?'dark':'light'} ${isSel?'sel':''} ${isV?'valid':''} ${isV&&p?'has-piece':''}`}>
+        {p&&<><span className={`piece ${p.color}`}>{ICONS[p.color][p.type]}</span>
+        {p.level > 1 && <span className={`lvl-badge l${p.level}`}>L{p.level}</span>}</>}
+      </div>)
+    }))}</div>
+    
     <div className="panel">
       <div className="row">
-        <button className="btn" disabled={!sp||sp.evolved||energy[turn]<3||sp.color!==turn} onClick={evolve}>Evolvi pedone ★</button>
-        <div className="hint">Turno: {turn===W?'Bianco':'Nero'}</div>
-      </div>
-      <div className="abil">
-        {sp?<> <strong>{sp.type==='P'?(sp.evolved?'Guardia ★':'Pedone'):'Pezzo'}</strong> {sp.type==='P'&&sp.evolved?' — avanti 1, indietro 1, avanti 2 (una volta)':sp.type==='P'?' — muovi per caricare energia':''}</>:<>Seleziona un pedone. Dopo 3 mosse puoi evolverlo.</>}
+        <div className="abil">
+          {sp?<div>
+            <strong>{getPieceName(sp)}</strong> (Lvl.{sp.level})
+            {sp.type===P && <div className="xp-bar-container"><div className="xp-bar-fill" style={{width:`${(sp.xp/3)*100}%`}}></div></div>}
+            <span style={{fontSize:'12px', color:'#94a3b8'}}>
+              {sp.type==='P'&&sp.level===1&&' ➔ Abilità: Passo doppio iniziale. Accumula 3 XP per evolvere.'}
+              {sp.type==='P'&&sp.level===2&&' ➔ Evoluto: Sbloccato passo tattico all\'indietro.'}
+              {sp.type==='P'&&sp.level===3&&' ➔ Eletto: Movimento e attacco globale a 1 casella (Mini-Regina).'}
+              {sp.type!=='P'&&' ➔ Unità standard. Fase 1: Pronto al combattimento.'}
+            </span>
+          </div>:<span>Seleziona un'unità sulla griglia per vedere il livello di evoluzione e i punti XP.</span>}
+        </div>
+        <div className={`turn-indicator ${turn}`}>{turn===W?'Turno: Cyan':'Turno: Crimson'}</div>
       </div>
     </div>
   </div>);

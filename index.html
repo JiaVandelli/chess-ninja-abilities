@@ -20,8 +20,6 @@ h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:80
 .xp-bar{width:120px;height:5px;background:#1e293b;border-radius:3px;overflow:hidden;margin-top:5px}
 .xp-fill{height:100%;border-radius:3px;transition:width.4s}
 .turn-pill{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
-@keyframes levelup{0%{transform:scale(1)}30%{transform:scale(1.4)}100%{transform:scale(1)}}
-.levelup-anim{animation:levelup.5s ease}
 </style>
 </head>
 <body>
@@ -38,8 +36,8 @@ const Chess=window.Chess;
 const EVOLUTIONS = {
   p: {
     levels: [
-      { name:'Soldato', color:'#64748b', xpToNext:1 }, // ← MODIFICATO: era 3
-      { name:'Veterano', color:'#eab308', xpToNext:3 },
+      { name:'Soldato', color:'#64748b', xpToNext:3 },
+      { name:'Veterano', color:'#eab308', xpToNext:5 },
       { name:'Campione', color:'#a855f7', xpToNext:null },
     ],
     xpForCapture: { p:1, n:2, b:2, r:3, q:5 },
@@ -52,7 +50,7 @@ const EVOLUTIONS = {
         if (backRank >= 1 && backRank <= 8) {
           const toSq = 'abcdefgh'[file] + backRank;
           if (!game.get(toSq))
-            moves.push({ from:sq, to:toSq, isCapture:false });
+            moves.push({ from:sq, to:toSq, isCapture:false, label:'↩ Indietro' });
         }
       }
       if (level >= 3) {
@@ -62,7 +60,7 @@ const EVOLUTIONS = {
           const toSq = 'abcdefgh'[nf] + nr;
           const target = game.get(toSq);
           if (target?.color === color) return;
-          moves.push({ from:sq, to:toSq, isCapture:!!target });
+          moves.push({ from:sq, to:toSq, isCapture:!!target, label: target? '⚔ Attacca' : '★ Muovi' });
         });
       }
       return moves;
@@ -72,13 +70,22 @@ const EVOLUTIONS = {
 
 const ICONS={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
+// ← MODIFICA DEFINITIVA: calcola sq manualmente perché chess.js 0.10.3 non ha cell.square
 function buildInitialState(game) {
   const pieceData = {}, squareMap = {};
-  game.board().flat().filter(Boolean).forEach(cell => {
-    const id = `${cell.color}${cell.type}_${cell.square}`;
-    pieceData[id] = { id, type:cell.type, color:cell.color, xp:0, level:1 };
-    squareMap[cell.square] = id;
+
+  game.board().forEach((row, r) => {
+    row.forEach((cell, c) => {
+      if (cell) {
+        const sq = 'abcdefgh'[c] + (8 - r);
+        const id = `${cell.color}${cell.type}_${sq}`;
+
+        pieceData[id] = { id, type:cell.type, color:cell.color, xp:0, level:1 };
+        squareMap[sq] = id;
+      }
+    });
   });
+
   return { pieceData, squareMap };
 }
 
@@ -103,9 +110,9 @@ function execAbilityMove(game, from, to) {
   if (captured) g.remove(to);
   g.put(piece, to);
   const parts = g.fen().split(' ');
-  const wasWhite = parts[1] === 'w';
-  parts[1] = wasWhite? 'b' : 'w';
-  if (!wasWhite) parts[5] = String(parseInt(parts[5]) + 1);
+  const wasTurnWhite = parts[1] === 'w';
+  parts[1] = wasTurnWhite? 'b' : 'w';
+  if (!wasTurnWhite) parts[5] = String(parseInt(parts[5]) + 1);
   parts[3] = '-';
   const ng = new Chess(); ng.load(parts.join(' '));
   return { newGame: ng, capturedPiece: captured };
@@ -151,13 +158,12 @@ function App() {
         } else {
           newGame = new Chess(game.fen());
           const mv = newGame.move({ from:sel, to:sq, promotion:'q' });
-          if (mv?.captured) capturedPiece = { type:mv.captured };
+          if (mv?.captured) capturedPiece = { type:mv.captured, color: game.get(sel)?.color === 'w'? 'b' : 'w' };
           if (mv?.flags?.includes('e')) {
             const epSq = sq[0] + sel[1];
             capturedPiece = { type:'p', _sq: epSq };
           }
         }
-
         const newSM = {...squareMap };
         const newPD = {...pieceData };
         let capturedId = null;
@@ -173,9 +179,8 @@ function App() {
         }
         delete newSM[sel];
         newSM[sq] = movingId;
-
         if (capturedPiece && newPD[movingId]) {
-          const evo = EVOLUTIONS[newPD[movingId].type];
+          const evo = EVOLUTIONS[newPD[movingId].type]?? EVOLUTIONS[pieceData[movingId]?.type];
           const xpGain = evo?.xpForCapture?.[capturedPiece.type]?? 1;
           const before = newPD[movingId].level;
           newPD[movingId] = awardXP(newPD[movingId], xpGain);
@@ -184,10 +189,8 @@ function App() {
             setTimeout(() => setLevelUpSq(null), 800);
           }
         }
-
         setGame(newGame); setPieceData(newPD); setSquareMap(newSM);
-        setSel(sq); // ← MODIFICATO: era null, ora rimane selezionato
-        setStdMoves([]); setAbilMoves([]);
+        setSel(null); setStdMoves([]); setAbilMoves([]);
         return;
       }
       if (piece?.color === game.turn()) {
@@ -230,27 +233,34 @@ function App() {
           const data = id? pieceData[id] : null;
           const level = data?.level?? 1;
           const isLvlUp = levelUpSq === sq;
+          const lvlColors = ['','#64748b','#eab308','#a855f7'];
 
           return (
             <div key={sq} onClick={() => handleClick(sq)}
               className={`cell ${isLight?'light':'dark'} ${isSel?'sel':''}`}>
               {isAny &&!hasPiece && (
                 <div style={{position:'absolute',width:'28%',height:'28%',borderRadius:'50%',
-                  background: isAbil? '#f59e0b' : '#22c55e'}}/>
+                  background: isAbil? '#f59e0b' : '#22c55e',
+                  boxShadow:`0 0 8px ${isAbil?'#f59e0b':'#22c55e'}`}}/>
               )}
               {isAny && hasPiece && (
                 <div style={{position:'absolute',inset:0,
-                  border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`}}/>
+                  border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`,
+                  borderRadius:'4px'}}/>
               )}
               {cell && (
                 <span className={`piece-${cell.color}`}
-                  style={{transform: isLvlUp? 'scale(1.4)' : 'scale(1)'}}>
+                  style={{transition:'transform.2s',
+                    transform: isLvlUp? 'scale(1.4)' : 'scale(1)',
+                    filter: isLvlUp? 'drop-shadow(0 0 10px gold)' : undefined}}>
                   {ICONS[cell.color][cell.type]}
                 </span>
               )}
               {cell?.type === 'p' && level > 1 && (
-                <div style={{position:'absolute',top:2,right:3,fontSize:9,fontWeight:800,
-                  color: level===2?'#eab308':'#a855f7'}}>
+                <div style={{position:'absolute',top:2,right:3,
+                  fontSize:9,fontWeight:800,
+                  color: lvlColors[level],
+                  textShadow:`0 0 6px ${lvlColors[level]}`}}>
                   {'★'.repeat(level - 1)}
                 </div>
               )}
@@ -263,7 +273,7 @@ function App() {
           <div style={{flex:1}}>
             {selData && evo? (<>
               <div style={{fontWeight:700,fontSize:13,color:lvlInfo.color}}>
-                {lvlInfo.name}
+                {lvlInfo.name} {ICONS[selPiece.color][selPiece.type]}
               </div>
               <div className="xp-bar">
                 <div className="xp-fill" style={{
@@ -271,14 +281,21 @@ function App() {
                   background: lvlInfo.color}}/>
               </div>
               <div style={{fontSize:11,color:'#475569',marginTop:3}}>
-                {lvlInfo.xpToNext? `XP ${selData.xp}/${lvlInfo.xpToNext}` : 'MAX'}
+                {lvlInfo.xpToNext
+                 ? `XP ${selData.xp}/${lvlInfo.xpToNext} → ${evo.levels[selData.level]?.name}`
+                  : '★ Livello massimo'}
               </div>
+              {abilMoves.length > 0 && (
+                <div style={{fontSize:11,color:'#f59e0b',marginTop:4}}>
+                  🟡 {abilMoves.length} abilità disponibili
+                </div>
+              )}
             </>) : (
               <div style={{color:'#475569',fontSize:12}}>Seleziona un pezzo</div>
             )}
           </div>
-          <div className="turn-pill" style={{color: turn==='w'?'#38bdf8':'#f43f5e'}}>
-            {turn==='w'?'Bianco':'Nero'}
+          <div className={`turn-pill`} style={{color: turn==='w'?'#38bdf8':'#f43f5e'}}>
+            {turn==='w'?'⬜ Bianco':'⬛ Nero'}
           </div>
         </div>
       </div>

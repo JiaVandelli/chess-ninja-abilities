@@ -1,0 +1,96 @@
+import { useState } from "react";
+
+const P='P', R='R', N='N', B='B', Q='Q', K='K';
+const W='w', BK='b';
+
+const NAMES = { P:'Pedone', R:'Torre', N:'Cavallo', B:'Alfiere', Q:'Regina', K:'Re' };
+const ABIL_NAME = { P:'⚡ Carica Frontale', R:'🎯 Cecchino', N:'💥 Doppio Scatto', B:'💨 Spirito del Vento', Q:'👻 Vanish', K:"🛡️ Scudo" };
+const ICONS = { [W]:{K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙'}, [BK]:{K:'♚',Q:'♛',R:'♜',B:'♝',N:'♞',P:'♟'} };
+
+let _uid=0;
+const mkP = (t,c)=>({type:t,color:c,id:_uid++,energy:0,cooldown:0,used:false,shield:0,invisible:0});
+const inB = (r,c)=>r>=0&&r<8&&c>=0&&c<8;
+const cloneB = b=>b.map(row=>row.map(p=>p?{...p}:null));
+const isReady = p=>p && p.energy>=3 && p.cooldown===0 &&!(p.type===P && p.used) &&!(p.type===Q && p.used);
+
+function initBoard(){ _uid=0; const b=Array(8).fill(null).map(()=>Array(8).fill(null)); const back=[R,N,B,Q,K,B,N,R]; for(let c=0;c<8;c++){ b[0][c]=mkP(back[c],BK); b[1][c]=mkP(P,BK); b[6][c]=mkP(P,W); b[7][c]=mkP(back[c],W);} return b; }
+
+// --- mosse (identiche alle tue, con limite Cecchino a 4) ---
+function pawnMoves(b,r,c,p,ab){ const d=p.color===W?-1:1, m=[]; if(ab&&isReady(p)){ if(inB(r+d,c)&&b[r+d][c]?.color!==p.color) m.push([r+d,c,'carica']); return m;} if(inB(r+d,c)&&!b[r+d][c]){m.push([r+d,c,'mv']); if(r===(p.color===W?6:1)&&!b[r+2*d][c])m.push([r+2*d,c,'mv']);} [-1,1].forEach(dc=>{if(inB(r+d,c+dc)&&b[r+d][c+dc]?.color!==p.color&&!(b[r+d][c+dc]?.type===K&&b[r+d][c+dc]?.shield>0))m.push([r+d,c+dc,'cap']);}); return m;}
+function lineMoves(b,r,c,p,dirs,ab){ const m=[]; for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc,steps=0; while(inB(nr,nc)&&steps<4){ if(b[nr][nc]){ if(b[nr][nc].color!==p.color&&ab&&b[nr][nc].type!==K&&b[nr][nc].shield===0) m.push([nr,nc,'snipe']); break;} if(!ab) m.push([nr,nc,'mv']); nr+=dr; nc+=dc; steps++;}} return m;}
+function bishopMoves(b,r,c,p,ab){ const dirs=[[1,1],[1,-1],[-1,1],[-1,-1]]; if(!ab) return lineMoves(b,r,c,p,dirs,false); const m=[]; for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc,jumped=false; while(inB(nr,nc)){ if(b[nr][nc]){ if(!jumped) jumped=true; else break;} else if(jumped){m.push([nr,nc,'jump']); if(Math.abs(nr-r)>2) break;} nr+=dr; nc+=dc;}} return m;}
+function knightMoves(b,r,c,p,second=false){ return [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].reduce((a,[dr,dc])=>{const nr=r+dr,nc=c+dc; if(inB(nr,nc)&&(!b[nr][nc]||b[nr][nc].color!==p.color)&&!(b[nr][nc]?.type===K&&b[nr][nc]?.shield>0)){ if(second&&b[nr][nc])return a; a.push([nr,nc,b[nr][nc]?'cap':'mv']);} return a;},[]);}
+function getMoves(b,r,c,ab=false,second=false){ const p=b[r][c]; if(!p) return []; const RD=[[0,1],[0,-1],[1,0],[-1,0]]; switch(p.type){ case P: return pawnMoves(b,r,c,p,ab); case R: return lineMoves(b,r,c,p,RD,ab); case N: return knightMoves(b,r,c,p,second); case B: return bishopMoves(b,r,c,p,ab); case Q: return [...lineMoves(b,r,c,p,RD,false),...bishopMoves(b,r,c,p,false)]; case K: return [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].reduce((a,[dr,dc])=>{const nr=r+dr,nc=c+dc; if(inB(nr,nc)&&b[nr][nc]?.color!==p.color&&!(b[nr][nc]?.type===K&&b[nr][nc]?.shield>0))a.push([nr,nc,b[nr][nc]?'cap':'mv']); return a;},[]); default: return [];}}
+
+export default function RpgChess(){
+  const [board,setBoard]=useState(initBoard());
+  const [turn,setTurn]=useState(W);
+  const [selected,setSelected]=useState(null);
+  const [validMoves,setValidMoves]=useState([]);
+  const [useAbility,setUseAbility]=useState(false);
+  const [pendingDouble,setPendingDouble]=useState(null);
+
+  const endTurn = (nextBoard, player) => {
+    nextBoard.forEach(row=>row.forEach(p=>{ if(p){
+      if(p.color===player && p.cooldown>0) p.cooldown--;
+      else if(p.color===player && p.energy<3) p.energy++;
+      if(p.shield>0) p.shield--;
+      if(p.invisible>0) p.invisible--;
+    }}));
+    setBoard(nextBoard);
+    setTurn(player===W?BK:W);
+  };
+
+  const handleCellClick = (r,c)=>{
+    const move = validMoves.find(m=>m[0]===r&&m[1]===c);
+    if(selected && move){
+      const [sr,sc]=selected;
+      const next = cloneB(board);
+      const piece = next[sr][sc]; // ✅ lavoriamo SEMPRE su next, non su board
+
+      if(move[2]==='snipe'){
+        next[r][c]=null;
+        piece.energy=0;
+        piece.cooldown=4;
+      } else {
+        // spostiamo il pezzo
+        next[r][c] = {...piece};
+        next[sr][sc] = null;
+        const moved = next[r][c];
+
+        if(move[2]==='carica'){ moved.energy=0; moved.used=true; }
+        else if(move[2]==='jump'){ moved.energy=0; moved.cooldown=3; }
+        else if(useAbility && moved.type===N &&!pendingDouble){
+          moved.energy=0; moved.cooldown=5;
+          setBoard(next); setSelected([r,c]); setValidMoves(getMoves(next,r,c,false,true)); setPendingDouble([sr,sc]); setUseAbility(false); return;
+        }
+        // qui in futuro: if(useAbility && moved.type===Q){ moved.invisible=2; moved.used=true; }
+        // qui in futuro: if(useAbility && moved.type===K){ moved.shield=2; }
+      }
+
+      setSelected(null); setValidMoves([]); setUseAbility(false); setPendingDouble(null);
+      endTurn(next, piece.color);
+      return;
+    }
+
+    if(pendingDouble) return;
+    const piece = board[r][c];
+    if(piece && piece.color===turn){ setSelected([r,c]); setValidMoves(getMoves(board,r,c,useAbility&&isReady(piece))); }
+    else { setSelected(null); setValidMoves([]); }
+  };
+
+  const sel = selected?board[selected[0]][selected[1]]:null;
+
+  return (
+    <div style={{fontFamily:'sans-serif',maxWidth:500,margin:'20px auto',textAlign:'center'}}>
+      <h2>♟️ RPG Chess v1.1 fix</h2>
+      <p>Turno: <strong>{turn===W?'Bianco':'Nero'}</strong></p>
+      <div style={{background:'#f0f0f0',padding:10,borderRadius:8,marginBottom:15}}>
+        {sel? <div><strong>{NAMES[sel.type]}</strong> - Energia {sel.energy}/3 {sel.cooldown?`(cd ${sel.cooldown})`:''}<br/><button disabled={!isReady(sel)} onClick={()=>{setUseAbility(!useAbility); setValidMoves(getMoves(board,selected[0],selected[1],!useAbility));}} style={{marginTop:6,padding:'6px 12px',background:isReady(sel)?'#008CBA':'#ccc',color:'white',border:'none',borderRadius:4}}>{useAbility?'Abilità ON':'Attiva'}</button></div> : <p style={{color:'#888'}}>Seleziona un pezzo</p>}
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(8,1fr)',border:'2px solid #333',width:400,height:400,margin:'0 auto'}}>
+        {board.map((row,r)=>row.map((p,c)=>{ const dark=(r+c)%2; const isSel=selected&&selected[0]===r&&selected[1]===c; const tgt=validMoves.find(m=>m[0]===r&&m[1]===c); let bg=dark?'#b58863':'#f0d9b5'; if(isSel)bg='#7b9c60'; else if(tgt)bg=tgt[2]==='snipe'||tgt[2]==='carica'?'#ff6b6b':'#a3d165'; const hidden = p && p.invisible>0 && p.color!==turn; return <div key={`${r}-${c}`} onClick={()=>handleCellClick(r,c)} style={{background:bg,display:'flex',justifyContent:'center',alignItems:'center',fontSize:32,position:'relative'}}>{p &&!hidden && <span>{ICONS[p.color][p.type]}</span>}{p && hidden && <span>?</span>}{p && isReady(p) && <span style={{position:'absolute',top:2,right:2,fontSize:10}}>🔥</span>}</div>;}))}
+      </div>
+    </div>
+  );
+}

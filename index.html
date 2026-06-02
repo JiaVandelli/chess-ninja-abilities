@@ -1,14 +1,14 @@
+Ecco il codice completo risistemato, unificato e corretto. Ho applicato i fix per fare in modo che la **Torre non si muova quando cecchina** e che **gli scudi/invisibilità durino per l'intero turno dell'avversario**, scalando solo alla fine del proprio turno successivo.
+Puoi copiarlo direttamente in un unico file .html e farlo girare ovunque.
+```html
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<!-- Playables SDK -->
 <script>// Playables SDK v1.0.0
 // Game lifecycle bridge: rAF-based game-ready detection + event communication
 (function() {
   'use strict';
 
-  // Idempotency: skip if already initialized (e.g., server-side injection
-  // followed by client-side inject-javascript via the Bloks webview component).
   if (window.playablesSDK) return;
 
   var HANDLER_NAME = 'playablesGameEventHandler';
@@ -20,8 +20,6 @@
   var errorSent = false;
   var frameCount = 0;
   var originalRAF = window.requestAnimationFrame;
-
-  // --- Transport Layer ---
 
   function hasIOSBridge() {
     return !!(window.webkit &&
@@ -53,17 +51,17 @@
     }
 
     if (hasAndroidBridge()) {
-    try {
-      var p = payload || {};
-      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
-      p.timestamp = message.timestamp;
-      window[ANDROID_BRIDGE_NAME].postEvent(
-        eventName,
-        JSON.stringify(p)
-      );
-    } catch (e) { /* ignore */ }
-    return;
-  }
+      try {
+        var p = payload || {};
+        p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+        p.timestamp = message.timestamp;
+        window[ANDROID_BRIDGE_NAME].postEvent(
+          eventName,
+          JSON.stringify(p)
+        );
+      } catch (e) { /* ignore */ }
+      return;
+    }
 
     if (isInIframe()) {
       try {
@@ -73,11 +71,8 @@
     }
   }
 
-  // --- rAF Game-Ready Detection ---
-
   function onFrame() {
     if (gameReadySent) return;
-
     frameCount++;
     if (frameCount >= RAF_FRAME_THRESHOLD) {
       gameReadySent = true;
@@ -87,7 +82,6 @@
       });
       return;
     }
-
     originalRAF.call(window, onFrame);
   }
 
@@ -110,21 +104,16 @@
     };
   }
 
-  // --- First User Interaction Detection ---
-
   function setupFirstInteractionDetection() {
     var events = ['touchstart', 'mousedown', 'keydown'];
-
     function onFirstInteraction() {
       if (firstInteractionSent) return;
       firstInteractionSent = true;
       sendEvent('user_interaction_start', null);
-
       for (var i = 0; i < events.length; i++) {
         document.removeEventListener(events[i], onFirstInteraction, true);
       }
     }
-
     for (var i = 0; i < events.length; i++) {
       document.addEventListener(events[i], onFirstInteraction, true);
     }
@@ -135,8 +124,6 @@
   } else {
     setupFirstInteractionDetection();
   }
-
-  // --- Auto Error Capture ---
 
   window.addEventListener('error', function(event) {
     if (errorSent) return;
@@ -161,37 +148,27 @@
     });
   });
 
-  // --- Public API ---
-
   window.playablesSDK = {
     complete: function(score) {
-      sendEvent('game_ended', {
-        score: score,
-        completed: true
-      });
+      sendEvent('game_ended', { score: score, completed: true });
     },
-
     error: function(message) {
       if (errorSent) return;
       errorSent = true;
-      sendEvent('error', {
-        message: message || 'Unknown error',
-        auto_captured: false
-      });
+      sendEvent('error', { message: message || 'Unknown error', auto_captured: false });
     },
-
     sendEvent: function(eventName, payload) {
       if (!eventName || typeof eventName !== 'string') return;
       sendEvent(eventName, payload);
     }
   };
 
-  // Kick off rAF detection in case no game code calls rAF immediately
   if (originalRAF) {
     originalRAF.call(window, onFrame);
   }
 })();</script>
-<!-- PLAYABLE_TOUCH_PATCH_V1 --><script>
+
+<script>
 (function() {
   if (window.__playableTouchPatchInstalled) return;
   window.__playableTouchPatchInstalled = true;
@@ -210,7 +187,9 @@
     return origAdd.call(this, type, listener, options);
   };
 })();
-</script><script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+</script>
+<script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chess Ninja Abilities</title>
@@ -449,9 +428,12 @@
         if(p.color===moverColor){
           if(p.cooldown>0) p.cooldown--;
           else if(p.energy<3) p.energy++;
+          
+          // Scalano solo quando finisce il turno del proprietario,
+          // proteggendolo durante l'intero round di attacco avversario
+          if(p.shield>0) p.shield--;
+          if(p.invisible>0) p.invisible--;
         }
-        if(p.shield>0) p.shield--;
-        if(p.invisible>0) p.invisible--;
       }
       return after;
     }
@@ -471,39 +453,47 @@
           const [sr,sc]=selected;
           const sel=board[sr][sc];
           const valid=validMoves.find(m=>m.r===r && m.c===c);
+          
           if(valid && sel && sel.color===turn){
             const next=cloneB(board);
-            const mover=next[sr][sc]; // FIX ninja bug: lavora SEMPRE su next[sr][sc]
+            const mover = next[sr][sc];
 
-            next[r][c]=mover;
-            next[sr][sc]=null;
+            // GESTIONE ABILITÀ TORRE (CECCHINO) - La torre NON si muove
+            if(useAbility && isReady(sel) && mover.type===R && valid.special==='snipe'){
+              next[r][c]=null; // Elimina il bersaglio a distanza
+              mover.energy=0; 
+              mover.cooldown=4;
+            } 
+            // SPOSTAMENTO STANDARD E ALTRE ABILITÀ
+            else {
+              next[r][c]=mover;
+              next[sr][sc]=null;
 
-            if(useAbility && isReady(sel)){
-              if(mover.type===R){ // snipe
-                mover.energy=0; mover.cooldown=4;
-              } else if(mover.type===P){ // carica
-                if(valid.special==='charge'){ mover.energy=0; mover.used=true; }
-              } else if(mover.type===B){ // jump
-                if(valid.special==='jump'){ mover.energy=0; mover.cooldown=3; }
-              } else if(mover.type===N){ // doppio scatto
-                if(pendingDouble){
-                  mover.energy=0; mover.cooldown=5;
-                  setPendingDouble(null);
-                } else {
-                  // primo salto
-                  setPendingDouble({r,c});
-                  setBoard(next);
-                  setSelected([r,c]);
-                  setValidMoves(getMoves(next,r,c,false,true));
-                  setUseAbility(false);
-                  return;
+              if(useAbility && isReady(sel)){
+                if(mover.type===P){ // carica
+                  if(valid.special==='charge'){ mover.energy=0; mover.used=true; }
+                } else if(mover.type===B){ // jump
+                  if(valid.special==='jump'){ mover.energy=0; mover.cooldown=3; }
+                } else if(mover.type===N){ // doppio scatto
+                  if(pendingDouble){
+                    mover.energy=0; mover.cooldown=5;
+                    setPendingDouble(null);
+                  } else {
+                    // Primo salto del cavallo: congela il turno, aggiorna coordinate
+                    setPendingDouble({r,c});
+                    setBoard(next);
+                    setSelected([r,c]);
+                    setValidMoves(getMoves(next,r,c,false,true));
+                    setUseAbility(false);
+                    return;
+                  }
+                } else if(mover.type===Q){ // scudo reale
+                  const kp=findKing(next,mover.color);
+                  if(kp) next[kp.r][kp.c].shield=2;
+                  mover.energy=0; mover.used=true;
+                } else if(mover.type===K){ // invisibilità
+                  mover.energy=0; mover.cooldown=3; mover.invisible=2;
                 }
-              } else if(mover.type===Q){ // scudo reale
-                const kp=findKing(next,mover.color);
-                if(kp) next[kp.r][kp.c].shield=2;
-                mover.energy=0; mover.used=true;
-              } else if(mover.type===K){ // invisibilità
-                mover.energy=0; mover.cooldown=3; mover.invisible=2;
               }
             }
 
@@ -547,7 +537,7 @@
                 <div key={`${r}-${c}`} onClick={()=>handleCellClick(r,c)}
                   className={`cell ${isDark?'dark':'light'} ${isSel?'sel':''} ${isValid?'valid':''} ${hasEnemy?'has-piece':''}`}>
                   {showP && <span className={`piece ${p.color}`}>{ICONS[p.color][p.type]}</span>}
-                  {hidden && <span className="piece">?</span>}
+                  {hidden && <span className="piece" style={{color:'#6b7280'}}>?</span>}
                   {showP && isReady(p) && <span className="ready">🔥</span>}
                   {showP && p.shield>0 && <span className="shield">🛡️</span>}
                 </div>
@@ -568,12 +558,12 @@
               <div className="abil">
                 <strong>{NAMES[selPiece.type]}</strong> — {ABIL_NAME[selPiece.type]}<br/>
                 Energia: {selPiece.energy}/3 {isReady(selPiece)?'✅':''} · Cooldown: {selPiece.cooldown} {selPiece.used?'(usata)':''}
-                {selPiece.type===R && <> · Cecchino: fino a 4 case, non colpisce Re con scudo</>}
+                {selPiece.type===R && <> · Cecchino: spara fino a 4 case restando ferma, non colpisce Re con scudo</>}
                 {selPiece.type===P && <> · Carica: avanti 1-2 e cattura frontale</>}
                 {selPiece.type===B && <> · Salto Ombra: salta 1 pezzo, atterra 1-2 dopo</>}
-                {selPiece.type===N && <> · Doppio Scatto: 2 salti, il secondo non cattura</>}
-                {selPiece.type===Q && <> · Scudo Reale: protegge il Re 2 turni (una volta)</>}
-                {selPiece.type===K && <> · Invisibilità: nascosto 2 turni</>}
+                {selPiece.type===N && <> · Doppio Scatto: 2 salti di fila, il secondo non cattura</>}
+                {selPiece.type===Q && <> · Scudo Reale: protegge il Re per 2 round avversari (una volta)</>}
+                {selPiece.type===K && <> · Invisibilità: diventa un '?' per l'avversario per 2 round</>}
               </div>
             )}
             {pendingDouble && <div className="alert">Doppio Scatto: esegui il secondo salto (senza cattura)</div>}
@@ -587,3 +577,5 @@
 <script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
 </body>
 </html>
+
+```

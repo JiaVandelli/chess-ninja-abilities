@@ -1,6 +1,3 @@
-Ecco il codice completo risistemato, unificato e corretto. Ho applicato i fix per fare in modo che la **Torre non si muova quando cecchina** e che **gli scudi/invisibilità durino per l'intero turno dell'avversario**, scalando solo alla fine del proprio turno successivo.
-Puoi copiarlo direttamente in un unico file .html e farlo girare ovunque.
-```html
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -577,5 +574,3 @@ Puoi copiarlo direttamente in un unico file .html e farlo girare ovunque.
 <script>(function(){document.addEventListener("click",function(e){var a=e.target.closest("[data-product-id]");if(!a)return;e.preventDefault();var pid=a.getAttribute("data-product-id");if(pid)parent.postMessage({type:"ecto-artifact-link-click",productId:pid},"*")})})();</script>
 </body>
 </html>
-
-```

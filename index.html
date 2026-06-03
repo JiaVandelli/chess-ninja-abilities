@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Final</title>
+<title>Chess RPG - Fixed</title>
 <style>
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
@@ -18,13 +18,13 @@ h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:80
 .piece-b{color:#f43f5e;text-shadow:0 0 10px rgba(244,63,94,.6)}
 .panel{margin:12px auto 0;max-width:520px;background:#030712;border:1px solid #1e293b;border-radius:12px;padding:12px 14px}
 .xp-bar{width:120px;height:5px;background:#1e293b;border-radius:3px;overflow:hidden;margin-top:5px}
-.xp-fill{height:100%;border-radius:3px;transition:width.4s}
+.xp-fill{height:100%;border-radius:3px;transition:width .4s}
 .turn-pill{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
+@keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
 </style>
 </head>
 <body>
 <div id="root"></div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -33,33 +33,33 @@ h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:80
 const {useState,useEffect,useCallback}=React;
 const Chess=window.Chess;
 
-const EVOLUTIONS = {
-  p: {
-    levels: [
-      { name:'Soldato', color:'#64748b', xpToNext:3 },
-      { name:'Veterano', color:'#eab308', xpToNext:5 },
-      { name:'Campione', color:'#a855f7', xpToNext:null },
+const EVOLUTIONS={
+  p:{
+    levels:[
+      {name:'Soldato',  color:'#64748b', xpToNext:3},
+      {name:'Veterano', color:'#eab308', xpToNext:5},
+      {name:'Campione', color:'#a855f7', xpToNext:null},
     ],
-    xpForCapture: { p:1, n:2, b:2, r:3, q:5 },
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      const file = sq.charCodeAt(0) - 97;
-      const rank = parseInt(sq[1]);
-      if (level >= 2) {
-        const backRank = color === 'w'? rank - 1 : rank + 1;
-        if (backRank >= 1 && backRank <= 8) {
-          const toSq = 'abcdefgh'[file] + backRank;
-          if (!game.get(toSq)) moves.push({ from:sq, to:toSq, isCapture:false });
+    xpForCapture:{p:1,n:2,b:2,r:3,q:5},
+    getAbilityMoves(sq,game,level,color){
+      const moves=[];
+      const file=sq.charCodeAt(0)-97;
+      const rank=parseInt(sq[1]);
+      if(level>=2){
+        const backRank=color==='w'?rank-1:rank+1;
+        if(backRank>=1&&backRank<=8){
+          const toSq='abcdefgh'[file]+backRank;
+          if(!game.get(toSq)) moves.push({from:sq,to:toSq,isCapture:false});
         }
       }
-      if (level >= 3) {
-        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => {
-          const nf = file + dc, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
-          const toSq = 'abcdefgh'[nf] + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) return;
-          moves.push({ from:sq, to:toSq, isCapture:!!target });
+      if(level>=3){
+        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc])=>{
+          const nf=file+dc,nr=rank+dr;
+          if(nf<0||nf>7||nr<1||nr>8) return;
+          const toSq='abcdefgh'[nf]+nr;
+          const target=game.get(toSq);
+          if(target?.color===color) return;
+          moves.push({from:sq,to:toSq,isCapture:!!target});
         });
       }
       return moves;
@@ -69,186 +69,203 @@ const EVOLUTIONS = {
 
 const ICONS={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-function buildInitialState(game) {
-  const pieceData = {}, squareMap = {};
-  game.board().forEach((row, r) => {
-    row.forEach((cell, c) => {
-      if (cell) {
-        const sq = 'abcdefgh'[c] + (8 - r);
-        const id = `${cell.color}${cell.type}_${sq}`;
-        pieceData[id] = { id, type:cell.type, color:cell.color, xp:0, level:1 };
-        squareMap[sq] = id;
+function buildInitialState(game){
+  const pieceData={},squareMap={};
+  game.board().forEach((row,r)=>{
+    row.forEach((cell,c)=>{
+      if(cell){
+        const sq='abcdefgh'[c]+(8-r);
+        const id=`${cell.color}${cell.type}_${sq}`;
+        pieceData[id]={id,type:cell.type,color:cell.color,xp:0,level:1};
+        squareMap[sq]=id;
       }
     });
   });
-  return { pieceData, squareMap };
+  return{pieceData,squareMap};
 }
 
-function awardXP(piece, xpGained) {
-  const evo = EVOLUTIONS[piece.type];
-  if (!evo) return piece;
-  let { xp, level } = piece;
-  xp += xpGained;
-  while (level < evo.levels.length) {
-    const needed = evo.levels[level - 1].xpToNext;
-    if (needed!== null && xp >= needed) { xp -= needed; level++; }
+function awardXP(piece,xpGained){
+  const evo=EVOLUTIONS[piece.type];
+  if(!evo) return piece;
+  let{xp,level}=piece;
+  xp+=xpGained;
+  while(level<evo.levels.length){
+    const needed=evo.levels[level-1].xpToNext;
+    if(needed!==null&&xp>=needed){xp-=needed;level++;}
     else break;
   }
-  return {...piece, xp, level };
+  return{...piece,xp,level};
 }
 
-function execAbilityMove(game, from, to) {
-  const piece = game.get(from);
-  const captured = game.get(to) || null;
-  const g = new Chess(game.fen());
+function execAbilityMove(game,from,to){
+  const piece=game.get(from);
+  const captured=game.get(to)||null;
+  const g=new Chess(game.fen());
   g.remove(from);
-  if (captured) g.remove(to);
-  g.put(piece, to);
-  const parts = g.fen().split(' ');
-  const wasWhite = parts[1] === 'w';
-  parts[1] = wasWhite? 'b' : 'w';
-  if (!wasWhite) parts[5] = String(parseInt(parts[5]) + 1);
-  parts[3] = '-';
-  const ng = new Chess(); ng.load(parts.join(' '));
-  return { newGame: ng, capturedPiece: captured };
+  if(captured) g.remove(to);
+  g.put(piece,to);
+  const parts=g.fen().split(' ');
+  const wasWhite=parts[1]==='w';
+  parts[1]=wasWhite?'b':'w';
+  if(!wasWhite) parts[5]=String(parseInt(parts[5])+1);
+  parts[3]='-';
+  const ng=new Chess();ng.load(parts.join(' '));
+  return{newGame:ng,capturedPiece:captured};
 }
 
-function App() {
-  const [game, setGame] = useState(() => new Chess());
-  const [pieceData, setPieceData] = useState({});
-  const [squareMap, setSquareMap] = useState({});
-  const [sel, setSel] = useState(null);
-  const [stdMoves, setStdMoves] = useState([]);
-  const [abilMoves, setAbilMoves] = useState([]);
-  const [levelUpSq, setLevelUpSq] = useState(null);
+function App(){
+  const[game,setGame]=useState(()=>new Chess());
+  const[pieceData,setPieceData]=useState({});
+  const[squareMap,setSquareMap]=useState({});
+  const[sel,setSel]=useState(null);
+  const[stdMoves,setStdMoves]=useState([]);
+  const[abilMoves,setAbilMoves]=useState([]);
+  const[levelUpSq,setLevelUpSq]=useState(null);
 
-  useEffect(() => {
-    const { pieceData:pd, squareMap:sm } = buildInitialState(game);
-    setPieceData(pd); setSquareMap(sm);
-  }, []);
+  useEffect(()=>{
+    const{pieceData:pd,squareMap:sm}=buildInitialState(game);
+    setPieceData(pd);setSquareMap(sm);
+  },[]);
 
-  const getMovesFor = useCallback((sq) => {
-    const piece = game.get(sq);
-    if (!piece) return { std:[], abil:[] };
-    const std = game.moves({ square:sq, verbose:true });
-    const id = squareMap[sq];
-    const data = pieceData[id];
-    const evo = EVOLUTIONS[piece.type];
-    const abil = (evo && data)? evo.getAbilityMoves(sq, game, data.level, piece.color) : [];
-    return { std, abil };
-  }, [game, squareMap, pieceData]);
+  const getMovesFor=useCallback((sq)=>{
+    const piece=game.get(sq);
+    if(!piece) return{std:[],abil:[]};
+    const std=game.moves({square:sq,verbose:true});
+    const id=squareMap[sq];
+    const data=pieceData[id];
+    const evo=EVOLUTIONS[piece.type];
+    const abil=(evo&&data)?evo.getAbilityMoves(sq,game,data.level,piece.color):[];
+    return{std,abil};
+  },[game,squareMap,pieceData]);
 
-  const handleClick = useCallback((sq) => {
-    const piece = game.get(sq);
-    if (sel) {
-      const stdMv = stdMoves.find(m => m.to === sq);
-      const abilMv = abilMoves.find(m => m.to === sq);
-      if (stdMv || abilMv) {
-        let newGame, capturedPiece = null;
-        const movingId = squareMap[sel];
-        if (abilMv) {
-          const res = execAbilityMove(game, sel, sq);
-          newGame = res.newGame;
-          capturedPiece = res.capturedPiece;
-        } else {
-          newGame = new Chess(game.fen());
-          const mv = newGame.move({ from:sel, to:sq, promotion:'q' });
-          if (mv?.captured) capturedPiece = { type:mv.captured };
-          if (mv?.flags?.includes('e')) {
-            const epSq = sq[0] + sel[1];
-            capturedPiece = { type:'p', _sq: epSq };
+  const handleClick=useCallback((sq)=>{
+    const piece=game.get(sq);
+    if(sel){
+      const stdMv=stdMoves.find(m=>m.to===sq);
+      const abilMv=abilMoves.find(m=>m.to===sq);
+      if(stdMv||abilMv){
+        let newGame,capturedPiece=null;
+        const movingId=squareMap[sel];
+        if(abilMv){
+          const res=execAbilityMove(game,sel,sq);
+          newGame=res.newGame;capturedPiece=res.capturedPiece;
+        }else{
+          newGame=new Chess(game.fen());
+          const mv=newGame.move({from:sel,to:sq,promotion:'q'});
+          if(mv?.captured) capturedPiece={type:mv.captured};
+          if(mv?.flags?.includes('e')){
+            capturedPiece={type:'p',_sq:sq[0]+sel[1]};
           }
         }
-        const newSM = {...squareMap };
-        const newPD = {...pieceData };
-        if (capturedPiece) {
-          const capSq = capturedPiece._sq?? sq;
-          const capturedId = newSM[capSq];
-          delete newPD[capturedId];
-          delete newSM[capSq];
+        const newSM={...squareMap};
+        const newPD={...pieceData};
+        if(capturedPiece){
+          const capSq=capturedPiece._sq??sq;
+          const capturedId=newSM[capSq];
+          delete newPD[capturedId];delete newSM[capSq];
         }
-        const newPieceOnSq = newGame.get(sq);
-        if (newPieceOnSq && newPieceOnSq.type!== pieceData[movingId]?.type) {
-          newPD[movingId] = {...newPD[movingId], type: newPieceOnSq.type };
+        const newPieceOnSq=newGame.get(sq);
+        if(newPieceOnSq&&newPieceOnSq.type!==pieceData[movingId]?.type){
+          newPD[movingId]={...newPD[movingId],type:newPieceOnSq.type};
         }
-        delete newSM[sel];
-        newSM[sq] = movingId;
-        if (capturedPiece && newPD[movingId]) {
-          const evo = EVOLUTIONS[newPD[movingId].type];
-          const xpGain = evo?.xpForCapture?.[capturedPiece.type]?? 1;
-          const before = newPD[movingId].level;
-          newPD[movingId] = awardXP(newPD[movingId], xpGain);
-          if (newPD[movingId].level > before) {
+        delete newSM[sel];newSM[sq]=movingId;
+        if(capturedPiece&&newPD[movingId]){
+          const evo=EVOLUTIONS[newPD[movingId].type];
+          const xpGain=evo?.xpForCapture?.[capturedPiece.type]??1;
+          const before=newPD[movingId].level;
+          newPD[movingId]=awardXP(newPD[movingId],xpGain);
+          if(newPD[movingId].level>before){
             setLevelUpSq(sq);
-            setTimeout(() => setLevelUpSq(null), 800);
+            setTimeout(()=>setLevelUpSq(null),1000);
           }
         }
-        setGame(newGame); setPieceData(newPD); setSquareMap(newSM);
-        setSel(sq); // ← FIX 2: rimane selezionato
-        setStdMoves([]); setAbilMoves([]);
+        setGame(newGame);setPieceData(newPD);setSquareMap(newSM);
+        // ✅ FIX: deseleziona dopo la mossa (era setSel(sq) — causava il bug)
+        setSel(null);setStdMoves([]);setAbilMoves([]);
         return;
       }
-      if (piece?.color === game.turn()) {
+      if(piece?.color===game.turn()){
         setSel(sq);
-        const { std, abil } = getMovesFor(sq);
-        setStdMoves(std); setAbilMoves(abil);
+        const{std,abil}=getMovesFor(sq);
+        setStdMoves(std);setAbilMoves(abil);
         return;
       }
-      setSel(null); setStdMoves([]); setAbilMoves([]);
+      setSel(null);setStdMoves([]);setAbilMoves([]);
       return;
     }
-    if (piece?.color === game.turn()) {
+    if(piece?.color===game.turn()){
       setSel(sq);
-      const { std, abil } = getMovesFor(sq);
-      setStdMoves(std); setAbilMoves(abil);
+      const{std,abil}=getMovesFor(sq);
+      setStdMoves(std);setAbilMoves(abil);
     }
-  }, [game, sel, stdMoves, abilMoves, squareMap, pieceData, getMovesFor]);
+  },[game,sel,stdMoves,abilMoves,squareMap,pieceData,getMovesFor]);
 
-  const board = game.board();
-  const turn = game.turn();
-  const selId = sel? squareMap[sel] : null;
-  const selData = selId? pieceData[selId] : null;
-  const selPiece = sel? game.get(sel) : null;
-  const evo = selPiece? EVOLUTIONS[selPiece.type] : null;
-  const lvlInfo = evo && selData? evo.levels[selData.level - 1] : null;
+  const board=game.board();
+  const turn=game.turn();
+  const selId=sel?squareMap[sel]:null;
+  const selData=selId?pieceData[selId]:null;
+  const selPiece=sel?game.get(sel):null;
+  const evo=selPiece?EVOLUTIONS[selPiece.type]:null;
+  const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;
 
-  return (
+  return(
     <div className="app">
       <h1>♟ Chess RPG</h1>
       <div className="board">
-        {board.map((row, r) => row.map((cell, c) => {
-          const sq = 'abcdefgh'[c] + (8 - r);
-          const isLight = (r + c) % 2 === 1;
-          const isSel = sel === sq;
-          const isStd = stdMoves.some(m => m.to === sq);
-          const isAbil = abilMoves.some(m => m.to === sq);
-          const isAny = isStd || isAbil;
-          const hasPiece =!!cell;
-          const id = squareMap[sq];
-          const data = id? pieceData[id] : null;
-          const level = data?.level?? 1;
-          const isLvlUp = levelUpSq === sq;
+        {board.map((row,r)=>row.map((cell,c)=>{
+          const sq='abcdefgh'[c]+(8-r);
+          const isLight=(r+c)%2===1;
+          const isSel=sel===sq;
+          const isStd=stdMoves.some(m=>m.to===sq);
+          const isAbil=abilMoves.some(m=>m.to===sq);
+          const isAny=isStd||isAbil;
+          const hasPiece=!!cell;
+          const id=squareMap[sq];
+          const data=id?pieceData[id]:null;
+          const level=data?.level??1;
+          const isLvlUp=levelUpSq===sq;
+          const pLvlInfo=data&&EVOLUTIONS[cell?.type]?EVOLUTIONS[cell.type].levels[level-1]:null;
 
-          return (
-            <div key={sq} onClick={() => handleClick(sq)}
+          return(
+            <div key={sq} onClick={()=>handleClick(sq)}
               className={`cell ${isLight?'light':'dark'} ${isSel?'sel':''}`}>
-              {isAny &&!hasPiece && (
+              {isAny&&!hasPiece&&(
                 <div style={{position:'absolute',width:'28%',height:'28%',borderRadius:'50%',
-                  background: isAbil? '#f59e0b' : '#22c55e'}}/>
+                  background:isAbil?'#f59e0b':'#22c55e',
+                  boxShadow:`0 0 8px ${isAbil?'#f59e0b':'#22c55e'}`}}/>
               )}
-              {isAny && hasPiece && (
-                <div style={{position:'absolute',inset:0,border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`}}/>
+              {isAny&&hasPiece&&(
+                <div style={{position:'absolute',inset:0,
+                  border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`,
+                  borderRadius:'4px'}}/>
               )}
-              {cell && (
+              {cell&&(
                 <span className={`piece-${cell.color}`}
-                  style={{transform: isLvlUp? 'scale(1.4)' : 'scale(1)'}}>
+                  style={{
+                    transition:'transform .15s',
+                    transform:isLvlUp?'scale(1.5)':'scale(1)',
+                    animation:isLvlUp?'lvlup 1s ease':undefined,
+                  }}>
                   {ICONS[cell.color][cell.type]}
                 </span>
               )}
-              {cell?.type === 'p' && level > 1 && (
+              {/* Badge livello */}
+              {cell?.type==='p'&&level>1&&(
                 <div style={{position:'absolute',top:2,right:3,fontSize:9,fontWeight:800,
-                  color: level===2?'#eab308':'#a855f7'}}>
-                  {'★'.repeat(level - 1)}
+                  color:level===2?'#eab308':'#a855f7',
+                  textShadow:`0 0 6px ${level===2?'#eab308':'#a855f7'}`}}>
+                  {'★'.repeat(level-1)}
+                </div>
+              )}
+              {/* ✅ FIX: mini barra XP sempre visibile su ogni pedone */}
+              {cell?.type==='p'&&data&&pLvlInfo&&(
+                <div style={{position:'absolute',bottom:0,left:0,right:0,height:'3px',background:'#0f172a'}}>
+                  <div style={{
+                    height:'100%',
+                    width:pLvlInfo.xpToNext?`${(data.xp/pLvlInfo.xpToNext)*100}%`:'100%',
+                    background:pLvlInfo.color,
+                    transition:'width .3s',
+                  }}/>
                 </div>
               )}
             </div>
@@ -258,24 +275,29 @@ function App() {
       <div className="panel">
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{flex:1}}>
-            {selData && evo? (<>
+            {selData&&evo?(<>
               <div style={{fontWeight:700,fontSize:13,color:lvlInfo.color}}>
-                {lvlInfo.name}
+                {lvlInfo.name} {ICONS[selPiece.color][selPiece.type]}
               </div>
               <div className="xp-bar">
                 <div className="xp-fill" style={{
-                  width: lvlInfo.xpToNext? `${(selData.xp/lvlInfo.xpToNext)*100}%` : '100%',
-                  background: lvlInfo.color}}/>
+                  width:lvlInfo.xpToNext?`${(selData.xp/lvlInfo.xpToNext)*100}%`:'100%',
+                  background:lvlInfo.color}}/>
               </div>
               <div style={{fontSize:11,color:'#475569',marginTop:3}}>
-                {lvlInfo.xpToNext? `XP ${selData.xp}/${lvlInfo.xpToNext}` : 'MAX'}
+                {lvlInfo.xpToNext?`XP ${selData.xp}/${lvlInfo.xpToNext} → ${evo.levels[selData.level]?.name??'MAX'}`:'★ Livello massimo'}
               </div>
-            </>) : (
+              {abilMoves.length>0&&(
+                <div style={{fontSize:11,color:'#f59e0b',marginTop:4}}>
+                  🟡 {abilMoves.length} abilità disponibili (punti gialli)
+                </div>
+              )}
+            </>):(
               <div style={{color:'#475569',fontSize:12}}>Seleziona un pezzo</div>
             )}
           </div>
-          <div className="turn-pill" style={{color: turn==='w'?'#38bdf8':'#f43f5e'}}>
-            {turn==='w'?'Bianco':'Nero'}
+          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>
+            {turn==='w'?'⬜ Bianco':'⬛ Nero'}
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Fixed</title>
+<title>Chess RPG - Evolved</title>
 <style>
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
@@ -33,12 +33,13 @@ h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:80
 const {useState,useEffect,useCallback}=React;
 const Chess=window.Chess;
 
+// ✅ MODIFICA: Aggiunte le icone evolutive testuali direttamente nei livelli
 const EVOLUTIONS={
   p:{
     levels:[
-      {name:'Soldato',  color:'#64748b', xpToNext:3},
-      {name:'Veterano', color:'#eab308', xpToNext:5},
-      {name:'Campione', color:'#a855f7', xpToNext:null},
+      {name:'Soldato',  color:#64748b, xpToNext:3, icons:{w:'♙', b:'♟'}},
+      {name:'Veterano', color:#eab308, xpToNext:5, icons:{w:'⛨', b:'⛨'}},
+      {name:'Campione', color:#a855f7, xpToNext:null, icons:{w:'⚔', b:'⚔'}},
     ],
     xpForCapture:{p:1,n:2,b:2,r:3,q:5},
     getAbilityMoves(sq,game,level,color){
@@ -180,7 +181,6 @@ function App(){
           }
         }
         setGame(newGame);setPieceData(newPD);setSquareMap(newSM);
-        // ✅ FIX: deseleziona dopo la mossa (era setSel(sq) — causava il bug)
         setSel(null);setStdMoves([]);setAbilMoves([]);
         return;
       }
@@ -219,7 +219,6 @@ function App(){
           const isStd=stdMoves.some(m=>m.to===sq);
           const isAbil=abilMoves.some(m=>m.to===sq);
           const isAny=isStd||isAbil;
-          const hasPiece=!!cell;
           const id=squareMap[sq];
           const data=id?pieceData[id]:null;
           const level=data?.level??1;
@@ -229,16 +228,17 @@ function App(){
           return(
             <div key={sq} onClick={()=>handleClick(sq)}
               className={`cell ${isLight?'light':'dark'} ${isSel?'sel':''}`}>
-              {isAny&&!hasPiece&&(
+              {isAny&&!cell&&(
                 <div style={{position:'absolute',width:'28%',height:'28%',borderRadius:'50%',
                   background:isAbil?'#f59e0b':'#22c55e',
                   boxShadow:`0 0 8px ${isAbil?'#f59e0b':'#22c55e'}`}}/>
               )}
-              {isAny&&hasPiece&&(
+              {isAny&&cell&&(
                 <div style={{position:'absolute',inset:0,
                   border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`,
                   borderRadius:'4px'}}/>
               )}
+              {/* ✅ FIX: Il pezzo ora cambia icona in base al suo livello corrente */}
               {cell&&(
                 <span className={`piece-${cell.color}`}
                   style={{
@@ -246,7 +246,9 @@ function App(){
                     transform:isLvlUp?'scale(1.5)':'scale(1)',
                     animation:isLvlUp?'lvlup 1s ease':undefined,
                   }}>
-                  {ICONS[cell.color][cell.type]}
+                  {cell.type==='p'&&data
+                    ? (EVOLUTIONS.p.levels[level-1]?.icons[cell.color]??ICONS[cell.color][cell.type])
+                    : ICONS[cell.color][cell.type]}
                 </span>
               )}
               {/* Badge livello */}
@@ -257,7 +259,7 @@ function App(){
                   {'★'.repeat(level-1)}
                 </div>
               )}
-              {/* ✅ FIX: mini barra XP sempre visibile su ogni pedone */}
+              {/* Mini barra XP sempre visibile */}
               {cell?.type==='p'&&data&&pLvlInfo&&(
                 <div style={{position:'absolute',bottom:0,left:0,right:0,height:'3px',background:'#0f172a'}}>
                   <div style={{
@@ -276,8 +278,9 @@ function App(){
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{flex:1}}>
             {selData&&evo?(<>
+              {/* ✅ FIX: Aggiornata l'icona anche nel pannello informativo inferiore */}
               <div style={{fontWeight:700,fontSize:13,color:lvlInfo.color}}>
-                {lvlInfo.name} {ICONS[selPiece.color][selPiece.type]}
+                {lvlInfo.name} {selPiece.type==='p'?lvlInfo.icons[selPiece.color]:ICONS[selPiece.color][selPiece.type]}
               </div>
               <div className="xp-bar">
                 <div className="xp-fill" style={{

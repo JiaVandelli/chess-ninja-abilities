@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Pawn Evolution Only</title>
+<title>Chess RPG - Manual Evolution</title>
 <style>
 *{box-sizing:border-box}html,body{height:100%}
 body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
@@ -17,8 +17,6 @@ h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:80
 .piece-w{color:#38bdf8;text-shadow:0 0 10px rgba(56,189,248,.6)}
 .piece-b{color:#f43f5e;text-shadow:0 0 10px rgba(244,63,94,.6)}
 .panel{margin:12px auto 0;max-width:520px;background:#030712;border:1px solid #1e293b;border-radius:12px;padding:12px 14px}
-.xp-bar{width:120px;height:5px;background:#1e293b;border-radius:3px;overflow:hidden;margin-top:5px}
-.xp-fill{height:100%;border-radius:3px;transition:width 0.4s}
 .turn-pill{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
 @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
 </style>
@@ -36,17 +34,15 @@ const Chess=window.Chess;
 const EVOLUTIONS={
   p:{
     levels:[
-      {name:'Soldato', color:'#64748b', xpToNext:3, icons:{w:'♙', b:'♟'}},
-      {name:'Veterano', color:'#eab308', xpToNext:5, icons:{w:'⛨', b:'⛨'}},
-      {name:'Campione', color:'#a855f7', xpToNext:null, icons:{w:'⚔', b:'⚔'}},
+      {name:'Soldato', color:'#64748b', icons:{w:'♙', b:'♟'}},
+      {name:'Veterano', color:'#eab308', icons:{w:'⛨', b:'⛨'}},
+      {name:'Campione', color:'#a855f7', icons:{w:'⚔', b:'⚔'}},
     ],
-    xpForCapture:{p:1,n:2,b:2,r:3,q:5},
     getAbilityMoves(sq,game,level,color){
       const moves=[];
       const file=sq.charCodeAt(0)-97;
       const rank=parseInt(sq[1]);
-      
-      // Lv2: Passo indietro tattico
+
       if(level>=2){
         const backRank=color==='w'?rank-1:rank+1;
         if(backRank>=1&&backRank<=8){
@@ -54,7 +50,6 @@ const EVOLUTIONS={
           if(!game.get(toSq)) moves.push({from:sq,to:toSq,isCapture:false});
         }
       }
-      // Lv3: Movimento omnidirezionale (stile Re)
       if(level>=3){
         [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dc,dr])=>{
           const nf=file+dc,nr=rank+dr;
@@ -79,25 +74,12 @@ function buildInitialState(game){
       if(cell){
         const sq='abcdefgh'[c]+(8-r);
         const id=`${cell.color}${cell.type}_${sq}`;
-        pieceData[id]={id,type:cell.type,color:cell.color,xp:0,level:1};
+        pieceData[id]={id,type:cell.type,color:cell.color,level:1};
         squareMap[sq]=id;
       }
     });
   });
   return{pieceData,squareMap};
-}
-
-function awardXP(piece,xpGained){
-  const evo=EVOLUTIONS[piece.type];
-  if(!evo) return piece;
-  let{xp,level}=piece;
-  xp+=xpGained;
-  while(level<evo.levels.length){
-    const needed=evo.levels[level-1].xpToNext;
-    if(needed!==null&&xp>=needed){xp-=needed;level++;}
-    else break;
-  }
-  return{...piece,xp,level};
 }
 
 function execAbilityMove(game,from,to){
@@ -124,6 +106,7 @@ function App(){
   const[stdMoves,setStdMoves]=useState([]);
   const[abilMoves,setAbilMoves]=useState([]);
   const[levelUpSq,setLevelUpSq]=useState(null);
+  const[points,setPoints]=useState({w:0,b:0});
 
   useEffect(()=>{
     const{pieceData:pd,squareMap:sm}=buildInitialState(game);
@@ -149,6 +132,8 @@ function App(){
       if(stdMv||abilMv){
         let newGame,capturedPiece=null;
         const movingId=squareMap[sel];
+        const currentTurn=game.turn();
+
         if(abilMv){
           const res=execAbilityMove(game,sel,sq);
           newGame=res.newGame;capturedPiece=res.capturedPiece;
@@ -169,19 +154,12 @@ function App(){
         }
         const newPieceOnSq=newGame.get(sq);
         if(newPieceOnSq&&newPieceOnSq.type!==pieceData[movingId]?.type){
-          newPD[movingId]={...newPD[movingId],type:newPieceOnSq.type};
+          newPD[movingId]={...newPD[movingId],type:newPieceOnSq.type,level:1};
         }
         delete newSM[sel];newSM[sq]=movingId;
-        if(capturedPiece&&newPD[movingId]){
-          const evo=EVOLUTIONS[newPD[movingId].type];
-          const xpGain=evo?.xpForCapture?.[capturedPiece.type]??1;
-          const before=newPD[movingId].level;
-          newPD[movingId]=awardXP(newPD[movingId],xpGain);
-          if(newPD[movingId].level>before){
-            setLevelUpSq(sq);
-            setTimeout(()=>setLevelUpSq(null),1000);
-          }
-        }
+
+        setPoints(prev=>({...prev,[currentTurn]:prev[currentTurn]+1}));
+
         setGame(newGame);setPieceData(newPD);setSquareMap(newSM);
         setSel(null);setStdMoves([]);setAbilMoves([]);
         return;
@@ -202,6 +180,28 @@ function App(){
     }
   },[game,sel,stdMoves,abilMoves,squareMap,pieceData,getMovesFor]);
 
+  const handleEvolve=useCallback(()=>{
+    if(!sel) return;
+    const turn=game.turn();
+    const selPiece=game.get(sel);
+    if(!selPiece||selPiece.color!==turn) return; 
+    if(points[turn]<3) return;
+
+    const selId=squareMap[sel];
+    const data=pieceData[selId];
+    if(!data||data.type!=='p'||data.level>=3) return;
+
+    const newPD={...pieceData};
+    newPD[selId]={...data,level:data.level+1};
+
+    setPoints(prev=>({...prev,[turn]:prev[turn]-3}));
+    setPieceData(newPD);
+    setLevelUpSq(sel);
+    setTimeout(()=>setLevelUpSq(null),1000);
+
+    setSel(null);setStdMoves([]);setAbilMoves([]);
+  },[sel,squareMap,pieceData,points,game]);
+
   const board=game.board();
   const turn=game.turn();
   const selId=sel?squareMap[sel]:null;
@@ -209,6 +209,9 @@ function App(){
   const selPiece=sel?game.get(sel):null;
   const evo=selPiece?EVOLUTIONS[selPiece.type]:null;
   const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;
+
+  const currentPoints=points[turn];
+  const chargePct=Math.min((currentPoints/3)*100,100);
 
   return(
     <div className="app">
@@ -225,7 +228,6 @@ function App(){
           const data=id?pieceData[id]:null;
           const level=data?.level??1;
           const isLvlUp=levelUpSq===sq;
-          const pLvlInfo=data&&EVOLUTIONS[cell?.type]?EVOLUTIONS[cell.type].levels[level-1]:null;
 
           return(
             <div key={sq} onClick={()=>handleClick(sq)}
@@ -243,12 +245,12 @@ function App(){
               {cell&&(
                 <span className={`piece-${cell.color}`}
                   style={{
-                    transition:'transform .15s',
+                    transition:'transform .15s', /* ✅ FIXED: aggiunto lo spazio per fluidità animazione */
                     transform:isLvlUp?'scale(1.5)':'scale(1)',
                     animation:isLvlUp?'lvlup 1s ease':undefined,
                   }}>
                   {EVOLUTIONS[cell.type]&&data
-                   ? (EVOLUTIONS[cell.type].levels[level-1]?.icons[cell.color]??ICONS[cell.color][cell.type])
+                  ? (EVOLUTIONS[cell.type].levels[level-1]?.icons[cell.color]??ICONS[cell.color][cell.type])
                     : ICONS[cell.color][cell.type]}
                 </span>
               )}
@@ -259,45 +261,61 @@ function App(){
                   {'★'.repeat(level-1)}
                 </div>
               )}
-              {cell&&data&&pLvlInfo&&(
-                <div style={{position:'absolute',bottom:0,left:0,right:0,height:'3px',background:'#0f172a'}}>
-                  <div style={{
-                    height:'100%',
-                    width:pLvlInfo.xpToNext?`${(data.xp/pLvlInfo.xpToNext)*100}%`:'100%',
-                    background:pLvlInfo.color,
-                    transition:'width .3s',
-                  }}/>
-                </div>
-              )}
             </div>
           );
         }))}
       </div>
+
       <div className="panel">
+        <div style={{marginBottom:'12px',background:'#0b1120',padding:'8px 10px',borderRadius:'8px',border:'1px solid #1e293b'}}>
+          <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:800,color:'#94a3b8'}}>
+            <span>🔋 CARICA EVOLUZIONE ({turn==='w'?'BIANCO':'NERO'})</span>
+            <span style={{color:currentPoints>=3?'#22c55e':'#38bdf8'}}>
+              {currentPoints}/3 PUNTI {currentPoints>=3?'• PRONTO!':''}
+            </span>
+          </div>
+          <div style={{width:'100%',height:'6px',background:'#1e293b',borderRadius:'3px',overflow:'hidden',marginTop:'5px'}}>
+            <div style={{
+              width:`${chargePct}%`,
+              height:'100%',
+              background:currentPoints>=3?'#22c55e':'#38bdf8',
+              boxShadow:currentPoints>=3?'0 0 10px #22c55e':'none',
+              transition:'width 0.3s'
+            }}/>
+          </div>
+        </div>
+
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div style={{flex:1}}>
+          <div style={{flex:1,marginRight:'10px'}}>
             {selData&&evo?(<>
               <div style={{fontWeight:700,fontSize:13,color:lvlInfo.color}}>
-                {lvlInfo.name} {lvlInfo.icons[selPiece.color]??ICONS[selPiece.color][selPiece.type]}
+                {lvlInfo.name} {lvlInfo.icons[selPiece.color]??ICONS[selPiece.color][selPiece.type]} (Lv. {selData.level})
               </div>
-              <div className="xp-bar">
-                <div className="xp-fill" style={{
-                  width:lvlInfo.xpToNext?`${(selData.xp/lvlInfo.xpToNext)*100}%`:'100%',
-                  background:lvlInfo.color}}/>
-              </div>
-              <div style={{fontSize:11,color:'#475569',marginTop:3}}>
-                {lvlInfo.xpToNext?`XP ${selData.xp}/${lvlInfo.xpToNext} → ${evo.levels[selData.level]?.name??'MAX'}`:'★ Livello massimo'}
-              </div>
+
+              {selPiece.type==='p'&&selData.level<3&&(
+                <button onClick={handleEvolve} disabled={currentPoints<3||selPiece.color!==turn} style={{
+                  marginTop:'8px',width:'100%',padding:'8px',
+                  background:currentPoints>=3&&selPiece.color===turn?lvlInfo.color:'#1e293b',
+                  color:currentPoints>=3&&selPiece.color===turn?'#030712':'#64748b',
+                  border:'none',borderRadius:'6px',fontWeight:800,fontSize:11,
+                  cursor:currentPoints>=3&&selPiece.color===turn?'pointer':'not-allowed',
+                  boxShadow:currentPoints>=3&&selPiece.color===turn?`0 0 12px ${lvlInfo.color}`:'none',
+                  transition:'all 0.2s'
+                }}>
+                  ⚡ EVOLVI IN {evo.levels[selData.level].name.toUpperCase()} (-3 PT)
+                </button>
+              )}
+
               {abilMoves.length>0&&(
-                <div style={{fontSize:11,color:'#f59e0b',marginTop:4}}>
-                  🟡 {abilMoves.length} abilità disponibili (punti gialli)
+                <div style={{fontSize:11,color:'#f59e0b',marginTop:6}}>
+                  🟡 {abilMoves.length} abilità speciali sbloccate!
                 </div>
               )}
             </>):(
-              <div style={{color:'#475569',fontSize:12}}>Seleziona un pezzo</div>
+              <div style={{color:'#475569',fontSize:12}}>Seleziona un pezzo sulla scacchiera</div>
             )}
           </div>
-          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>
+          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e',textAlign:'center',minWidth:'90px'}}>
             {turn==='w'?'⬜ Bianco':'⬛ Nero'}
           </div>
         </div>

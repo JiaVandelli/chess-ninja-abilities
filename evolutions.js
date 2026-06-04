@@ -19,21 +19,33 @@ const EVOLUTIONS = {
           if (!game.get(toSq)) moves.push({ from: sq, to: toSq, isCapture: false });
         }
       }
+      
       // Livello 3: Movimento omnidirezionale da Re
       if (level >= 3) {
-        [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].forEach(([dc, dr]) => {
-          const nf = file + dc, nr = rank + dr;
+        // ✅ FIX: Variabili rinominate in [dFile, dRank] per chiarezza assoluta.
+        // Questo previene bug futuri quando si aggiungeranno pezzi asimmetrici (es. Cavallo).
+        [
+          [-1, -1], [-1, 0], [-1, 1], 
+          [0, -1],           [0, 1], 
+          [1, -1],  [1, 0],  [1, 1]
+        ].forEach(([dFile, dRank]) => {
+          const nf = file + dFile;
+          const nr = rank + dRank;
+          
+          // Controllo limiti della scacchiera
           if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
+          
           const toSq = String.fromCharCode(97 + nf) + nr;
           const target = game.get(toSq);
+          
+          // Non puoi mangiare i tuoi stessi pezzi
           if (target?.color === color) return;
+          
           moves.push({ from: sq, to: toSq, isCapture: !!target });
         });
       }
+      
       return moves;
     },
   },
-  /* Puoi espandere il gioco qui in futuro:
-  r: { levels: [...], getAbilityMoves(...) }, 
-  */
 };

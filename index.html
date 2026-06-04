@@ -1,330 +1,39 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Manual Evolution</title>
-<style>
-*{box-sizing:border-box}html,body{height:100%}
-body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
-#root{width:100%;max-width:760px}
-.app{background:#0b0f19;border:2px solid #1e293b;border-radius:20px;padding:16px;box-shadow:0 0 30px rgba(56,189,248,.12)}
-h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:800}
-.board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;max-width:520px;aspect-ratio:1/1;margin:0 auto;border-radius:10px;overflow:hidden;border:2px solid #1e293b}
-.cell{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;font-size:clamp(26px,6.5vw,44px);cursor:pointer}
-.cell.light{background:#1e293b}.cell.dark{background:#0f172a}
-.cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
-.piece-w{color:#38bdf8;text-shadow:0 0 10px rgba(56,189,248,.6)}
-.piece-b{color:#f43f5e;text-shadow:0 0 10px rgba(244,63,94,.6)}
-.panel{margin:12px auto 0;max-width:520px;background:#030712;border:1px solid #1e293b;border-radius:12px;padding:12px 14px}
-.turn-pill{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
-@keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
-</style>
-</head>
-<body>
-<div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script type="text/babel">
-const {useState,useEffect,useCallback}=React;
-const Chess=window.Chess;
-
-const EVOLUTIONS={
-  p:{
-    levels:[
-      {name:'Soldato', color:'#64748b', icons:{w:'♙', b:'♟'}},
-      {name:'Veterano', color:'#eab308', icons:{w:'⛨', b:'⛨'}},
-      {name:'Campione', color:'#a855f7', icons:{w:'⚔', b:'⚔'}},
+// evolutions.js — Aggiungi qui le evoluzioni dei pezzi senza toccare il codice principale
+const EVOLUTIONS = {
+  p: {
+    levels: [
+      { name: 'Soldato', color: '#64748b', icons: { w: '♙', b: '♟' } },
+      { name: 'Veterano', color: '#eab308', icons: { w: '⛨', b: '⛨' } },
+      { name: 'Campione', color: '#a855f7', icons: { w: '⚔', b: '⚔' } },
     ],
-    getAbilityMoves(sq,game,level,color){
-      const moves=[];
-      const file=sq.charCodeAt(0)-97;
-      const rank=parseInt(sq[1]);
+    getAbilityMoves(sq, game, level, color) {
+      const moves = [];
+      const file = sq.charCodeAt(0) - 97;
+      const rank = parseInt(sq[1]);
 
-      if(level>=2){
-        const backRank=color==='w'?rank-1:rank+1;
-        if(backRank>=1&&backRank<=8){
-          const toSq=sq[0]+backRank;
-          if(!game.get(toSq)) moves.push({from:sq,to:toSq,isCapture:false});
+      // Livello 2: Passo indietro
+      if (level >= 2) {
+        const backRank = color === 'w' ? rank - 1 : rank + 1;
+        if (backRank >= 1 && backRank <= 8) {
+          const toSq = sq[0] + backRank;
+          if (!game.get(toSq)) moves.push({ from: sq, to: toSq, isCapture: false });
         }
       }
-      if(level>=3){
-        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dc,dr])=>{
-          const nf=file+dc,nr=rank+dr;
-          if(nf<0||nf>7||nr<1||nr>8) return;
-          const toSq=String.fromCharCode(97+nf)+nr;
-          const target=game.get(toSq);
-          if(target?.color===color) return;
-          moves.push({from:sq,to:toSq,isCapture:!!target});
+      // Livello 3: Movimento omnidirezionale da Re
+      if (level >= 3) {
+        [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].forEach(([dc, dr]) => {
+          const nf = file + dc, nr = rank + dr;
+          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
+          const toSq = String.fromCharCode(97 + nf) + nr;
+          const target = game.get(toSq);
+          if (target?.color === color) return;
+          moves.push({ from: sq, to: toSq, isCapture: !!target });
         });
       }
       return moves;
     },
   },
+  /* Puoi espandere il gioco qui in futuro:
+  r: { levels: [...], getAbilityMoves(...) }, 
+  */
 };
-
-const ICONS={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
-
-function buildInitialState(game){
-  const pieceData={},squareMap={};
-  game.board().forEach((row,r)=>{
-    row.forEach((cell,c)=>{
-      if(cell){
-        const sq='abcdefgh'[c]+(8-r);
-        const id=`${cell.color}${cell.type}_${sq}`;
-        pieceData[id]={id,type:cell.type,color:cell.color,level:1};
-        squareMap[sq]=id;
-      }
-    });
-  });
-  return{pieceData,squareMap};
-}
-
-function execAbilityMove(game,from,to){
-  const piece=game.get(from);
-  const captured=game.get(to)||null;
-  const g=new Chess(game.fen());
-  g.remove(from);
-  if(captured) g.remove(to);
-  g.put(piece,to);
-  const parts=g.fen().split(' ');
-  const wasWhite=parts[1]==='w';
-  parts[1]=wasWhite?'b':'w';
-  if(!wasWhite) parts[5]=String(parseInt(parts[5])+1);
-  parts[3]='-';
-  const ng=new Chess();ng.load(parts.join(' '));
-  return{newGame:ng,capturedPiece:captured};
-}
-
-function App(){
-  const[game,setGame]=useState(()=>new Chess());
-  const[pieceData,setPieceData]=useState({});
-  const[squareMap,setSquareMap]=useState({});
-  const[sel,setSel]=useState(null);
-  const[stdMoves,setStdMoves]=useState([]);
-  const[abilMoves,setAbilMoves]=useState([]);
-  const[levelUpSq,setLevelUpSq]=useState(null);
-  const[points,setPoints]=useState({w:0,b:0});
-
-  useEffect(()=>{
-    const{pieceData:pd,squareMap:sm}=buildInitialState(game);
-    setPieceData(pd);setSquareMap(sm);
-  },[]);
-
-  const getMovesFor=useCallback((sq)=>{
-    const piece=game.get(sq);
-    if(!piece) return{std:[],abil:[]};
-    const std=game.moves({square:sq,verbose:true});
-    const id=squareMap[sq];
-    const data=pieceData[id];
-    const evo=EVOLUTIONS[piece.type];
-    const abil=(evo&&data)?evo.getAbilityMoves(sq,game,data.level,piece.color):[];
-    return{std,abil};
-  },[game,squareMap,pieceData]);
-
-  const handleClick=useCallback((sq)=>{
-    const piece=game.get(sq);
-    if(sel){
-      const stdMv=stdMoves.find(m=>m.to===sq);
-      const abilMv=abilMoves.find(m=>m.to===sq);
-      if(stdMv||abilMv){
-        let newGame,capturedPiece=null;
-        const movingId=squareMap[sel];
-        const currentTurn=game.turn();
-
-        if(abilMv){
-          const res=execAbilityMove(game,sel,sq);
-          newGame=res.newGame;capturedPiece=res.capturedPiece;
-        }else{
-          newGame=new Chess(game.fen());
-          const mv=newGame.move({from:sel,to:sq,promotion:'q'});
-          if(mv?.captured) capturedPiece={type:mv.captured};
-          if(mv?.flags?.includes('e')){
-            capturedPiece={type:'p',_sq:sq[0]+sel[1]};
-          }
-        }
-        const newSM={...squareMap};
-        const newPD={...pieceData};
-        if(capturedPiece){
-          const capSq=capturedPiece._sq??sq;
-          const capturedId=newSM[capSq];
-          delete newPD[capturedId];delete newSM[capSq];
-        }
-        const newPieceOnSq=newGame.get(sq);
-        if(newPieceOnSq&&newPieceOnSq.type!==pieceData[movingId]?.type){
-          newPD[movingId]={...newPD[movingId],type:newPieceOnSq.type,level:1};
-        }
-        delete newSM[sel];newSM[sq]=movingId;
-
-        setPoints(prev=>({...prev,[currentTurn]:prev[currentTurn]+1}));
-
-        setGame(newGame);setPieceData(newPD);setSquareMap(newSM);
-        setSel(null);setStdMoves([]);setAbilMoves([]);
-        return;
-      }
-      if(piece?.color===game.turn()){
-        setSel(sq);
-        const{std,abil}=getMovesFor(sq);
-        setStdMoves(std);setAbilMoves(abil);
-        return;
-      }
-      setSel(null);setStdMoves([]);setAbilMoves([]);
-      return;
-    }
-    if(piece?.color===game.turn()){
-      setSel(sq);
-      const{std,abil}=getMovesFor(sq);
-      setStdMoves(std);setAbilMoves(abil);
-    }
-  },[game,sel,stdMoves,abilMoves,squareMap,pieceData,getMovesFor]);
-
-  const handleEvolve=useCallback(()=>{
-    if(!sel) return;
-    const turn=game.turn();
-    const selPiece=game.get(sel);
-    if(!selPiece||selPiece.color!==turn) return; 
-    if(points[turn]<3) return;
-
-    const selId=squareMap[sel];
-    const data=pieceData[selId];
-    if(!data||data.type!=='p'||data.level>=3) return;
-
-    const newPD={...pieceData};
-    newPD[selId]={...data,level:data.level+1};
-
-    setPoints(prev=>({...prev,[turn]:prev[turn]-3}));
-    setPieceData(newPD);
-    setLevelUpSq(sel);
-    setTimeout(()=>setLevelUpSq(null),1000);
-
-    setSel(null);setStdMoves([]);setAbilMoves([]);
-  },[sel,squareMap,pieceData,points,game]);
-
-  const board=game.board();
-  const turn=game.turn();
-  const selId=sel?squareMap[sel]:null;
-  const selData=selId?pieceData[selId]:null;
-  const selPiece=sel?game.get(sel):null;
-  const evo=selPiece?EVOLUTIONS[selPiece.type]:null;
-  const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;
-
-  const currentPoints=points[turn];
-  const chargePct=Math.min((currentPoints/3)*100,100);
-
-  return(
-    <div className="app">
-      <h1>♟ Chess RPG</h1>
-      <div className="board">
-        {board.map((row,r)=>row.map((cell,c)=>{
-          const sq='abcdefgh'[c]+(8-r);
-          const isLight=(r+c)%2===1;
-          const isSel=sel===sq;
-          const isStd=stdMoves.some(m=>m.to===sq);
-          const isAbil=abilMoves.some(m=>m.to===sq);
-          const isAny=isStd||isAbil;
-          const id=squareMap[sq];
-          const data=id?pieceData[id]:null;
-          const level=data?.level??1;
-          const isLvlUp=levelUpSq===sq;
-
-          return(
-            <div key={sq} onClick={()=>handleClick(sq)}
-              className={`cell ${isLight?'light':'dark'} ${isSel?'sel':''}`}>
-              {isAny&&!cell&&(
-                <div style={{position:'absolute',width:'28%',height:'28%',borderRadius:'50%',
-                  background:isAbil?'#f59e0b':'#22c55e',
-                  boxShadow:`0 0 8px ${isAbil?'#f59e0b':'#22c55e'}`}}/>
-              )}
-              {isAny&&cell&&(
-                <div style={{position:'absolute',inset:0,
-                  border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`,
-                  borderRadius:'4px'}}/>
-              )}
-              {cell&&(
-                <span className={`piece-${cell.color}`}
-                  style={{
-                    transition:'transform .15s', /* ✅ FIXED: aggiunto lo spazio per fluidità animazione */
-                    transform:isLvlUp?'scale(1.5)':'scale(1)',
-                    animation:isLvlUp?'lvlup 1s ease':undefined,
-                  }}>
-                  {EVOLUTIONS[cell.type]&&data
-                  ? (EVOLUTIONS[cell.type].levels[level-1]?.icons[cell.color]??ICONS[cell.color][cell.type])
-                    : ICONS[cell.color][cell.type]}
-                </span>
-              )}
-              {cell&&EVOLUTIONS[cell.type]&&level>1&&(
-                <div style={{position:'absolute',top:2,right:3,fontSize:9,fontWeight:800,
-                  color:level===2?'#eab308':'#a855f7',
-                  textShadow:`0 0 6px ${level===2?'#eab308':'#a855f7'}`}}>
-                  {'★'.repeat(level-1)}
-                </div>
-              )}
-            </div>
-          );
-        }))}
-      </div>
-
-      <div className="panel">
-        <div style={{marginBottom:'12px',background:'#0b1120',padding:'8px 10px',borderRadius:'8px',border:'1px solid #1e293b'}}>
-          <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:800,color:'#94a3b8'}}>
-            <span>🔋 CARICA EVOLUZIONE ({turn==='w'?'BIANCO':'NERO'})</span>
-            <span style={{color:currentPoints>=3?'#22c55e':'#38bdf8'}}>
-              {currentPoints}/3 PUNTI {currentPoints>=3?'• PRONTO!':''}
-            </span>
-          </div>
-          <div style={{width:'100%',height:'6px',background:'#1e293b',borderRadius:'3px',overflow:'hidden',marginTop:'5px'}}>
-            <div style={{
-              width:`${chargePct}%`,
-              height:'100%',
-              background:currentPoints>=3?'#22c55e':'#38bdf8',
-              boxShadow:currentPoints>=3?'0 0 10px #22c55e':'none',
-              transition:'width 0.3s'
-            }}/>
-          </div>
-        </div>
-
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div style={{flex:1,marginRight:'10px'}}>
-            {selData&&evo?(<>
-              <div style={{fontWeight:700,fontSize:13,color:lvlInfo.color}}>
-                {lvlInfo.name} {lvlInfo.icons[selPiece.color]??ICONS[selPiece.color][selPiece.type]} (Lv. {selData.level})
-              </div>
-
-              {selPiece.type==='p'&&selData.level<3&&(
-                <button onClick={handleEvolve} disabled={currentPoints<3||selPiece.color!==turn} style={{
-                  marginTop:'8px',width:'100%',padding:'8px',
-                  background:currentPoints>=3&&selPiece.color===turn?lvlInfo.color:'#1e293b',
-                  color:currentPoints>=3&&selPiece.color===turn?'#030712':'#64748b',
-                  border:'none',borderRadius:'6px',fontWeight:800,fontSize:11,
-                  cursor:currentPoints>=3&&selPiece.color===turn?'pointer':'not-allowed',
-                  boxShadow:currentPoints>=3&&selPiece.color===turn?`0 0 12px ${lvlInfo.color}`:'none',
-                  transition:'all 0.2s'
-                }}>
-                  ⚡ EVOLVI IN {evo.levels[selData.level].name.toUpperCase()} (-3 PT)
-                </button>
-              )}
-
-              {abilMoves.length>0&&(
-                <div style={{fontSize:11,color:'#f59e0b',marginTop:6}}>
-                  🟡 {abilMoves.length} abilità speciali sbloccate!
-                </div>
-              )}
-            </>):(
-              <div style={{color:'#475569',fontSize:12}}>Seleziona un pezzo sulla scacchiera</div>
-            )}
-          </div>
-          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e',textAlign:'center',minWidth:'90px'}}>
-            {turn==='w'?'⬜ Bianco':'⬛ Nero'}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-</script>
-</body>
-</html>

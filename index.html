@@ -46,7 +46,6 @@ body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;
   border:3px solid #4b3220;
   box-shadow:0 0 0 5px #6b4423, 0 4px 20px rgba(0,0,0,0.5);
 }
-/* ✅ FIX BUG TAGLIO: Ridotto il font minimo da 32px a 24px per non far strabordare le caselle su mobile */
 .cell{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;font-size:clamp(24px, 7.5vw, 46px);cursor:pointer;line-height:1}
 
 /* COLORI SCACCHIERA LEGNO CLASSICO */
@@ -134,7 +133,6 @@ function App(){
   const[levelUpSq,setLevelUpSq]=useState(null);
   const[points,setPoints]=useState({w:0,b:0});
   
-  /* STATO PER I NOMI DEI GIOCATORI */
   const[playerW,setPlayerW]=useState('');
   const[playerB,setPlayerB]=useState('');
 
@@ -233,7 +231,7 @@ function App(){
 
     const selId=squareMap[sel];
     const data=pieceData[selId];
-    if(!data||data.type!=='p'||data.level>=3) return;
+    if(!data||data.level >= 3) return; // Rimosso vincolo rigido sul pedone tipo === 'p'
 
     const newPD={...pieceData};
     newPD[selId]={...data,level:data.level+1};
@@ -259,7 +257,6 @@ function App(){
 
   return(
     <div className="app">
-      {/* 👤 GIOCATORE NERO (IN ALTO) */}
       <input 
         type="text" 
         className="player-input" 
@@ -308,7 +305,6 @@ function App(){
                 </span>
               )}
               
-              {/* BORDO E PALLINI EVOLUZIONE */}
               {cell&&EVOLUTIONS[cell.type]&&level>1&&(
                 <>
                   <div style={{
@@ -328,7 +324,6 @@ function App(){
         }))}
       </div>
 
-      {/* 👤 GIOCATORE BIANCO (IN BASSO) */}
       <input 
         type="text" 
         className="player-input" 
@@ -366,7 +361,7 @@ function App(){
                 </span>
               </div>
 
-              {selPiece.type==='p'&&selData.level<3&&(
+              {selData.level<3&&(
                 <button onClick={handleEvolve} disabled={currentPoints<3||selPiece.color!==turn} style={{
                   marginTop:'8px',width:'100%',padding:'8px',
                   background:currentPoints>=3&&selPiece.color===turn?lvlInfo.color:'#1e293b',

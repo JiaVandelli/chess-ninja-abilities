@@ -9,7 +9,29 @@
 body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
 #root{width:100%;max-width:760px}
 .app{background:#0b0f19;border:2px solid #1e293b;border-radius:20px;padding:16px;box-shadow:0 0 30px rgba(56,189,248,.12)}
-h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:800}
+
+/* INPUT DEI GIOCATORI STILE TABELLONE */
+.player-input {
+  background: #030712;
+  border: 1px solid #1e293b;
+  color: #f1f5f9;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  display: block;
+  text-align: center;
+  transition: all 0.2s;
+}
+.player-input:focus {
+  outline: none;
+  border-color: #38bdf8;
+  background: #070d1e;
+}
+.player-input::placeholder { color: #475569; }
 
 /* BOARD: Legno classico con doppio bordo massiccio */
 .board{
@@ -18,13 +40,14 @@ h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:80
   width:100%;
   max-width:520px;
   aspect-ratio:1/1;
-  margin:0 auto;
+  margin:10px auto;
   border-radius:4px;
   overflow:hidden;
   border:3px solid #4b3220;
   box-shadow:0 0 0 5px #6b4423, 0 4px 20px rgba(0,0,0,0.5);
 }
-.cell{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;font-size:clamp(32px,7vw,48px);cursor:pointer}
+/* ✅ FIX BUG TAGLIO: Ridotto il font minimo da 32px a 24px per non far strabordare le caselle su mobile */
+.cell{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;font-size:clamp(24px, 7.5vw, 46px);cursor:pointer;line-height:1}
 
 /* COLORI SCACCHIERA LEGNO CLASSICO */
 .cell.light{background:#f0d9b5}
@@ -44,12 +67,12 @@ h1{margin:0 0 12px;text-align:center;font-size:22px;color:#38bdf8;font-weight:80
 .evo2{ filter: drop-shadow(0 0 6px gold); } 
 .evo3{ filter: drop-shadow(0 0 8px #a855f7) drop-shadow(0 0 16px #a855f7); }
 
-/* ✅ PALLINI LIVELLO LUMINOSI */
+/* PALLINI LIVELLO LUMINOSI */
 .level-mark { position:absolute; top:3px; right:4px; font-size:10px; font-weight:800; pointer-events:none; }
 .level-mark-2 { color:#eab308; text-shadow:0 0 6px #eab308; }
 .level-mark-3 { color:#a855f7; text-shadow:0 0 8px #a855f7; }
 
-.panel{margin:12px auto 0;max-width:520px;background:#030712;border:1px solid #1e293b;border-radius:12px;padding:12px 14px}
+.panel{margin:0 auto;max-width:520px;background:#030712;border:1px solid #1e293b;border-radius:12px;padding:12px 14px}
 .turn-pill{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
 @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
 </style>
@@ -110,6 +133,10 @@ function App(){
   const[abilMoves,setAbilMoves]=useState([]);
   const[levelUpSq,setLevelUpSq]=useState(null);
   const[points,setPoints]=useState({w:0,b:0});
+  
+  /* STATO PER I NOMI DEI GIOCATORI */
+  const[playerW,setPlayerW]=useState('');
+  const[playerB,setPlayerB]=useState('');
 
   useEffect(()=>{
     const{pieceData:pd,squareMap:sm}=buildInitialState(game);
@@ -168,7 +195,6 @@ function App(){
         }
         delete newSM[sel];newSM[sq]=movingId;
 
-        // ✅ NUOVA LOGICA PUNTI STRATEGICA
         let earnedPoints = 0;
         if (capturedPiece) earnedPoints += 1;
         if (newGame.in_check()) earnedPoints += 1;
@@ -233,7 +259,16 @@ function App(){
 
   return(
     <div className="app">
-      <h1>♟ Chess RPG</h1>
+      {/* 👤 GIOCATORE NERO (IN ALTO) */}
+      <input 
+        type="text" 
+        className="player-input" 
+        placeholder="Inserisci nome Giocatore Nero..." 
+        value={playerB} 
+        onChange={(e)=>setPlayerB(e.target.value)}
+        style={{borderLeft:'4px solid #f43f5e'}}
+      />
+
       <div className="board">
         {board.map((row,r)=>row.map((cell,c)=>{
           const sq='abcdefgh'[c]+(8-r);
@@ -273,7 +308,7 @@ function App(){
                 </span>
               )}
               
-              {/* ✅ BORDO E PALLINI EVOLUZIONE */}
+              {/* BORDO E PALLINI EVOLUZIONE */}
               {cell&&EVOLUTIONS[cell.type]&&level>1&&(
                 <>
                   <div style={{
@@ -292,6 +327,16 @@ function App(){
           );
         }))}
       </div>
+
+      {/* 👤 GIOCATORE BIANCO (IN BASSO) */}
+      <input 
+        type="text" 
+        className="player-input" 
+        placeholder="Inserisci nome Giocatore Bianco..." 
+        value={playerW} 
+        onChange={(e)=>setPlayerW(e.target.value)}
+        style={{borderLeft:'4px solid #38bdf8', marginBottom:'12px'}}
+      />
 
       <div className="panel">
         <div style={{marginBottom:'12px',background:'#0b1120',padding:'8px 10px',borderRadius:'8px',border:'1px solid #1e293b'}}>

@@ -33,7 +33,7 @@ body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;
 }
 .player-input::placeholder { color: #475569; }
 
-/* BOARD: Legno classico con doppio bordo massiccio */
+/* BOARD */
 .board{
   display:grid;
   grid-template-columns:repeat(8,1fr);
@@ -48,12 +48,12 @@ body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;
 }
 .cell{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;font-size:clamp(24px, 7.5vw, 46px);cursor:pointer;line-height:1}
 
-/* COLORI SCACCHIERA LEGNO CLASSICO */
+/* COLORI SCACCHIERA */
 .cell.light{background:#f0d9b5}
 .cell.dark{background:#b58863}
 .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
 
-/* PEZZI STILE NEO: Alto contrasto e font solido */
+/* PEZZI */
 .piece {
   font-family: "Segoe UI Symbol", "Noto Sans Symbols", "Arial Unicode MS", sans-serif;
   text-shadow: 0 0 2px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.3);
@@ -66,7 +66,7 @@ body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;
 .evo2{ filter: drop-shadow(0 0 6px gold); } 
 .evo3{ filter: drop-shadow(0 0 8px #a855f7) drop-shadow(0 0 16px #a855f7); }
 
-/* PALLINI LIVELLO LUMINOSI */
+/* PALLINI LIVELLO */
 .level-mark { position:absolute; top:3px; right:4px; font-size:10px; font-weight:800; pointer-events:none; }
 .level-mark-2 { color:#eab308; text-shadow:0 0 6px #eab308; }
 .level-mark-3 { color:#a855f7; text-shadow:0 0 8px #a855f7; }
@@ -193,14 +193,13 @@ function App(){
         }
         delete newSM[sel];newSM[sq]=movingId;
 
-        let earnedPoints = 0;
-        if (capturedPiece) earnedPoints += 1;
-        if (newGame.in_check()) earnedPoints += 1;
-        if (isPromotion) earnedPoints += 2;
+        // 🟢 NUOVO SISTEMA PUNTI (Opzione 2)
+        let earnedPoints = 1; // +1 punto base per ogni mossa completata
+        if (capturedPiece) earnedPoints += 1; // +1 extra (totale 2) = evoluzione immediata
+        if (newGame.in_check()) earnedPoints += 1; // +1 extra scacco
+        if (isPromotion) earnedPoints += 2; // +2 extra promozione
 
-        if (earnedPoints > 0) {
-          setPoints(prev=>({...prev,[currentTurn]:prev[currentTurn] + earnedPoints}));
-        }
+        setPoints(prev=>({...prev,[currentTurn]:prev[currentTurn] + earnedPoints}));
 
         setGame(newGame);setPieceData(newPD);setSquareMap(newSM);
         setSel(null);setStdMoves([]);setAbilMoves([]);
@@ -227,16 +226,19 @@ function App(){
     const turn=game.turn();
     const selPiece=game.get(sel);
     if(!selPiece||selPiece.color!==turn) return; 
-    if(points[turn]<3) return;
+    
+    // 🟢 CONTROLLO COSTO RIDOTTO (2 PUNTI)
+    if(points[turn]<2) return;
 
     const selId=squareMap[sel];
     const data=pieceData[selId];
-    if(!data||data.level >= 3) return; // Rimosso vincolo rigido sul pedone tipo === 'p'
+    if(!data||data.level >= 3) return;
 
     const newPD={...pieceData};
     newPD[selId]={...data,level:data.level+1};
 
-    setPoints(prev=>({...prev,[turn]:prev[turn]-3}));
+    // 🟢 SOTTRAZIONE COSTO RIDOTTO (-2 PUNTI)
+    setPoints(prev=>({...prev,[turn]:prev[turn]-2}));
     setPieceData(newPD);
     setLevelUpSq(sel);
     setTimeout(()=>setLevelUpSq(null),1000);
@@ -253,7 +255,9 @@ function App(){
   const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;
 
   const currentPoints=points[turn];
-  const chargePct=Math.min((currentPoints/3)*100,100);
+  
+  // 🟢 BARRA CARICAMENTO CALCOLATA SU 2 PUNTI
+  const chargePct=Math.min((currentPoints/2)*100,100);
 
   return(
     <div className="app">
@@ -337,16 +341,17 @@ function App(){
         <div style={{marginBottom:'12px',background:'#0b1120',padding:'8px 10px',borderRadius:'8px',border:'1px solid #1e293b'}}>
           <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:800,color:'#94a3b8'}}>
             <span>🔋 CARICA EVOLUZIONE ({turn==='w'?'BIANCO':'NERO'})</span>
-            <span style={{color:currentPoints>=3?'#22c55e':'#38bdf8'}}>
-              {currentPoints}/3 PUNTI {currentPoints>=3?'• PRONTO!':''}
+            {/* 🟢 AGGIORNATO IL TESTO DELLA UI A 2 PUNTI */}
+            <span style={{color:currentPoints>=2?'#22c55e':'#38bdf8'}}>
+              {currentPoints}/2 PUNTI {currentPoints>=2?'• PRONTO!':''}
             </span>
           </div>
           <div style={{width:'100%',height:'6px',background:'#1e293b',borderRadius:'3px',overflow:'hidden',marginTop:'5px'}}>
             <div style={{
               width:`${chargePct}%`,
               height:'100%',
-              background:currentPoints>=3?'#22c55e':'#38bdf8',
-              boxShadow:currentPoints>=3?'0 0 10px #22c55e':'none',
+              background:currentPoints>=2?'#22c55e':'#38bdf8',
+              boxShadow:currentPoints>=2?'0 0 10px #22c55e':'none',
               transition:'width 0.3s'
             }}/>
           </div>
@@ -362,16 +367,17 @@ function App(){
               </div>
 
               {selData.level<3&&(
-                <button onClick={handleEvolve} disabled={currentPoints<3||selPiece.color!==turn} style={{
+                /* 🟢 PULSANTE CHE COSTA 2 PUNTI */
+                <button onClick={handleEvolve} disabled={currentPoints<2||selPiece.color!==turn} style={{
                   marginTop:'8px',width:'100%',padding:'8px',
-                  background:currentPoints>=3&&selPiece.color===turn?lvlInfo.color:'#1e293b',
-                  color:currentPoints>=3&&selPiece.color===turn?'#030712':'#64748b',
+                  background:currentPoints>=2&&selPiece.color===turn?lvlInfo.color:'#1e293b',
+                  color:currentPoints>=2&&selPiece.color===turn?'#030712':'#64748b',
                   border:'none',borderRadius:'6px',fontWeight:800,fontSize:11,
-                  cursor:currentPoints>=3&&selPiece.color===turn?'pointer':'not-allowed',
-                  boxShadow:currentPoints>=3&&selPiece.color===turn?`0 0 12px ${lvlInfo.color}`:'none',
+                  cursor:currentPoints>=2&&selPiece.color===turn?'pointer':'not-allowed',
+                  boxShadow:currentPoints>=2&&selPiece.color===turn?`0 0 12px ${lvlInfo.color}`:'none',
                   transition:'all 0.2s'
                 }}>
-                  ⚡ EVOLVI IN {evo.levels[selData.level].name.toUpperCase()} (-3 PT)
+                  ⚡ EVOLVI IN {evo.levels[selData.level].name.toUpperCase()} (-2 PT)
                 </button>
               )}
 

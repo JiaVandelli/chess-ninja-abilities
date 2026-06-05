@@ -2,9 +2,9 @@
 const EVOLUTIONS = {
   p: {
     levels: [
-      { name: 'Soldato', color: '#64748b', icons: { w: '♙', b: '♟' } },
-      { name: 'Veterano', color: '#eab308', icons: { w: '⛨', b: '⛨' } },
-      { name: 'Campione', color: '#a855f7', icons: { w: '⚔', b: '⚔' } },
+      { name: 'Soldato', color: '#64748b' },
+      { name: 'Veterano', color: '#eab308' },
+      { name: 'Campione', color: '#a855f7' },
     ],
     getAbilityMoves(sq, game, level, color) {
       const moves = [];
@@ -22,8 +22,6 @@ const EVOLUTIONS = {
       
       // Livello 3: Movimento omnidirezionale da Re
       if (level >= 3) {
-        // ✅ FIX: Variabili rinominate in [dFile, dRank] per chiarezza assoluta.
-        // Questo previene bug futuri quando si aggiungeranno pezzi asimmetrici (es. Cavallo).
         [
           [-1, -1], [-1, 0], [-1, 1], 
           [0, -1],           [0, 1], 

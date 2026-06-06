@@ -421,7 +421,8 @@ function App(){
             {selData&&evo?(
               <span style={{fontWeight:700,fontSize:13,color:lvlInfo.color,
                 display:'inline-flex',alignItems:'center',gap:5}}>
-                <span className={evoClass||''}>
+                {/* QUI C'È LA CORREZIONE: calcoliamo la classe in base a selData.level */}
+                <span className={selData.level === 2 ? 'evo2' : selData.level === 3 ? 'evo3' : ''}>
                   {ICONS[selPiece.color][selPiece.type]}
                 </span>
                 {lvlInfo.name} Lv.{selData.level}
@@ -436,7 +437,6 @@ function App(){
             )}
           </div>
 
-          {/* ✅ visibility:hidden (non display:none) → nessun layout shift */}
           <button className="evolve-btn" onClick={handleEvolve}
             style={{
               visibility: showEvolveBtn ? 'visible' : 'hidden',

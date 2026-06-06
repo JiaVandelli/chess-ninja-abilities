@@ -3,77 +3,83 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Manual Evolution</title>
+<title>Chess RPG</title>
 <style>
 *{box-sizing:border-box}html,body{height:100%}
-body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;padding:12px}
+body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;
+  display:flex;align-items:center;justify-content:center;padding:12px}
 #root{width:100%;max-width:760px}
-.app{background:#0b0f19;border:2px solid #1e293b;border-radius:20px;padding:16px;box-shadow:0 0 30px rgba(56,189,248,.12)}
+.app{background:#0b0f19;border:2px solid #1e293b;border-radius:20px;
+  padding:16px;box-shadow:0 0 30px rgba(56,189,248,.12)}
 
-/* INPUT DEI GIOCATORI STILE TABELLONE */
-.player-input {
-  background: #030712;
-  border: 1px solid #1e293b;
-  color: #f1f5f9;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  width: 100%;
-  max-width: 520px;
-  margin: 0 auto;
-  display: block;
-  text-align: center;
-  transition: all 0.2s;
+/* ── PLAYER ROW ── */
+.player-row{
+  display:flex;gap:8px;align-items:center;
+  width:100%;max-width:520px;margin:0 auto 8px;
 }
-.player-input:focus {
-  outline: none;
-  border-color: #38bdf8;
-  background: #070d1e;
+.player-input{
+  flex:1;background:#030712;border:1px solid #1e293b;
+  color:#f1f5f9;padding:8px 12px;border-radius:8px;
+  font-size:13px;font-weight:600;
 }
-.player-input::placeholder { color: #475569; }
+.player-input:focus{outline:none;border-color:#38bdf8;background:#070d1e}
+.player-input::placeholder{color:#475569}
+.energy-badge{
+  min-width:64px;background:#0b1120;border:1px solid #1e293b;
+  border-radius:8px;padding:6px 10px;text-align:center;
+  font-size:12px;font-weight:800;line-height:1.3;
+  flex-shrink:0;
+}
 
-/* BOARD */
+/* ── BOARD ── */
 .board{
-  display:grid;
-  grid-template-columns:repeat(8,1fr);
-  width:100%;
-  max-width:520px;
-  aspect-ratio:1/1;
-  margin:10px auto;
-  border-radius:4px;
-  overflow:hidden;
+  display:grid;grid-template-columns:repeat(8,1fr);
+  width:100%;max-width:520px;aspect-ratio:1/1;
+  margin:0 auto 8px;border-radius:4px;overflow:hidden;
   border:3px solid #4b3220;
-  box-shadow:0 0 0 5px #6b4423, 0 4px 20px rgba(0,0,0,0.5);
+  box-shadow:0 0 0 5px #6b4423,0 4px 20px rgba(0,0,0,.5);
 }
-.cell{position:relative;display:flex;align-items:center;justify-content:center;aspect-ratio:1/1;font-size:clamp(24px, 7.5vw, 46px);cursor:pointer;line-height:1}
-
-/* COLORI SCACCHIERA */
+.cell{
+  position:relative;display:flex;align-items:center;
+  justify-content:center;aspect-ratio:1/1;
+  font-size:clamp(24px,7.5vw,46px);cursor:pointer;
+}
 .cell.light{background:#f0d9b5}
-.cell.dark{background:#b58863}
-.cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
+.cell.dark {background:#b58863}
+.cell.sel  {outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
 
-/* PEZZI */
-.piece {
-  font-family: "Segoe UI Symbol", "Noto Sans Symbols", "Arial Unicode MS", sans-serif;
-  text-shadow: 0 0 2px rgba(0,0,0,.5), 0 2px 4px rgba(0,0,0,.3);
-  display: inline-block;
+/* ── PEZZI — entrambi usano i glifhi "pieni" ── */
+.piece{
+  font-family:"Segoe UI Symbol","Noto Sans Symbols","Apple Color Emoji",sans-serif;
+  display:inline-block;line-height:1;
 }
-.piece-w{ color:#f8fafc; }
-.piece-b{ color:#18181b; }
+/* ✅ Bianco: riempito con ombra scura → sembra solido */
+.piece-w{
+  color:#f0ece0;
+  -webkit-text-stroke:1.5px #2a1f0f;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6));
+}
+/* Nero: solido scuro con micro-bordo chiaro */
+.piece-b{
+  color:#1a1008;
+  -webkit-text-stroke:0.5px rgba(255,255,255,.15);
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));
+}
+/* Glow evoluzione */
+.evo2{filter:drop-shadow(0 0 5px #eab308) drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.evo3{filter:drop-shadow(0 0 8px #a855f7) drop-shadow(0 0 16px #a855f7)}
 
-/* GLOW EVOLUZIONI */
-.evo2{ filter: drop-shadow(0 0 6px gold); } 
-.evo3{ filter: drop-shadow(0 0 8px #a855f7) drop-shadow(0 0 16px #a855f7); }
+.level-mark{position:absolute;top:3px;right:4px;font-size:10px;font-weight:800;pointer-events:none}
+.level-mark-2{color:#eab308;text-shadow:0 0 6px #eab308}
+.level-mark-3{color:#a855f7;text-shadow:0 0 8px #a855f7}
 
-/* PALLINI LIVELLO */
-.level-mark { position:absolute; top:3px; right:4px; font-size:10px; font-weight:800; pointer-events:none; }
-.level-mark-2 { color:#eab308; text-shadow:0 0 6px #eab308; }
-.level-mark-3 { color:#a855f7; text-shadow:0 0 8px #a855f7; }
+/* ── PANEL ── */
+.panel{max-width:520px;margin:0 auto;background:#030712;
+  border:1px solid #1e293b;border-radius:12px;padding:12px 14px}
+.turn-pill{padding:4px 12px;border-radius:20px;font-size:12px;
+  font-weight:700;background:#1e293b}
 
-.panel{margin:0 auto;max-width:520px;background:#030712;border:1px solid #1e293b;border-radius:12px;padding:12px 14px}
-.turn-pill{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
-@keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.5)}100%{transform:scale(1)}}
+@keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.6)}100%{transform:scale(1)}}
 </style>
 </head>
 <body>
@@ -83,14 +89,18 @@ body{margin:0;background:#060913;color:#f1f5f9;font-family:system-ui,sans-serif;
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
 <script src="evolutions.js"></script>
 
 <script type="text/babel">
 const {useState,useEffect,useCallback}=React;
 const Chess=window.Chess;
 
-const ICONS={w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
+// ✅ Entrambi i colori usano i glifi "pieni" (♟ invece di ♙)
+// Il colore del pezzo viene gestito da CSS (.piece-w / .piece-b)
+const ICONS={
+  w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},
+  b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},
+};
 
 function buildInitialState(game){
   const pieceData={},squareMap={};
@@ -119,34 +129,31 @@ function execAbilityMove(game,from,to){
   parts[1]=wasWhite?'b':'w';
   if(!wasWhite) parts[5]=String(parseInt(parts[5])+1);
   parts[3]='-';
-  const ng=new Chess();ng.load(parts.join(' '));
+  const ng=new Chess(); ng.load(parts.join(' '));
   return{newGame:ng,capturedPiece:captured};
 }
 
 function App(){
-  const[game,setGame]=useState(()=>new Chess());
+  const[game,setGame]    =useState(()=>new Chess());
   const[pieceData,setPieceData]=useState({});
   const[squareMap,setSquareMap]=useState({});
-  const[sel,setSel]=useState(null);
+  const[sel,setSel]      =useState(null);
   const[stdMoves,setStdMoves]=useState([]);
   const[abilMoves,setAbilMoves]=useState([]);
   const[levelUpSq,setLevelUpSq]=useState(null);
   const[points,setPoints]=useState({w:0,b:0});
-  
   const[playerW,setPlayerW]=useState('');
   const[playerB,setPlayerB]=useState('');
 
   useEffect(()=>{
     const{pieceData:pd,squareMap:sm}=buildInitialState(game);
-    setPieceData(pd);setSquareMap(sm);
+    setPieceData(pd); setSquareMap(sm);
   },[]);
 
   const getMovesFor=useCallback((sq)=>{
-    const piece=game.get(sq);
-    if(!piece) return{std:[],abil:[]};
+    const piece=game.get(sq); if(!piece) return{std:[],abil:[]};
     const std=game.moves({square:sq,verbose:true});
-    const id=squareMap[sq];
-    const data=pieceData[id];
+    const id=squareMap[sq]; const data=pieceData[id];
     const evo=EVOLUTIONS[piece.type];
     const abil=(evo&&data)?evo.getAbilityMoves(sq,game,data.level,piece.color):[];
     return{std,abil};
@@ -161,63 +168,48 @@ function App(){
         let newGame,capturedPiece=null;
         const movingId=squareMap[sel];
         const currentTurn=game.turn();
-
         if(abilMv){
           const res=execAbilityMove(game,sel,sq);
-          newGame=res.newGame;capturedPiece=res.capturedPiece;
+          newGame=res.newGame; capturedPiece=res.capturedPiece;
         }else{
           newGame=new Chess(game.fen());
           const mv=newGame.move({from:sel,to:sq,promotion:'q'});
           if(mv?.captured) capturedPiece={type:mv.captured};
-          if(mv?.flags?.includes('e')){
-            capturedPiece={type:'p',_sq:sq[0]+sel[1]};
-          }
+          if(mv?.flags?.includes('e')) capturedPiece={type:'p',_sq:sq[0]+sel[1]};
         }
-        
-        const newSM={...squareMap};
-        const newPD={...pieceData};
-        
+        const newSM={...squareMap}; const newPD={...pieceData};
         if(capturedPiece){
           const capSq=capturedPiece._sq??sq;
-          const capturedId=newSM[capSq];
-          delete newPD[capturedId];delete newSM[capSq];
+          const cId=newSM[capSq];
+          delete newPD[cId]; delete newSM[capSq];
         }
-        
         const newPieceOnSq=newGame.get(sq);
-        const oldType=pieceData[movingId]?.type;
-        let isPromotion = false;
-
-        if(newPieceOnSq&&newPieceOnSq.type!==oldType){
+        let isPromotion=false;
+        if(newPieceOnSq&&newPieceOnSq.type!==pieceData[movingId]?.type){
           newPD[movingId]={...newPD[movingId],type:newPieceOnSq.type,level:1};
-          isPromotion = true;
+          isPromotion=true;
         }
-        delete newSM[sel];newSM[sq]=movingId;
-
-        // 🟢 NUOVO SISTEMA PUNTI (Opzione 2)
-        let earnedPoints = 1; // +1 punto base per ogni mossa completata
-        if (capturedPiece) earnedPoints += 1; // +1 extra (totale 2) = evoluzione immediata
-        if (newGame.in_check()) earnedPoints += 1; // +1 extra scacco
-        if (isPromotion) earnedPoints += 2; // +2 extra promozione
-
-        setPoints(prev=>({...prev,[currentTurn]:prev[currentTurn] + earnedPoints}));
-
-        setGame(newGame);setPieceData(newPD);setSquareMap(newSM);
-        setSel(null);setStdMoves([]);setAbilMoves([]);
+        delete newSM[sel]; newSM[sq]=movingId;
+        let pts=1;
+        if(capturedPiece) pts+=1;
+        if(newGame.in_check()) pts+=1;
+        if(isPromotion) pts+=2;
+        setPoints(prev=>({...prev,[currentTurn]:prev[currentTurn]+pts}));
+        setGame(newGame); setPieceData(newPD); setSquareMap(newSM);
+        setSel(null); setStdMoves([]); setAbilMoves([]);
         return;
       }
       if(piece?.color===game.turn()){
         setSel(sq);
         const{std,abil}=getMovesFor(sq);
-        setStdMoves(std);setAbilMoves(abil);
-        return;
+        setStdMoves(std); setAbilMoves(abil); return;
       }
-      setSel(null);setStdMoves([]);setAbilMoves([]);
-      return;
+      setSel(null); setStdMoves([]); setAbilMoves([]); return;
     }
     if(piece?.color===game.turn()){
       setSel(sq);
       const{std,abil}=getMovesFor(sq);
-      setStdMoves(std);setAbilMoves(abil);
+      setStdMoves(std); setAbilMoves(abil);
     }
   },[game,sel,stdMoves,abilMoves,squareMap,pieceData,getMovesFor]);
 
@@ -225,25 +217,17 @@ function App(){
     if(!sel) return;
     const turn=game.turn();
     const selPiece=game.get(sel);
-    if(!selPiece||selPiece.color!==turn) return; 
-    
-    // 🟢 CONTROLLO COSTO RIDOTTO (2 PUNTI)
-    if(points[turn]<2) return;
-
+    if(!selPiece||selPiece.color!==turn||points[turn]<2) return;
     const selId=squareMap[sel];
     const data=pieceData[selId];
-    if(!data||data.level >= 3) return;
-
+    if(!data||data.level>=3) return;
     const newPD={...pieceData};
     newPD[selId]={...data,level:data.level+1};
-
-    // 🟢 SOTTRAZIONE COSTO RIDOTTO (-2 PUNTI)
     setPoints(prev=>({...prev,[turn]:prev[turn]-2}));
     setPieceData(newPD);
     setLevelUpSq(sel);
     setTimeout(()=>setLevelUpSq(null),1000);
-
-    setSel(null);setStdMoves([]);setAbilMoves([]);
+    setSel(null); setStdMoves([]); setAbilMoves([]);
   },[sel,squareMap,pieceData,points,game]);
 
   const board=game.board();
@@ -253,23 +237,33 @@ function App(){
   const selPiece=sel?game.get(sel):null;
   const evo=selPiece?EVOLUTIONS[selPiece.type]:null;
   const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;
-
   const currentPoints=points[turn];
-  
-  // 🟢 BARRA CARICAMENTO CALCOLATA SU 2 PUNTI
   const chargePct=Math.min((currentPoints/2)*100,100);
+
+  // ✅ Badge energia riutilizzabile
+  const EnergyBadge=({color,pts})=>(
+    <div className="energy-badge" style={{
+      borderLeft:`3px solid ${color==='w'?'#38bdf8':'#f43f5e'}`,
+      color: pts>=2 ? '#22c55e' : '#94a3b8',
+    }}>
+      <div style={{fontSize:16,lineHeight:1}}>⚡</div>
+      <div>{pts} PT</div>
+    </div>
+  );
 
   return(
     <div className="app">
-      <input 
-        type="text" 
-        className="player-input" 
-        placeholder="Inserisci nome Giocatore Nero..." 
-        value={playerB} 
-        onChange={(e)=>setPlayerB(e.target.value)}
-        style={{borderLeft:'4px solid #f43f5e'}}
-      />
 
+      {/* Giocatore Nero (in cima) */}
+      <div className="player-row">
+        <input className="player-input" type="text"
+          placeholder="Giocatore Nero..."
+          value={playerB} onChange={e=>setPlayerB(e.target.value)}
+          style={{borderLeft:'3px solid #f43f5e'}}/>
+        <EnergyBadge color="b" pts={points.b}/>
+      </div>
+
+      {/* Scacchiera */}
       <div className="board">
         {board.map((row,r)=>row.map((cell,c)=>{
           const sq='abcdefgh'[c]+(8-r);
@@ -282,14 +276,14 @@ function App(){
           const data=id?pieceData[id]:null;
           const level=data?.level??1;
           const isLvlUp=levelUpSq===sq;
-          
-          const pieceEvoClass = level === 2 ? 'evo2' : level === 3 ? 'evo3' : '';
+          const evoClass=level===2?'evo2':level===3?'evo3':'';
 
           return(
             <div key={sq} onClick={()=>handleClick(sq)}
               className={`cell ${isLight?'light':'dark'} ${isSel?'sel':''}`}>
               {isAny&&!cell&&(
-                <div style={{position:'absolute',width:'28%',height:'28%',borderRadius:'50%',
+                <div style={{position:'absolute',width:'28%',height:'28%',
+                  borderRadius:'50%',
                   background:isAbil?'#f59e0b':'#22c55e',
                   boxShadow:`0 0 8px ${isAbil?'#f59e0b':'#22c55e'}`}}/>
               )}
@@ -299,25 +293,20 @@ function App(){
                   borderRadius:'4px'}}/>
               )}
               {cell&&(
-                <span className={`piece piece-${cell.color} ${pieceEvoClass}`}
+                <span className={`piece piece-${cell.color} ${evoClass}`}
                   style={{
-                    transition:'transform .15s',
                     transform:isLvlUp?'scale(1.5)':'scale(1)',
+                    transition:'transform .15s',
                     animation:isLvlUp?'lvlup 1s ease':undefined,
                   }}>
                   {ICONS[cell.color][cell.type]}
                 </span>
               )}
-              
               {cell&&EVOLUTIONS[cell.type]&&level>1&&(
                 <>
-                  <div style={{
-                    position:'absolute',
-                    inset:'2px',
-                    borderRadius:'3px',
+                  <div style={{position:'absolute',inset:'2px',borderRadius:'3px',
                     pointerEvents:'none',
-                    border: level===2 ? '2px solid #eab308' : '2px solid #a855f7'
-                  }} />
+                    border:`2px solid ${level===2?'#eab308':'#a855f7'}`}}/>
                   <div className={`level-mark level-mark-${level}`}>
                     {'●'.repeat(level-1)}
                   </div>
@@ -328,32 +317,32 @@ function App(){
         }))}
       </div>
 
-      <input 
-        type="text" 
-        className="player-input" 
-        placeholder="Inserisci nome Giocatore Bianco..." 
-        value={playerW} 
-        onChange={(e)=>setPlayerW(e.target.value)}
-        style={{borderLeft:'4px solid #38bdf8', marginBottom:'12px'}}
-      />
+      {/* Giocatore Bianco (sotto) */}
+      <div className="player-row" style={{marginBottom:'10px'}}>
+        <input className="player-input" type="text"
+          placeholder="Giocatore Bianco..."
+          value={playerW} onChange={e=>setPlayerW(e.target.value)}
+          style={{borderLeft:'3px solid #38bdf8'}}/>
+        <EnergyBadge color="w" pts={points.w}/>
+      </div>
 
+      {/* Panel */}
       <div className="panel">
-        <div style={{marginBottom:'12px',background:'#0b1120',padding:'8px 10px',borderRadius:'8px',border:'1px solid #1e293b'}}>
-          <div style={{display:'flex',justifyContent:'space-between',fontSize:11,fontWeight:800,color:'#94a3b8'}}>
-            <span>🔋 CARICA EVOLUZIONE ({turn==='w'?'BIANCO':'NERO'})</span>
-            {/* 🟢 AGGIORNATO IL TESTO DELLA UI A 2 PUNTI */}
+        <div style={{marginBottom:'10px',background:'#0b1120',
+          padding:'8px 10px',borderRadius:'8px',border:'1px solid #1e293b'}}>
+          <div style={{display:'flex',justifyContent:'space-between',
+            fontSize:11,fontWeight:800,color:'#94a3b8'}}>
+            <span>🔋 CARICA ({turn==='w'?'BIANCO':'NERO'})</span>
             <span style={{color:currentPoints>=2?'#22c55e':'#38bdf8'}}>
-              {currentPoints}/2 PUNTI {currentPoints>=2?'• PRONTO!':''}
+              {currentPoints}/2{currentPoints>=2?' • PRONTO!':''}
             </span>
           </div>
-          <div style={{width:'100%',height:'6px',background:'#1e293b',borderRadius:'3px',overflow:'hidden',marginTop:'5px'}}>
-            <div style={{
-              width:`${chargePct}%`,
-              height:'100%',
+          <div style={{width:'100%',height:'5px',background:'#1e293b',
+            borderRadius:'3px',overflow:'hidden',marginTop:'5px'}}>
+            <div style={{width:`${chargePct}%`,height:'100%',
               background:currentPoints>=2?'#22c55e':'#38bdf8',
-              boxShadow:currentPoints>=2?'0 0 10px #22c55e':'none',
-              transition:'width 0.3s'
-            }}/>
+              boxShadow:currentPoints>=2?'0 0 8px #22c55e':'none',
+              transition:'width .3s'}}/>
           </div>
         </div>
 
@@ -361,40 +350,41 @@ function App(){
           <div style={{flex:1,marginRight:'10px'}}>
             {selData&&evo?(<>
               <div style={{fontWeight:700,fontSize:13,color:lvlInfo.color}}>
-                <span className={selData.level === 2 ? 'evo2' : selData.level === 3 ? 'evo3' : ''} style={{display:'inline-block'}}>
-                  {lvlInfo.name} {ICONS[selPiece.color][selPiece.type]} (Lv. {selData.level})
+                <span className={selData.level===2?'evo2':selData.level===3?'evo3':''}>
+                  {lvlInfo.name} {ICONS[selPiece.color][selPiece.type]} Lv.{selData.level}
                 </span>
               </div>
-
               {selData.level<3&&(
-                /* 🟢 PULSANTE CHE COSTA 2 PUNTI */
-                <button onClick={handleEvolve} disabled={currentPoints<2||selPiece.color!==turn} style={{
-                  marginTop:'8px',width:'100%',padding:'8px',
-                  background:currentPoints>=2&&selPiece.color===turn?lvlInfo.color:'#1e293b',
-                  color:currentPoints>=2&&selPiece.color===turn?'#030712':'#64748b',
-                  border:'none',borderRadius:'6px',fontWeight:800,fontSize:11,
-                  cursor:currentPoints>=2&&selPiece.color===turn?'pointer':'not-allowed',
-                  boxShadow:currentPoints>=2&&selPiece.color===turn?`0 0 12px ${lvlInfo.color}`:'none',
-                  transition:'all 0.2s'
-                }}>
-                  ⚡ EVOLVI IN {evo.levels[selData.level].name.toUpperCase()} (-2 PT)
+                <button onClick={handleEvolve}
+                  disabled={currentPoints<2||selPiece.color!==turn}
+                  style={{
+                    marginTop:'8px',width:'100%',padding:'8px',
+                    background:currentPoints>=2&&selPiece.color===turn?lvlInfo.color:'#1e293b',
+                    color:currentPoints>=2&&selPiece.color===turn?'#030712':'#64748b',
+                    border:'none',borderRadius:'6px',fontWeight:800,fontSize:11,
+                    cursor:currentPoints>=2&&selPiece.color===turn?'pointer':'not-allowed',
+                    boxShadow:currentPoints>=2&&selPiece.color===turn?`0 0 10px ${lvlInfo.color}`:'none',
+                    transition:'all .2s',
+                  }}>
+                  ⚡ EVOLVI → {evo.levels[selData.level].name.toUpperCase()} (−2 PT)
                 </button>
               )}
-
               {abilMoves.length>0&&(
                 <div style={{fontSize:11,color:'#f59e0b',marginTop:6}}>
-                  🟡 {abilMoves.length} abilità speciali sbloccate!
+                  🟡 {abilMoves.length} abilità speciali disponibili
                 </div>
               )}
             </>):(
-              <div style={{color:'#475569',fontSize:12}}>Seleziona un pezzo sulla scacchiera</div>
+              <div style={{color:'#475569',fontSize:12}}>Seleziona un pezzo</div>
             )}
           </div>
-          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e',textAlign:'center',minWidth:'90px'}}>
+          <div className="turn-pill"
+            style={{color:turn==='w'?'#38bdf8':'#f43f5e',textAlign:'center',minWidth:'80px'}}>
             {turn==='w'?'⬜ Bianco':'⬛ Nero'}
           </div>
         </div>
       </div>
+
     </div>
   );
 }

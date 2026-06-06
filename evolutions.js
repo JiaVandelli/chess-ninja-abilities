@@ -1,9 +1,9 @@
-// evolutions.js — Aggiungi qui le evoluzioni dei pezzi senza toccare il codice principale
+// evolutions.js
 const EVOLUTIONS = {
-  // --- PEDONE ---
+
   p: {
     levels: [
-      { name: 'Soldato', color: '#64748b' },
+      { name: 'Soldato',  color: '#64748b' },
       { name: 'Veterano', color: '#eab308' },
       { name: 'Campione', color: '#a855f7' },
     ],
@@ -12,7 +12,6 @@ const EVOLUTIONS = {
       const file = sq.charCodeAt(0) - 97;
       const rank = parseInt(sq[1]);
 
-      // Livello 2: Passo indietro
       if (level >= 2) {
         const backRank = color === 'w' ? rank - 1 : rank + 1;
         if (backRank >= 1 && backRank <= 8) {
@@ -21,21 +20,14 @@ const EVOLUTIONS = {
         }
       }
 
-      // Livello 3: Movimento omnidirezionale da Re
       if (level >= 3) {
-        [
-          [-1, -1], [-1, 0], [-1, 1], 
-          [0, -1],           [0, 1], 
-          [1, -1],  [1, 0],  [1, 1]
-        ].forEach(([dFile, dRank]) => {
-          const nf = file + dFile;
-          const nr = rank + dRank;
+        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
+        .forEach(([dFile, dRank]) => {
+          const nf = file + dFile, nr = rank + dRank;
           if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
-
           const toSq = String.fromCharCode(97 + nf) + nr;
           const target = game.get(toSq);
           if (target?.color === color) return;
-
           moves.push({ from: sq, to: toSq, isCapture: !!target });
         });
       }
@@ -43,52 +35,6 @@ const EVOLUTIONS = {
     },
   },
 
-  // --- CAVALLO ---
-  n: {
-    levels: [
-      { name: 'Esploratore', color: '#64748b' },
-      { name: 'Cavaliere', color: '#eab308' },
-      { name: 'Paladino', color: '#a855f7' },
-    ],
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      const file = sq.charCodeAt(0) - 97;
-      const rank = parseInt(sq[1]);
-
-      // Livello 2: Passo Ortogonale (1 casella in croce: su, giù, dx, sx)
-      if (level >= 2) {
-        [
-          [-1, 0], [1, 0], [0, -1], [0, 1]
-        ].forEach(([dFile, dRank]) => {
-          const nf = file + dFile;
-          const nr = rank + dRank;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
-
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) return;
-
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        });
-      }
-
-      // Livello 3: Passo Diagonale (Diventa Cavallo + Re = Centauro)
-      if (level >= 3) {
-        [
-          [-1, -1], [-1, 1], [1, -1], [1, 1]
-        ].forEach(([dFile, dRank]) => {
-          const nf = file + dFile;
-          const nr = rank + dRank;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
-
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) return;
-
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        });
-      }
-      return moves;
-    },
-  },
+  // n: { ... }  ← Cavallo: verrà aggiunto nel prossimo episodio
+  // r: { ... }  ← Torre:   verrà aggiunto nel prossimo episodio
 };

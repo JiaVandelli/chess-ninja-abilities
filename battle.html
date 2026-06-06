@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Chess RPG - AI V3</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:#060913}
+#root{height:100%}
+.app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
+.top-bar{flex-shrink:0;height:42px;display:flex;gap:5px;align-items:center;overflow-x:auto}
+.mode-btn{flex:1;min-width:70px;height:100%;background:#0b0f19;border:1px solid #1e293b;color:#94a3b8;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
+.mode-btn.active{background:#38bdf8;color:#030712;border-color:#38bdf8}
+.board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+.board{--side:min(calc(100vw - 16px),calc(100vh - 84px - 100px - 90px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
+.cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,320px)/8*0.72);cursor:pointer;aspect-ratio:1/1}
+.cell.light{background:#f0d9b5}.cell.dark{background:#b58863}.cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
+.piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;display:inline-block;line-height:1;user-select:none}
+.piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
+.piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.evo2{filter:drop-shadow(0 0 5px #eab308) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+.evo3{filter:drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 22px #a855f7)}
+.level-mark{position:absolute;top:2px;right:3px;font-size:9px;font-weight:800;pointer-events:none}
+.lm2{color:#eab308;text-shadow:0 0 5px #eab308}.lm3{color:#a855f7;text-shadow:0 0 8px #a855f7}
+.player-row{flex-shrink:0;height:46px;display:flex;gap:8px;align-items:center}
+.player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:12px;font-weight:600}
+.energy-badge{padding:3px 7px;background:#1e293b;border-radius:6px;font-size:11px;font-weight:800}
+.panel{flex-shrink:0;height:84px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:7px 10px;display:flex;flex-direction:column;gap:6px}
+.charge-row{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:#94a3b8}
+.charge-track{width:100%;height:5px;background:#1e293b;border-radius:3px;overflow:hidden}
+.panel-bottom{display:flex;align-items:center;gap:8px;flex:1}
+.piece-label{flex:1;font-size:11px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.evolve-btn{flex-shrink:0;padding:5px 9px;border:none;border-radius:6px;font-weight:800;font-size:11px;cursor:pointer;background:#38bdf8;color:#030712}
+.evolve-btn:disabled{background:#1e293b;color:#475569}
+.turn-pill{flex-shrink:0;padding:4px 9px;border-radius:16px;font-size:11px;font-weight:700;background:#1e293b}
+@keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.6)}100%{transform:scale(1)}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="evolutions.js"></script>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef}=React;
+const Chess=window.Chess;
+const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
+
+const AI = {
+  pieceValues:{p:100,n:320,b:330,r:500,q:900,k:20000},
+  pst:{
+    p:{1:[[0,0,0,0],[50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0]],2:[[0,0,0,0],[60,60,60,60],[15,15,30,40,40,30,15,15],[10,10,20,35,35,20,10,10],[5,5,10,25,25,10,5,5],[10,0,0,5,5,0,10],[10,15,15,0,0,15,15,10],[0,0,0,0]],3:[[0,0,0,0,0,0,0,0],[70,70,70,70],[20,20,40,50,50,40,20,20],[15,15,30,45,45,30,15,15],[10,10,20,35,35,20,10,10],[15,5,5,10,10,5,5,15],[15,20,20,5,5,20,20,15],[0,0,0,0]]},
+    n:{1:[[-50,-40,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,15,5,-30],[-30,0,15,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]],2:[[-40,-30,-20,-20,-30,-40],[-30,-10,5,10,10,5,-10,-30],[-20,5,20,25,25,20,5,-20],[-20,10,25,30,30,25,10,-20],[-20,5,25,30,25,5,-20],[-20,10,20,25,25,20,10,-20],[-30,-10,5,10,10,5,-10,-30],[-40,-30,-20,-20,-20,-20,-30,-40]],3:[[-30,-20,-10,-10,-10,-10,-20,-30],[-20,0,15,20,20,15,0,-20],[-10,15,30,35,35,30,15,-10],[-10,20,35,40,40,35,20,-10],[-10,15,35,40,35,15,-10],[-10,20,30,35,35,30,20,-10],[-20,5,15,20,20,15,5,-20],[-30,-20,-10,-10,-10,-10,-20,-30]]}
+  },
+  getEvoBonus(t,l){switch(t){case'p':return l*180+(l===3?120:0);case'n':return l*160*(l===3?1.3:1);case'b':return l*150+(l>=2?50:0);case'r':return l*140;case'q':return l*200+(l===3?150:0);default:return l*150;}},
+  calculateSynergy(g,sq,c,t,l){let b=0;const f=sq.charCodeAt(0)-97,r=8-parseInt(sq[1]);for(let df=-1;df<=1;df++)for(let dr=-1;dr<=1;dr++){if(!df&&!dr)continue;const nf=f+df,nr=r+dr;if(nf<0||nf>7||nr<0||nr>7)continue;const p=g.get('abcdefgh'[nf]+(8-nr));if(p&&p.color===c)b+=l*3;}if(t==='p'&&l>=2){const dir=c==='w'?-1:1;let blocked=false;for(let rr=r+dir;rr>=0&&rr<8;rr+=dir)if(g.get('abcdefgh'[f]+(8-rr))blocked=true;if(!blocked)b+=40*l;}return b;},
+  evaluate(g,pd,pts,col,per='balanced'){if(g.in_checkmate())return g.turn()===col?-999999:999999;if(g.in_draw())return 0;let s=0;const o=col==='w'?'b':'w';g.board().forEach((row,r)=>row.forEach((p,c)=>{if(!p)return;const sq='abcdefgh'[c]+(8-r);const id=Object.keys(pd).find(k=>k.endsWith('_'+sq)&&pd[k].color===p.color);const d=id?pd[id]:{level:1};const lv=Math.min(d.level,3);let v=AI.pieceValues[p.type]||0;v+=AI.getEvoBonus(p.type,lv);const tbl=AI.pst[p.type]?.[lv];if(tbl)v+=tbl[p.color==='w'?r:7-r][c];v+=AI.calculateSynergy(g,sq,p.color,p.type,lv);if(per==='necromante'&&p.type==='p')v+=100;if(per==='cavaliere'&&p.type==='n')v+=280;if(per==='imperatore'&&p.type==='k')v-=(Math.abs(r-3.5)+Math.abs(c-3.5))*25;s+=p.color===col?v:-v;}));s+=pts[col]*35-pts[o]*35;if(pts[col]>=2)s+=60;if(pts[o]>=2)s-=60;if(g.in_check())s+=g.turn()===col?-50:50;if(per==='berserker')s+=g.moves({verbose:true}).filter(m=>m.captured).length*40;return s;},
+  getAllActions(g,pd,sm,pts,col){const a=[];const end=g.board().flat().filter(p=>p).length<12;Object.entries(sm).forEach(([sq,id])=>{const p=g.get(sq);if(!p||p.color!==col)return;const d=pd[id];g.moves({square:sq,verbose:true}).forEach(m=>a.push({type:'move',from:m.from,to:m.to,promotion:'q',piece:p.type,captured:m.captured,level:d.level}));const e=EVOLUTIONS[p.type];if(e&&d)e.getAbilityMoves(sq,g,d.level,col).forEach(ab=>{const t=g.get(ab.to);a.push({type:'ability',from:ab.from,to:ab.to,piece:p.type,captured:t?t.type:null,level:d.level});});});if(pts[col]>=2){Object.entries(pd).filter(([id,d])=>d.color===col&&d.level<3&&EVOLUTIONS[d.type]).map(([id,d])=>{const sq=Object.keys(sm).find(k=>sm[k]===id);let pr=d.level*10;if(sq){const cen=Math.abs(sq.charCodeAt(0)-100)+Math.abs(parseInt(sq[1])-4.5);pr+=(7-cen)*2;}if(end&&d.type==='p')pr+=30;if(g.in_check())pr-=20;return{id,sq,data:d,priority:pr};}).sort((x,y)=>y.priority-x.priority).slice(0,3).forEach(c=>a.push({type:'evolve',square:c.sq,piece:c.data.type,level:c.data.level,priority:c.priority}));}return a.sort((x,y)=>((y.type==='evolve'?1000:0)+(y.captured?500:0)+(y.type==='ability'?200:0)+(y.priority||0))-((x.type==='evolve'?1000:0)+(x.captured?500:0)+(x.type==='ability'?200:0)+(x.priority||0)));},
+  simulateAction(fen,pd,pts,act,col){const g=new Chess(fen);const npd=JSON.parse(JSON.stringify(pd));const npts={...pts};let nsm={};if(act.type==='move'){g.move({from:act.from,to:act.to,promotion:act.promotion||'q'});const m=g.get(act.to);if(m){const oid=Object.keys(npd).find(id=>id.endsWith('_'+act.from));if(oid){const nid=`${m.color}${m.type}_${act.to}`;npd[nid]={...npd[oid],type:m.type,id:nid};delete npd[oid];}}}else if(act.type==='ability'){const p=g.get(act.from);const oid=Object.keys(npd).find(id=>id.endsWith('_'+act.from));g.remove(act.from);if(g.get(act.to))g.remove(act.to);g.put(p,act.to);if(oid){const nid=`${p.color}${p.type}_${act.to}`;npd[nid]={...npd[oid],id:nid};delete npd[oid];}const pa=g.fen().split(' ');pa[1]=pa[1]==='w'?'b':'w';pa[3]='-';g.load(pa.join(' '));}else if(act.type==='evolve'){const id=Object.keys(npd).find(k=>k.endsWith('_'+act.square));if(id){npd[id].level+=1;npts[col]-=2;}}g.board().forEach((row,r)=>row.forEach((cell,c)=>{if(cell){const sq='abcdefgh'[c]+(8-r);const id=Object.keys(npd).find(k=>k.endsWith('_'+sq)&&npd[k].color===cell.color);if(id)nsm[sq]=id;}}));if(act.type!=='evolve'){let p=1;if(act.captured)p+=1;if(g.in_check())p+=1;npts[col]+=p;}return{game:g,pieceData:npd,points:npts,squareMap:nsm};},
+  minimax(g,pd,pts,sm,d,a,b,max,col,per){if(d===0||g.game_over())return AI.evaluate(g,pd,pts,col,per);const turn=g.turn();const isMax=turn===col;const acts=AI.getAllActions(g,pd,sm,pts,turn).slice(0,18);if(isMax){let v=-Infinity;for(let act of acts){const s=AI.simulateAction(g.fen(),pd,pts,act,turn);const e=AI.minimax(s.game,s.pieceData,s.points,s.squareMap,d-1,a,b,false,col,per);v=Math.max(v,e);a=Math.max(a,e);if(b<=a)break;}return v;}else{let v=Infinity;for(let act of acts){const s=AI.simulateAction(g.fen(),pd,pts,act,turn);const e=AI.minimax(s.game,s.pieceData,s.points,s.squareMap,d-1,a,b,true,col,per);v=Math.min(v,e);b=Math.min(b,e);if(b<=a)break;}return v;}},
+  chooseMove(g,pd,sm,pts,col,lvl='medium',per='balanced'){const acts=AI.getAllActions(g,pd,sm,pts,col);if(!acts.length)return null;if(lvl==='easy'&&Math.random()<0.25)return acts[Math.floor(Math.random()*acts.length)];const depth=lvl==='easy'?1:lvl==='medium'?2:3;let best=null,bs=-Infinity;for(let act of acts.slice(0,25)){const s=AI.simulateAction(g.fen(),pd,pts,act,col);const sc=AI.minimax(s.game,s.pieceData,s.points,s.squareMap,depth-1,-Infinity,Infinity,false,col,per);let f=sc;if(per==='berserker'&&act.captured)f+=250;if(per==='necromante'&&act.type==='evolve'&&act.piece==='p')f+=200;if(act.type==='evolve'&&act.priority>30)f+=50;if(f>bs){bs=f;best=act;}}return best;}
+};
+
+const PERSONALITIES={human:{name:'Umano',ai:false},easy:{name:'Novizio',ai:true,level:'easy',personality:'balanced'},medium:{name:'Maestro',ai:true,level:'medium',personality:'balanced'},hard:{name:'GM',ai:true,level:'hard',personality:'balanced'},necromante:{name:'Necromante',ai:true,level:'hard',personality:'necromante'},cavaliere:{name:'Cavaliere',ai:true,level:'hard',personality:'cavaliere'},berserker:{name:'Berserker',ai:true,level:'medium',personality:'berserker'},imperatore:{name:'Imperatore',ai:true,level:'hard',personality:'imperatore'}};
+
+function buildInitialState(game){const pd={},sm={};game.board().forEach((row,r)=>row.forEach((cell,c)=>{if(cell){const sq='abcdefgh'[c]+(8-r);const id=`${cell.color}${cell.type}_${sq}`;pd[id]={id,type:cell.type,color:cell.color,level:1};sm[sq]=id;}}));return{pieceData:pd,squareMap:sm};}
+function execAbilityMove(game,from,to){const piece=game.get(from);const captured=game.get(to)||null;const g=new Chess(game.fen());g.remove(from);if(captured)g.remove(to);g.put(piece,to);const parts=g.fen().split(' ');const wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';const ng=new Chess();ng.load(parts.join(' '));return{newGame:ng,capturedPiece:captured};}
+
+function App(){
+  const[game,setGame]=useState(()=>new Chess());
+  const[pieceData,setPieceData]=useState({});
+  const[squareMap,setSquareMap]=useState({});
+  const[sel,setSel]=useState(null);
+  const[stdMoves,setStdMoves]=useState([]);
+  const[abilMoves,setAbilMoves]=useState([]);
+  const[levelUpSq,setLevelUpSq]=useState(null);
+  const[points,setPoints]=useState({w:0,b:0});
+  const[whiteAI,setWhiteAI]=useState('human');
+  const[blackAI,setBlackAI]=useState('necromante');
+  const aiTimer=useRef(null);
+
+  useEffect(()=>{const s=buildInitialState(game);setPieceData(s.pieceData);setSquareMap(s.squareMap);},[]);
+
+  const getMovesFor=useCallback(sq=>{const p=game.get(sq);if(!p)return{std:[],abil:[]};const std=game.moves({square:sq,verbose:true});const id=squareMap[sq];const d=pieceData[id];const e=EVOLUTIONS[p.type];const abil=(e&&d)?e.getAbilityMoves(sq,game,d.level,p.color):[];return{std,abil};},[game,squareMap,pieceData]);
+
+  const makeMove=useCallback((from,to,isAb=false)=>{const turn=game.turn();let ng,cap=null;if(isAb){const r=execAbilityMove(game,from,to);ng=r.newGame;cap=r.capturedPiece;}else{ng=new Chess(game.fen());const mv=ng.move({from,to,promotion:'q'});if(mv?.captured)cap={type:mv.captured};if(mv?.flags?.includes('e'))cap={type:'p',_sq:to[0]+from[1]};}const mid=squareMap[from];const nsm={...squareMap};const npd={...pieceData};if(cap){const cs=cap._sq??to;const cid=nsm[cs];delete npd[cid];delete nsm[cs];}const np=ng.get(to);if(np&&np.type!==pieceData[mid]?.type){npd[mid]={...npd[mid],type:np.type,level:1};}delete nsm[from];nsm[to]=mid;if(npd[mid]){const nid=`${np.color}${np.type}_${to}`;npd[nid]={...npd[mid],id:nid};delete npd[mid];nsm[to]=nid;}let pts=1;if(cap)pts+=1;if(ng.in_check())pts+=1;if(np&&np.type!==pieceData[mid]?.type)pts+=2;setPoints(p=>({...p,[turn]:p[turn]+pts}));setGame(ng);setPieceData(npd);setSquareMap(nsm);setSel(null);setStdMoves([]);setAbilMoves([]);},[game,squareMap,pieceData]);
+
+  const handleEvolve=useCallback(()=>{if(!sel)return;const t=game.turn();const p=game.get(sel);if(!p||p.color!==t||points[t]<2)return;const id=squareMap[sel];const d=pieceData[id];if(!d||d.level>=3)return;setPieceData(prev=>({...prev,[id]:{...d,level:d.level+1}}));setPoints(prev=>({...prev,[t]:prev[t]-2}));setLevelUpSq(sel);setTimeout(()=>setLevelUpSq(null),800);setSel(null);},[sel,game,points,pieceData,squareMap]);
+
+  useEffect(()=>{const turn=game.turn();const key=turn==='w'?whiteAI:blackAI;const ai=PERSONALITIES[key];if(!ai.ai||game.game_over())return;clearTimeout(aiTimer.current);aiTimer.current=setTimeout(()=>{const act=AI.chooseMove(game,pieceData,squareMap,points,turn,ai.level,ai.personality);if(!act)return;if(act.type==='evolve'){const id=Object.keys(pieceData).find(k=>k.endsWith('_'+act.square));if(id&&points[turn]>=2){setPieceData(p=>({...p,[id]:{...p[id],level:p[id].level+1}}));setPoints(p=>({...p,[turn]:p[turn]-2}));setLevelUpSq(act.square);setTimeout(()=>setLevelUpSq(null),800);}}else{makeMove(act.from,act.to,act.type==='ability');}},ai.level==='hard'?800:500);},[game,pieceData,squareMap,points,whiteAI,blackAI,makeMove]);
+
+  const board=game.board();const turn=game.turn();const selId=sel?squareMap[sel]:null;const selData=selId?pieceData[selId]:null;const selPiece=sel?game.get(sel):null;const evo=selPiece?EVOLUTIONS[selPiece.type]:null;const canEvolve=!!(evo&&selData&&selData.level<3&&selPiece?.color===turn&&points[turn]>=2);
+
+  const handleClick=sq=>{const human=(turn==='w'&&!PERSONALITIES[whiteAI].ai)||(turn==='b'&&!PERSONALITIES[blackAI].ai);if(!human)return;const pc=game.get(sq);if(sel){const s=stdMoves.find(m=>m.to===sq);const a=abilMoves.find(m=>m.to===sq);if(s||a){makeMove(sel,sq,!!a);return;}if(pc?.color===turn){setSel(sq);const m=getMovesFor(sq);setStdMoves(m.std);setAbilMoves(m.abil);}else{setSel(null);setStdMoves([]);setAbilMoves([]);}}else if(pc?.color===turn){setSel(sq);const m=getMovesFor(sq);setStdMoves(m.std);setAbilMoves(m.abil);}};
+
+  return(
+    <div className="app">
+      <div className="top-bar">{Object.entries(PERSONALITIES).slice(0,4).map(([k,v])=><button key={'w'+k} className={`mode-btn ${whiteAI===k?'active':''}`} onClick={()=>setWhiteAI(k)}>W:{v.name}</button>)}</div>
+      <div className="player-row"><div className="player-label">Nero: {PERSONALITIES[blackAI].name}<span className="energy-badge">⚡{points.b}</span></div></div>
+      <div className="board-wrap"><div className="board">{board.map((row,r)=>row.map((cell,c)=>{const sq='abcdefgh'[c]+(8-r);const isSel=sel===sq;const isStd=stdMoves.some(m=>m.to===sq);const isAb=abilMoves.some(m=>m.to===sq);const id=squareMap[sq];const d=id?pieceData[id]:null;const lv=d?.level??1;const lup=levelUpSq===sq;return<div key={sq} onClick={()=>handleClick(sq)} className={`cell ${(r+c)%2?'light':'dark'} ${isSel?'sel':''}`}>{(isStd||isAb)&&!cell&&<div style={{position:'absolute',width:'28%',height:'28%',borderRadius:'50%',background:isAb?'#f59e0b':'#22c55e'}}/>}{cell&&<span className={`piece piece-${cell.color} ${lv===2?'evo2':lv===3?'evo3':''}`} style={{transform:lup?'scale(1.5)':'scale(1)'}}>{ICONS[cell.color][cell.type]}</span>}{cell&&lv>1&&<div className={`level-mark ${lv===2?'lm2':'lm3'}`}>{'●'.repeat(lv-1)}</div>}</div>;}))}</div></div>
+      <div className="player-row"><div className="player-label">Bianco: {PERSONALITIES[whiteAI].name}<span className="energy-badge">⚡{points.w}</span></div></div>
+      <div className="panel"><div className="charge-row"><span>Turno: {turn==='w'?'Bianco':'Nero'}</span><span>{points[turn]}/2</span></div><div className="charge-track"><div style={{width:`${Math.min(points[turn]/2*100,100)}%`,height:'100%',background:points[turn]>=2?'#22c55e':'#38bdf8'}}/></div><div className="panel-bottom"><div className="piece-label">{selData?`${evo?.levels[selData.level-1]?.name} Lv${selData.level}`:'Seleziona pezzo'}</div><button className="evolve-btn" disabled={!canEvolve} onClick={handleEvolve}>EVOLVI</button><div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{game.in_check()?'SCACCO':turn==='w'?'⬜':'⬛'}</div></div></div>
+      <div className="top-bar">{Object.entries(PERSONALITIES).slice(4).map(([k,v])=><button key={'b'+k} className={`mode-btn ${blackAI===k?'active':''}`} onClick={()=>setBlackAI(k)}>B:{v.name}</button>)}</div>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

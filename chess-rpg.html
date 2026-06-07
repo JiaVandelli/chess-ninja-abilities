@@ -3,29 +3,26 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Omega Edition</title>
+<title>Chess RPG - Omega</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 #root{height:100%}
 .app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
 
-/* ── BARRE ── */
 .top-bar{flex-shrink:0;height:40px;display:flex;gap:6px;align-items:center}
 .mode-btn{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;color:#94a3b8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
 .mode-btn.active{color:#030712!important}
 .flip-btn{flex-shrink:0;padding:0 12px;height:100%;background:#1e293b;border:none;color:#94a3b8;border-radius:8px;font-size:13px;cursor:pointer}
 
-/* ── PLAYER ROW ── */
 .player-row{flex-shrink:0;height:48px;display:flex;gap:8px;align-items:center}
 .player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;justify-content:center;padding:0 12px;overflow:hidden}
 .player-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
-.last-move-hint{font-size:10px;color:#475569;margin-top:1px;letter-spacing:.05em}
+.last-move-hint{font-size:10px;color:#475569;margin-top:1px}
 .thinking-dot{flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#38bdf8;animation:blink 1s infinite}
 @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
 .energy-badge{flex-shrink:0;width:58px;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900}
 
-/* ── BOARD ── */
 .board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
 .board{
   --side:min(calc(100vw - 16px),calc(100vh - 310px));
@@ -37,13 +34,12 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 }
 .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,300px)/8*.72);cursor:pointer;aspect-ratio:1/1}
 .cell.light{background:#f0d9b5}
-.cell.dark {background:#b58863}
+.cell.dark{background:#b58863}
 .cell.last-from.light,.cell.last-to.light{background:#f6f669}
-.cell.last-from.dark, .cell.last-to.dark {background:#c8b400}
+.cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
 .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
 
-/* ── PEZZI ── */
-.piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;display:inline-block;line-height:1;user-select:none}
+.piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none}
 .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
 .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
 .evo2{filter:drop-shadow(0 0 5px #eab308) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
@@ -52,7 +48,6 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 .lm2{color:#eab308;text-shadow:0 0 5px #eab308}
 .lm3{color:#a855f7;text-shadow:0 0 8px #a855f7}
 
-/* ── PANEL ── */
 .panel{flex-shrink:0;height:88px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:8px 12px;display:flex;flex-direction:column;gap:7px}
 .charge-row{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:#94a3b8}
 .charge-track{width:100%;height:5px;background:#1e293b;border-radius:3px;overflow:hidden;margin-top:4px}
@@ -67,802 +62,399 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 <body>
 <div id="root"></div>
 
-<!-- Ordine di caricamento: chess.js → evolutions.js → omega-ai.js → React -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-<script>
-// ── EVOLUTIONS (evolutions.js) ──────────────────────────────────────────────
-const EVOLUTIONS = {
-  p: {
-    levels: [
-      { name: 'Soldato', color: '#64748b' },
-      { name: 'Veterano', color: '#eab308' },
-      { name: 'Campione', color: '#a855f7' },
-    ],
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      const file = sq.charCodeAt(0) - 97;
-      const rank = parseInt(sq[1]);
-
-      if (level >= 2) {
-        const backRank = color === 'w'? rank - 1 : rank + 1;
-        if (backRank >= 1 && backRank <= 8) {
-          const toSq = sq[0] + backRank;
-          if (!game.get(toSq)) moves.push({ from: sq, to: toSq, isCapture: false });
-        }
-      }
-
-      if (level >= 3) {
-        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
-       .forEach(([df, dr]) => {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) return;
-          moves.push({ from: sq, to: toSq, isCapture:!!target });
-        });
-      }
-      return moves;
-    },
-  },
-
-  n: {
-    levels: [
-      {name:'Pony',color:'#64748b'},
-      {name:'Destriero',color:'#eab308'},
-      {name:'Nightmare',color:'#a855f7'}
-    ],
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      if (level >= 2) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        const jumps = [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]];
-        for (const [df, dr] of jumps) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      if (level >= 3) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        const extendedJumps = [[1,3],[3,1],[3,-1],[1,-3],[-1,-3],[-3,-1],[-3,1],[-1,3]];
-        for (const [df, dr] of extendedJumps) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      return moves;
-    }
-  },
-
-  b: {
-    levels: [
-      {name:'Alfiere',color:'#64748b'},
-      {name:'Vescovo',color:'#eab308'},
-      {name:'Arcivescovo',color:'#a855f7'}
-    ],
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      if (level >= 2) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        for (const [df, dr] of [[0,1],[0,-1],[1,0],[-1,0]]) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      if (level >= 3) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        for (const [df, dr] of [[2,2],[2,-2],[-2,2],[-2,-2]]) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      return moves;
-    }
-  },
-
-  r: {
-    levels: [
-      {name:'Torre',color:'#64748b'},
-      {name:'Fortezza',color:'#eab308'},
-      {name:'Castello',color:'#a855f7'}
-    ],
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      if (level >= 2) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        for (const [df, dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      if (level >= 3) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        for (const [df, dr] of [[0,2],[0,-2],[2,0],[-2,0]]) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      return moves;
-    }
-  },
-
-  q: {
-    levels: [
-      {name:'Regina',color:'#64748b'},
-      {name:'Imperatrice',color:'#eab308'},
-      {name:'Dea',color:'#a855f7'}
-    ],
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      if (level >= 2) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        const jumps = [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]];
-        for (const [df, dr] of jumps) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      if (level >= 3) {
-        for (let f = 0; f < 8; f++) {
-          for (let r = 1; r <= 8; r++) {
-            const toSq = String.fromCharCode(97 + f) + r;
-            if (toSq === sq) continue;
-            if (!game.get(toSq)) {
-              moves.push({ from: sq, to: toSq, isCapture: false });
-            }
-          }
-        }
-      }
-      return moves;
-    }
-  },
-
-  k: {
-    levels: [
-      {name:'Re',color:'#64748b'},
-      {name:'Imperatore',color:'#eab308'},
-      {name:'Dio',color:'#a855f7'}
-    ],
-    getAbilityMoves(sq, game, level, color) {
-      const moves = [];
-      if (level >= 2) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        for (const [df, dr] of [[0,2],[0,-2],[2,0],[-2,0],[2,2],[2,-2],[-2,2],[-2,-2]]) {
-          const nf = file + df, nr = rank + dr;
-          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-          const toSq = String.fromCharCode(97 + nf) + nr;
-          const target = game.get(toSq);
-          if (target?.color === color) continue;
-          moves.push({ from: sq, to: toSq, isCapture: !!target });
-        }
-      }
-      if (level >= 3) {
-        const file = sq.charCodeAt(0) - 97;
-        const rank = parseInt(sq[1]);
-        for (let df = -2; df <= 2; df++) {
-          for (let dr = -2; dr <= 2; dr++) {
-            if (df === 0 && dr === 0) continue;
-            const nf = file + df, nr = rank + dr;
-            if (nf < 0 || nf > 7 || nr < 1 || nr > 8) continue;
-            const toSq = String.fromCharCode(97 + nf) + nr;
-            const target = game.get(toSq);
-            if (target && target.color !== color) {
-              moves.push({ from: sq, to: toSq, isCapture: true });
-            }
-          }
-        }
-      }
-      return moves;
-    }
-  }
-};
-</script>
-
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <script type="text/babel">
-const {useState,useEffect,useCallback,useRef} = React;
-const Chess = window.Chess;
-const ICONS = {w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
-
-const PERSONALITIES = {
-  human: { name:'Umano', ai:false, color:'#94a3b8' },
-  omega: { name:'Stockfish Omega', ai:true, color:'#eab308' },
+// ═══════════════════════════════════════════════════════════════
+//  EVOLUTIONS
+// ═══════════════════════════════════════════════════════════════
+const EVOLUTIONS = {
+  p: {
+    levels: [
+      { name:'Soldato',   color:'#64748b' },
+      { name:'Veterano',  color:'#eab308' },
+      { name:'Campione',  color:'#a855f7' },
+    ],
+    getAbilityMoves(sq, game, level, color) {
+      const moves=[], file=sq.charCodeAt(0)-97, rank=parseInt(sq[1]);
+      if(level>=2){
+        const br=color==='w'?rank-1:rank+1;
+        if(br>=1&&br<=8){const t=sq[0]+br;if(!game.get(t))moves.push({from:sq,to:t,isCapture:false})}
+      }
+      if(level>=3){
+        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([df,dr])=>{
+          const nf=file+df,nr=rank+dr;
+          if(nf<0||nf>7||nr<1||nr>8)return;
+          const t=String.fromCharCode(97+nf)+nr,tg=game.get(t);
+          if(tg?.color===color)return;
+          moves.push({from:sq,to:t,isCapture:!!tg})
+        })
+      }
+      return moves
+    }
+  },
+  n: {
+    levels:[{name:'Pony',color:'#64748b'},{name:'Destriero',color:'#eab308'},{name:'Nightmare',color:'#a855f7'}],
+    getAbilityMoves(sq,game,level,color){
+      const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
+      const jumps=level>=3?[[1,3],[3,1],[3,-1],[1,-3],[-1,-3],[-3,-1],[-3,1],[-1,3]]:[];
+      const base=level>=2?[[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]]:[];
+      [...base,...jumps].forEach(([df,dr])=>{
+        const nf=file+df,nr=rank+dr;
+        if(nf<0||nf>7||nr<1||nr>8)return;
+        const t=String.fromCharCode(97+nf)+nr,tg=game.get(t);
+        if(tg?.color===color)return;
+        moves.push({from:sq,to:t,isCapture:!!tg})
+      });
+      return moves
+    }
+  },
+  b: {
+    levels:[{name:'Alfiere',color:'#64748b'},{name:'Vescovo',color:'#eab308'},{name:'Arcivescovo',color:'#a855f7'}],
+    getAbilityMoves(sq,game,level,color){
+      const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
+      const dirs=level>=2?[[0,1],[0,-1],[1,0],[-1,0]]:[];
+      const jumps=level>=3?[[2,2],[2,-2],[-2,2],[-2,-2]]:[];
+      [...dirs,...jumps].forEach(([df,dr])=>{
+        const nf=file+df,nr=rank+dr;
+        if(nf<0||nf>7||nr<1||nr>8)return;
+        const t=String.fromCharCode(97+nf)+nr,tg=game.get(t);
+        if(tg?.color===color)return;
+        moves.push({from:sq,to:t,isCapture:!!tg})
+      });
+      return moves
+    }
+  },
+  r: {
+    levels:[{name:'Torre',color:'#64748b'},{name:'Fortezza',color:'#eab308'},{name:'Castello',color:'#a855f7'}],
+    getAbilityMoves(sq,game,level,color){
+      const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
+      const dirs=level>=2?[[1,1],[1,-1],[-1,1],[-1,-1]]:[];
+      const jumps=level>=3?[[0,2],[0,-2],[2,0],[-2,0]]:[];
+      [...dirs,...jumps].forEach(([df,dr])=>{
+        const nf=file+df,nr=rank+dr;
+        if(nf<0||nf>7||nr<1||nr>8)return;
+        const t=String.fromCharCode(97+nf)+nr,tg=game.get(t);
+        if(tg?.color===color)return;
+        moves.push({from:sq,to:t,isCapture:!!tg})
+      });
+      return moves
+    }
+  },
+  q: {
+    levels:[{name:'Regina',color:'#64748b'},{name:'Imperatrice',color:'#eab308'},{name:'Dea',color:'#a855f7'}],
+    getAbilityMoves(sq,game,level,color){
+      const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
+      if(level>=2){
+        [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]].forEach(([df,dr])=>{
+          const nf=file+df,nr=rank+dr;
+          if(nf<0||nf>7||nr<1||nr>8)return;
+          const t=String.fromCharCode(97+nf)+nr,tg=game.get(t);
+          if(tg?.color===color)return;
+          moves.push({from:sq,to:t,isCapture:!!tg})
+        })
+      }
+      if(level>=3){
+        for(let f=0;f<8;f++)for(let r=1;r<=8;r++){
+          const t=String.fromCharCode(97+f)+r;
+          if(t!==sq&&!game.get(t))moves.push({from:sq,to:t,isCapture:false})
+        }
+      }
+      return moves
+    }
+  },
+  k: {
+    levels:[{name:'Re',color:'#64748b'},{name:'Imperatore',color:'#eab308'},{name:'Dio',color:'#a855f7'}],
+    getAbilityMoves(sq,game,level,color){
+      const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
+      if(level>=2){
+        [[0,2],[0,-2],[2,0],[-2,0],[2,2],[2,-2],[-2,2],[-2,-2]].forEach(([df,dr])=>{
+          const nf=file+df,nr=rank+dr;
+          if(nf<0||nf>7||nr<1||nr>8)return;
+          const t=String.fromCharCode(97+nf)+nr,tg=game.get(t);
+          if(tg?.color===color)return;
+          moves.push({from:sq,to:t,isCapture:!!tg})
+        })
+      }
+      if(level>=3){
+        for(let df=-2;df<=2;df++)for(let dr=-2;dr<=2;dr++){
+          if(!df&&!dr)continue;
+          const nf=file+df,nr=rank+dr;
+          if(nf<0||nf>7||nr<1||nr>8)continue;
+          const t=String.fromCharCode(97+nf)+nr,tg=game.get(t);
+          if(tg&&tg.color!==color)moves.push({from:sq,to:t,isCapture:true})
+        }
+      }
+      return moves
+    }
+  }
 };
 
-// ── OMEGA AI ENGINE ──────────────────────────────────────────────────────────
-let sfWorker = null;
-let sfBusy = false;
+// ═══════════════════════════════════════════════════════════════
+//  OMEGA AI
+// ═══════════════════════════════════════════════════════════════
+let sfWorker=null,sfBusy=false;
+try{
+  sfWorker=new Worker(URL.createObjectURL(new Blob(
+    [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');`],
+    {type:'application/javascript'}
+  )));
+  sfWorker.postMessage('uci');
+  sfWorker.postMessage('setoption name Hash value 128');
+  console.log('✅ Stockfish ready')
+}catch(e){console.warn('⚠️ Stockfish offline')}
 
-(function initSF() {
-  try {
-    const blob = new Blob(
-      [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');`],
-      { type: 'application/javascript' }
-    );
-    sfWorker = new Worker(URL.createObjectURL(blob));
-    sfWorker.postMessage('uci');
-    sfWorker.postMessage('setoption name Hash value 128');
-    console.log('✅ Stockfish Omega loaded (Hash 128)');
-  } catch (e) {
-    console.warn('⚠️ Stockfish unavailable — greedy fallback active');
-  }
-})();
-
-function sfEval(fen, movetime) {
-  if (!sfWorker || sfBusy) return Promise.resolve(null);
-  sfBusy = true;
-
-  return new Promise(resolve => {
-    let lastScore = 0;
-    const timeout = setTimeout(() => {
-      sfBusy = false;
-      sfWorker.removeEventListener('message', h);
-      resolve(null);
-    }, movetime + 2500);
-
-    const h = e => {
-      if (typeof e.data !== 'string') return;
-      const msg = e.data;
-
-      if (msg.includes('score cp')) {
-        const m = msg.match(/score cp (-?\d+)/);
-        if (m) lastScore = parseInt(m[1]) / 100;
-      } else if (msg.includes('score mate')) {
-        const m = msg.match(/score mate (-?\d+)/);
-        if (m) lastScore = parseInt(m[1]) > 0 ? 200 : -200;
-      }
-
-      if (msg.startsWith('bestmove')) {
-        clearTimeout(timeout);
-        sfBusy = false;
-        sfWorker.removeEventListener('message', h);
-        const mv = msg.split(' ')[1];
-        if (!mv || mv === '(none)') { resolve(null); return; }
-        resolve({
-          from: mv.slice(0, 2),
-          to: mv.slice(2, 4),
-          promotion: mv[4] || null,
-          score: lastScore
-        });
+function sfEval(fen,movetime){
+  if(!sfWorker||sfBusy)return Promise.resolve(null);
+  sfBusy=true;
+  return new Promise(resolve=>{
+    let score=0;
+    const t=setTimeout(()=>{sfBusy=false;sfWorker.removeEventListener('message',h);resolve(null)},movetime+2500);
+    const h=e=>{
+      if(typeof e.data!=='string')return;
+      const m=e.data;
+      if(m.includes('score cp')){const x=m.match(/score cp (-?\d+)/);if(x)score=parseInt(x[1])/100}
+      else if(m.includes('score mate')){const x=m.match(/score mate (-?\d+)/);if(x)score=parseInt(x[1])>0?200:-200}
+      if(m.startsWith('bestmove')){
+        clearTimeout(t);sfBusy=false;sfWorker.removeEventListener('message',h);
+        const mv=m.split(' ')[1];
+        if(!mv||mv==='(none)'){resolve(null);return}
+        resolve({from:mv.slice(0,2),to:mv.slice(2,4),promotion:mv[4]||null,score})
       }
     };
-
-    sfWorker.addEventListener('message', h);
+    sfWorker.addEventListener('message',h);
     sfWorker.postMessage('ucinewgame');
-    sfWorker.postMessage('position fen ' + fen);
-    sfWorker.postMessage('go movetime ' + movetime);
-  });
+    sfWorker.postMessage('position fen '+fen);
+    sfWorker.postMessage('go movetime '+movetime)
+  })
 }
 
-const BASE_VALS = { p: 1.0, n: 3.2, b: 3.3, r: 5.0, q: 9.0, k: 200 };
-const PAWN_BONUS = [0, 0, 0.6, 1.8];
-
-function rpgVal(type, level) {
-  const base = BASE_VALS[type] || 0;
-  return type === 'p' ? base + (PAWN_BONUS[level] || 0) : base;
+const BASE_VALS={p:1,n:3.2,b:3.3,r:5,q:9,k:200};
+const PAWN_BONUS=[0,0,0.6,1.8];
+function rpgVal(type,level){const b=BASE_VALS[type]||0;return type==='p'?b+(PAWN_BONUS[level]||0):b}
+function evalRpg(pd,pts,color){
+  const opp=color==='w'?'b':'w';let s=0;
+  for(const d of Object.values(pd)){if(!d)continue;s+=d.color===color?rpgVal(d.type,d.level):-rpgVal(d.type,d.level)}
+  return s+(pts[color]-pts[opp])*0.35
 }
 
-function evalRpg(pd, pts, color) {
-  const opp = color === 'w' ? 'b' : 'w';
-  let score = 0;
-  for (const d of Object.values(pd)) {
-    if (!d) continue;
-    const v = rpgVal(d.type, d.level);
-    score += d.color === color ? v : -v;
-  }
-  score += (pts[color] - pts[opp]) * 0.35;
-  return score;
-}
+// ═══════════════════════════════════════════════════════════════
+//  APP
+// ═══════════════════════════════════════════════════════════════
+const {useState,useEffect,useCallback,useRef}=React;
+const Chess=window.Chess;
+const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
+const PERSONALITIES={human:{name:'Umano',ai:false,color:'#94a3b8'},omega:{name:'Stockfish Omega',ai:true,color:'#eab308'}};
 
-// ── GAME HELPERS ──────────────────────────────────────────────────────────────
-function buildInitialState(g) {
-  const pd = {}, sm = {};
-  g.board().forEach((row, r) => row.forEach((cell, c) => {
-    if (cell) {
-      const sq = 'abcdefgh'[c] + (8 - r);
-      const id = `${cell.color}${cell.type}_${sq}`;
-      pd[id] = {id, type: cell.type, color: cell.color, level: 1};
-      sm[sq] = id;
-    }
+function buildState(g){
+  const pd={},sm={};
+  g.board().forEach((row,r)=>row.forEach((cell,c)=>{
+    if(cell){const sq='abcdefgh'[c]+(8-r);pd[`${cell.color}${cell.type}_${sq}`]={type:cell.type,color:cell.color,level:1};sm[sq]=`${cell.color}${cell.type}_${sq}`}
   }));
-  return {pd, sm};
+  return{pd,sm}
 }
 
-function execAbilityMove(game, from, to) {
-  const piece = game.get(from), captured = game.get(to) || null;
-  const g = new Chess(game.fen());
-  g.remove(from);
-  if (captured) g.remove(to);
-  g.put(piece, to);
-  const parts = g.fen().split(' ');
-  const wasW = parts[1] === 'w';
-  parts[1] = wasW ? 'b' : 'w';
-  if (!wasW) parts[5] = String(parseInt(parts[5]) + 1);
-  parts[3] = '-';
-  const ng = new Chess();
-  ng.load(parts.join(' '));
-  return {newGame: ng, capturedPiece: captured};
+function execAbility(game,from,to){
+  const p=game.get(from),cap=game.get(to)||null,g2=new Chess(game.fen());
+  g2.remove(from);if(cap)g2.remove(to);g2.put(p,to);
+  const parts=g2.fen().split(' '),wasW=parts[1]==='w';
+  parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';
+  const ng=new Chess();ng.load(parts.join(' '));
+  return{newGame:ng,capturedPiece:cap}
 }
 
-// ── APP ───────────────────────────────────────────────────────────────────────
-function App() {
-  const [game, setGame] = useState(() => new Chess());
-  const [pd, setPd] = useState({});
-  const [sm, setSm] = useState({});
-  const [sel, setSel] = useState(null);
-  const [stdMoves, setStd] = useState([]);
-  const [abilMoves, setAbl] = useState([]);
-  const [lvlUpSq, setLvlUp] = useState(null);
-  const [pts, setPts] = useState({w: 0, b: 0});
-  const [whiteAI, setWhiteAI] = useState('human');
-  const [blackAI, setBlackAI] = useState('omega');
-  const [thinking, setThinking] = useState(false);
-  const [lastMove, setLastMove] = useState(null);
-  const [flipped, setFlipped] = useState(false);
-  const aiTimer = useRef(null);
-  const aiGen = useRef(0);
+function App(){
+  const[game,setGame]=useState(()=>new Chess());
+  const[pd,setPd]=useState({});const[sm,setSm]=useState({});
+  const[sel,setSel]=useState(null);const[stdM,setStd]=useState([]);const[abilM,setAbl]=useState([]);
+  const[lvlUp,setLvlUp]=useState(null);const[pts,setPts]=useState({w:0,b:0});
+  const[wAI,setWAI]=useState('human');const[bAI,setBAI]=useState('omega');
+  const[thinking,setThink]=useState(false);const[last,setLast]=useState(null);
+  const[flipped,setFlip]=useState(false);
+  const timer=useRef(null);const gen=useRef(0);
 
-  useEffect(() => {
-    const s = buildInitialState(game);
-    setPd(s.pd);
-    setSm(s.sm);
-  }, []);
+  useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm)},[]);
+  useEffect(()=>{setFlip(!PERSONALITIES[bAI]?.ai&&PERSONALITIES[wAI]?.ai)},[wAI,bAI]);
 
-  useEffect(() => {
-    const humanBlack = !PERSONALITIES[blackAI]?.ai && PERSONALITIES[whiteAI]?.ai;
-    setFlipped(humanBlack);
-  }, [whiteAI, blackAI]);
+  const getMoves=useCallback(sq=>{
+    const p=game.get(sq);if(!p)return{std:[],abil:[]};
+    const id=sm[sq],d=pd[id],evo=EVOLUTIONS[p.type];
+    return{std:game.moves({square:sq,verbose:true}),abil:evo&&d?evo.getAbilityMoves(sq,game,d.level,p.color):[]}
+  },[game,sm,pd]);
 
-  const getMovesFor = useCallback(sq => {
-    const piece = game.get(sq);
-    if (!piece) return {std: [], abil: []};
-    const std = game.moves({square: sq, verbose: true});
-    const id = sm[sq];
-    const data = pd[id];
-    const evo = EVOLUTIONS[piece.type];
-    const abil = evo && data ? evo.getAbilityMoves(sq, game, data.level, piece.color) : [];
-    return {std, abil};
-  }, [game, sm, pd]);
+  const move=useCallback((from,to,isAbil=false)=>{
+    const turn=game.turn();let ng,cap=null;
+    if(isAbil){const r=execAbility(game,from,to);ng=r.newGame;cap=r.capturedPiece}
+    else{ng=new Chess(game.fen());const mv=ng.move({from,to,promotion:'q'});if(!mv)return;if(mv.captured)cap={type:mv.captured};if(mv.flags?.includes('e'))cap={type:'p',_sq:to[0]+from[1]}}
+    const mid=sm[from],nsm={...sm},npd={...pd};
+    if(cap){const cs=cap._sq||to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs]}}
+    const np=ng.get(to);let promo=false;
+    if(np&&mid&&npd[mid]&&np.type!==npd[mid].type){npd[mid]={...npd[mid],type:np.type,level:1};promo=true}
+    delete nsm[from];nsm[to]=mid;
+    let p=1;if(cap)p++;if(ng.in_check())p++;if(promo)p+=2;
+    setPts(ps=>({...ps,[turn]:ps[turn]+p}));setGame(ng);setPd(npd);setSm(nsm);
+    setSel(null);setStd([]);setAbl([]);setLast({from,to})
+  },[game,sm,pd]);
 
-  const makeMove = useCallback((from, to, isAbility = false) => {
-    const turn = game.turn();
-    let newGame, cap = null;
-    
-    if (isAbility) {
-      const res = execAbilityMove(game, from, to);
-      newGame = res.newGame;
-      cap = res.capturedPiece;
-    } else {
-      newGame = new Chess(game.fen());
-      const mv = newGame.move({from, to, promotion: 'q'});
-      if (!mv) return;
-      if (mv.captured) cap = {type: mv.captured};
-      if (mv.flags && mv.flags.includes('e')) cap = {type: 'p', _sq: to[0] + from[1]};
+  const evolve=useCallback(sq=>{
+    if(!sq)return;const turn=game.turn(),p=game.get(sq);
+    if(!p||p.color!==turn||pts[turn]<2)return;
+    const id=sm[sq],d=pd[id];
+    if(!d||d.level>=3||!EVOLUTIONS[d.type])return;
+    setPd(prev=>({...prev,[id]:{...d,level:d.level+1}}));
+    setPts(prev=>({...prev,[turn]:prev[turn]-2}));
+    setLvlUp(sq);setTimeout(()=>setLvlUp(null),900);
+    setSel(null);setStd([]);setAbl([])
+  },[game,pts,sm,pd]);
+
+  const click=useCallback(sq=>{
+    const turn=game.turn(),isHuman=turn==='w'?!PERSONALITIES[wAI]?.ai:!PERSONALITIES[bAI]?.ai;
+    if(!isHuman||thinking)return;
+    const p=game.get(sq);
+    if(sel){
+      const smv=stdM.find(m=>m.to===sq),amv=abilM.find(m=>m.to===sq);
+      if(smv||amv){move(sel,sq,!!amv);return}
+      if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);return}
+      setSel(null);setStd([]);setAbl([]);return
     }
-    
-    const mid = sm[from];
-    const nsm = {...sm};
-    const npd = {...pd};
-    
-    if (cap) {
-      const cSq = cap._sq || to;
-      const cId = nsm[cSq];
-      if (cId) {
-        delete npd[cId];
-        delete nsm[cSq];
-      }
-    }
-    
-    const np = newGame.get(to);
-    let isPromo = false;
-    if (np && mid && npd[mid] && np.type !== npd[mid].type) {
-      npd[mid] = {...npd[mid], type: np.type, level: 1};
-      isPromo = true;
-    }
-    
-    delete nsm[from];
-    nsm[to] = mid;
-    
-    let p = 1;
-    if (cap) p++;
-    if (newGame.in_check()) p++;
-    if (isPromo) p += 2;
-    
-    setPts(ps => ({...ps, [turn]: ps[turn] + p}));
-    setGame(newGame);
-    setPd(npd);
-    setSm(nsm);
-    setSel(null);
-    setStd([]);
-    setAbl([]);
-    setLastMove({from, to});
-  }, [game, sm, pd]);
+    if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil)}
+  },[game,sel,stdM,abilM,getMoves,move,wAI,bAI,thinking]);
 
-  const doEvolve = useCallback(sq => {
-    if (!sq) return;
-    const turn = game.turn();
-    const piece = game.get(sq);
-    if (!piece || piece.color !== turn) return;
-    if (pts[turn] < 2) return;
-    const id = sm[sq];
-    const d = pd[id];
-    if (!d || d.level >= 3 || !EVOLUTIONS[d.type]) return;
-    
-    setPd(prev => ({...prev, [id]: {...d, level: d.level + 1}}));
-    setPts(prev => ({...prev, [turn]: prev[turn] - 2}));
-    setLvlUp(sq);
-    setTimeout(() => setLvlUp(null), 900);
-    setSel(null);
-    setStd([]);
-    setAbl([]);
-  }, [game, pts, sm, pd]);
+  useEffect(()=>{
+    const turn=game.turn(),ai=turn==='w'?wAI:bAI;
+    if(!PERSONALITIES[ai]?.ai||game.game_over())return;
+    gen.current++;const myGen=gen.current;
+    clearTimeout(timer.current);
+    timer.current=setTimeout(async()=>{
+      setThink(true);
+      const sf=await sfEval(game.fen(),3000);
+      if(gen.current!==myGen){setThink(false);return}
+      const rpg=evalRpg(pd,pts,turn);
+      let best=null,bs=-Infinity;
+      if(sf){const sc=sf.score*0.65+rpg*0.35;if(sc>bs){bs=sc;best={type:'move',from:sf.from,to:sf.to}}}
+      if(!best){const leg=game.moves({verbose:true});if(leg.length){const m=leg[Math.floor(Math.random()*leg.length)];best={type:'move',from:m.from,to:m.to}}}
+      if(pts[turn]>=2){for(const[sq,id]of Object.entries(sm)){const d=pd[id],p=game.get(sq);if(d&&p&&p.color===turn&&d.level<3&&d.type==='p'){const rk=parseInt(sq[1]),adv=turn==='w'?rk:9-rk;if(adv*12+d.level*18>40){best={type:'evolve',sq};break}}}}
+      if(best&&best.type==='move'){for(const[sq,id]of Object.entries(sm)){const p=game.get(sq);if(!p||p.color!==turn)continue;const d=pd[id],evo=EVOLUTIONS[p.type];if(!evo)continue;for(const ab of evo.getAbilityMoves(sq,game,d.level,turn)){const tg=game.get(ab.to);if(!tg)continue;const tl=sm[ab.to]?(pd[sm[ab.to]]?.level||1):1;if(rpgVal(tg.type,tl)>=3){const sg=new Chess(game.fen());sg.remove(ab.from);sg.remove(ab.to);sg.put(p,ab.to);const as=await sfEval(sg.fen(),800);const asc=(as?-as.score:0)*0.65+(evalRpg(pd,pts,turn)+rpgVal(tg.type,tl))*0.35;if(asc>bs+0.3){best={type:'ability',from:ab.from,to:ab.to};break}}}if(best.type==='ability')break}}
+      setThink(false);
+      if(!best)return;
+      if(best.type==='evolve')evolve(best.sq);else move(best.from,best.to,best.type==='ability')
+    },350+Math.random()*200);
+    return()=>clearTimeout(timer.current)
+  },[game,pd,sm,pts,wAI,bAI,move,evolve]);
 
-  const handleClick = useCallback(sq => {
-    const turn = game.turn();
-    const isHuman = turn === 'w' ? !PERSONALITIES[whiteAI]?.ai : !PERSONALITIES[blackAI]?.ai;
-    if (!isHuman || thinking) return;
-    
-    const piece = game.get(sq);
-    
-    if (sel) {
-      const sM = stdMoves.find(m => m.to === sq);
-      const aM = abilMoves.find(m => m.to === sq);
-      if (sM || aM) {
-        makeMove(sel, sq, !!aM);
-        return;
-      }
-      if (piece && piece.color === turn) {
-        setSel(sq);
-        const {std, abil} = getMovesFor(sq);
-        setStd(std);
-        setAbl(abil);
-        return;
-      }
-      setSel(null);
-      setStd([]);
-      setAbl([]);
-      return;
-    }
-    
-    if (piece && piece.color === turn) {
-      setSel(sq);
-      const {std, abil} = getMovesFor(sq);
-      setStd(std);
-      setAbl(abil);
-    }
-  }, [game, sel, stdMoves, abilMoves, getMovesFor, makeMove, whiteAI, blackAI, thinking]);
-
-  // AI Turn
-  useEffect(() => {
-    const turn = game.turn();
-    const aiType = turn === 'w' ? whiteAI : blackAI;
-    if (!PERSONALITIES[aiType]?.ai || game.game_over()) return;
-    
-    aiGen.current += 1;
-    const myGen = aiGen.current;
-    clearTimeout(aiTimer.current);
-    
-    aiTimer.current = setTimeout(async () => {
-      setThinking(true);
-      
-      // 1. Get Stockfish move
-      const sfResult = await sfEval(game.fen(), 3000);
-      
-      if (aiGen.current !== myGen) {
-        setThinking(false);
-        return;
-      }
-      
-      // 2. Evaluate RPG state
-      const baseRpg = evalRpg(pd, pts, turn);
-      
-      let bestAction = null;
-      let bestScore = -Infinity;
-      
-      // Stockfish move
-      if (sfResult) {
-        const sfScore = sfResult.score * 0.65 + baseRpg * 0.35;
-        if (sfScore > bestScore) {
-          bestScore = sfScore;
-          bestAction = { type: 'move', from: sfResult.from, to: sfResult.to };
-        }
-      }
-      
-      // Fallback: random legal move
-      if (!bestAction) {
-        const legals = game.moves({ verbose: true });
-        if (legals.length > 0) {
-          const m = legals[Math.floor(Math.random() * legals.length)];
-          bestAction = { type: 'move', from: m.from, to: m.to };
-        }
-      }
-      
-      // 3. Check evolution
-      if (pts[turn] >= 2) {
-        for (const [sq, id] of Object.entries(sm)) {
-          const d = pd[id];
-          const piece = game.get(sq);
-          if (d && piece && piece.color === turn && d.level < 3 && d.type === 'p') {
-            const rank = parseInt(sq[1]);
-            const adv = turn === 'w' ? rank : (9 - rank);
-            const evoScore = adv * 12 + d.level * 18;
-            
-            if (evoScore > 40) { // Soglia per evolvere
-              const pd2 = {...pd, [id]: {...d, level: d.level + 1}};
-              const pts2 = {...pts, [turn]: pts[turn] - 2};
-              const newRpg = evalRpg(pd2, pts2, turn);
-              
-              if (newRpg > baseRpg + 0.5) {
-                bestAction = { type: 'evolve', sq };
-                break; // Evolvi solo un pezzo per turno
-              }
-            }
-          }
-        }
-      }
-      
-      // 4. Check abilities (solo catture di valore)
-      if (bestAction && bestAction.type === 'move') {
-        for (const [sq, id] of Object.entries(sm)) {
-          const piece = game.get(sq);
-          if (!piece || piece.color !== turn) continue;
-          const d = pd[id];
-          const evo = EVOLUTIONS[piece.type];
-          if (!evo) continue;
-          
-          for (const ab of evo.getAbilityMoves(sq, game, d.level, turn)) {
-            const target = game.get(ab.to);
-            if (!target) continue;
-            const tId = sm[ab.to];
-            const tLvl = tId ? pd[tId]?.level || 1 : 1;
-            const capV = rpgVal(target.type, tLvl);
-            
-            if (capV >= 3.0) { // Cattura pezzo di valore
-              const simGame = new Chess(game.fen());
-              simGame.remove(ab.from);
-              simGame.remove(ab.to);
-              simGame.put(piece, ab.to);
-              
-              const abSf = await sfEval(simGame.fen(), 800);
-              const abScore = (abSf ? -abSf.score : 0) * 0.65 + 
-                (evalRpg(pd, pts, turn) + capV) * 0.35;
-              
-              if (abScore > bestScore + 0.3) {
-                bestAction = { type: 'ability', from: ab.from, to: ab.to };
-                break;
-              }
-            }
-          }
-          if (bestAction.type === 'ability') break;
-        }
-      }
-      
-      setThinking(false);
-      
-      if (!bestAction) return;
-      
-      if (bestAction.type === 'evolve') {
-        doEvolve(bestAction.sq);
-      } else {
-        makeMove(bestAction.from, bestAction.to, bestAction.type === 'ability');
-      }
-    }, 350 + Math.random() * 200);
-    
-    return () => clearTimeout(aiTimer.current);
-  }, [game, pd, sm, pts, whiteAI, blackAI, makeMove, doEvolve]);
-
-  // ── RENDER ────────────────────────────────────────────────────────────────────
-  const rawBoard = game.board();
-  const boardData = flipped ? [...rawBoard].reverse().map(r => [...r].reverse()) : rawBoard;
-  const turn = game.turn();
-  const selId = sel ? sm[sel] : null;
-  const selData = selId ? pd[selId] : null;
-  const selPiece = sel ? game.get(sel) : null;
-  const evo = selPiece ? EVOLUTIONS[selPiece.type] : null;
-  const lvlInfo = evo && selData ? evo.levels[selData.level - 1] : null;
-  const curPts = pts[turn];
-  const chargePct = Math.min(curPts / 2 * 100, 100);
-  const canEvolve = !!(evo && selData && selData.level < 3 && selPiece && selPiece.color === turn && curPts >= 2);
-  const showEvolveBtn = !!(evo && selData && selData.level < 3);
-  const isAITurn = PERSONALITIES[turn === 'w' ? whiteAI : blackAI]?.ai;
-
-  const resetGame = () => {
-    const g = new Chess();
-    const s = buildInitialState(g);
-    setGame(g);
-    setPd(s.pd);
-    setSm(s.sm);
-    setPts({w: 0, b: 0});
-    setSel(null);
-    setStd([]);
-    setAbl([]);
-    setThinking(false);
-    setLastMove(null);
-    aiGen.current += 1;
+  const reset=()=>{
+    const g=new Chess(),s=buildState(g);
+    setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});
+    setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);gen.current++
   };
 
-  const AIBar = ({forColor, current, onChange}) => (
+  const raw=game.board(),bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw;
+  const turn=game.turn(),sid=sel?sm[sel]:null,sd=sid?pd[sid]:null,sp=sel?game.get(sel):null;
+  const evo=sp?EVOLUTIONS[sp.type]:null,li=evo&&sd?evo.levels[sd.level-1]:null;
+  const cp=pts[turn],cpct=Math.min(cp/2*100,100);
+  const canEvo=!!(evo&&sd&&sd.level<3&&sp?.color===turn&&cp>=2);
+  const showEvo=!!(evo&&sd&&sd.level<3);
+  const isAI=PERSONALITIES[turn==='w'?wAI:bAI]?.ai;
+
+  const Bar=({color,cur,onChange})=>(
     <div className="top-bar">
-      {Object.entries(PERSONALITIES).map(([k, v]) => (
-        <button key={k}
-          className={`mode-btn ${current === k ? 'active' : ''}`}
-          style={current === k ? {background: v.color, borderColor: v.color} : {}}
-          onClick={() => onChange(k)}>
-          {forColor === 'w' ? '⬜' : '⬛'} {v.name}
+      {Object.entries(PERSONALITIES).map(([k,v])=>(
+        <button key={k} className={`mode-btn ${cur===k?'active':''}`}
+          style={cur===k?{background:v.color,borderColor:v.color}:{}}
+          onClick={()=>onChange(k)}>
+          {color==='w'?'⬜':'⬛'} {v.name}
         </button>
       ))}
-      {forColor === 'w' && (
-        <button className="flip-btn" onClick={() => setFlipped(f => !f)} title="Ruota scacchiera">🔄</button>
-      )}
+      {color==='w'&&<button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄</button>}
     </div>
   );
 
-  return (
+  return(
     <div className="app">
-      <AIBar forColor="w" current={whiteAI} onChange={(k) => { setWhiteAI(k); setTimeout(resetGame, 0); }}/>
+      <Bar color="w" cur={wAI} onChange={k=>{setWAI(k);setTimeout(reset,0)}}/>
 
-      {/* Nero */}
       <div className="player-row">
-        <div className="player-label" style={{borderLeft: `3px solid ${PERSONALITIES[blackAI]?.color || '#94a3b8'}`}}>
+        <div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[bAI]?.color||'#94a3b8'}`}}>
           <div className="player-name">
-            {thinking && turn === 'b' && <div className="thinking-dot"/>}
-            ⬛ {PERSONALITIES[blackAI]?.name || 'Umano'}
+            {thinking&&turn==='b'&&<div className="thinking-dot"/>}
+            ⬛ {PERSONALITIES[bAI]?.name||'Umano'}
           </div>
-          {lastMove && <div className="last-move-hint">{lastMove.from} → {lastMove.to}</div>}
+          {last&&<div className="last-move-hint">{last.from} → {last.to}</div>}
         </div>
-        <div className="energy-badge" style={{borderLeft: '3px solid #f43f5e', color: pts.b >= 2 ? '#22c55e' : '#94a3b8'}}>
-          <span style={{fontSize: 16}}>⚡</span><span style={{fontSize: 11}}>{pts.b}</span>
+        <div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}>
+          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span>
         </div>
       </div>
 
-      {/* Board */}
       <div className="board-wrap">
         <div className="board">
-          {boardData.map((row, r) => row.map((cell, c) => {
-            const fi = flipped ? 7 - c : c;
-            const ri = flipped ? r : 7 - r;
-            const sq = 'abcdefgh'[fi] + (ri + 1);
-            const isLight = (fi + ri) % 2 === 0;
-            const isSel = sel === sq;
-            const isStd = stdMoves.some(m => m.to === sq);
-            const isAbil = abilMoves.some(m => m.to === sq);
-            const isAny = isStd || isAbil;
-            const id = sm[sq];
-            const data = id ? pd[id] : null;
-            const level = data?.level ?? 1;
-            const isLvlUp = lvlUpSq === sq;
-            const evoClass = level === 2 ? 'evo2' : level === 3 ? 'evo3' : '';
-            const isLastFrom = lastMove?.from === sq;
-            const isLastTo = lastMove?.to === sq;
-
-            return (
-              <div key={sq} onClick={() => handleClick(sq)}
-                className={`cell ${isLight ? 'light' : 'dark'} ${isSel ? 'sel' : ''} ${isLastFrom ? 'last-from' : ''} ${isLastTo ? 'last-to' : ''}`}>
-                {isAny && !cell && (<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background: isAbil ? '#f59e0b' : '#22c55e',boxShadow: `0 0 10px ${isAbil ? '#f59e0b' : '#22c55e'}`}}/>)}
-                {isAny && cell && (<div style={{position:'absolute',inset:0,border:`3px solid ${isAbil ? '#f59e0b' : '#f43f5e'}`,borderRadius:'3px'}}/>)}
-                {cell && (
-                  <span className={`piece piece-${cell.color} ${evoClass}`}
-                    style={{transform: isLvlUp ? 'scale(1.5)' : 'scale(1)', transition: 'transform .15s', animation: isLvlUp ? 'lvlup 1s ease' : undefined}}>
-                    {ICONS[cell.color][cell.type]}
-                  </span>
-                )}
-                {cell && EVOLUTIONS[cell.type] && level > 1 && (
-                  <>
-                    <div style={{position:'absolute',inset:'2px',border:`2px solid ${level === 2 ? '#eab308' : '#a855f7'}`,borderRadius:'2px',pointerEvents:'none'}}/>
-                    <div className={`lm ${level === 2 ? 'lm2' : 'lm3'}`}>{'●'.repeat(level - 1)}</div>
-                  </>
-                )}
+          {bd.map((row,r)=>row.map((cell,c)=>{
+            const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1);
+            const light=(fi+ri)%2===0,isSel=sel===sq;
+            const isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),isAny=isStd||isAbil;
+            const id=sm[sq],data=id?pd[id]:null,level=data?.level??1;
+            const evoCls=level===2?'evo2':level===3?'evo3':'';
+            return(
+              <div key={sq} onClick={()=>click(sq)}
+                className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>
+                {isAny&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:isAbil?'#f59e0b':'#22c55e',boxShadow:`0 0 10px ${isAbil?'#f59e0b':'#22c55e'}`}}/>}
+                {isAny&&cell&&<div style={{position:'absolute',inset:0,border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`,borderRadius:'3px'}}/>}
+                {cell&&<span className={`piece piece-${cell.color} ${evoCls}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}
+                {cell&&EVOLUTIONS[cell.type]&&level>1&&<>
+                  <div style={{position:'absolute',inset:'2px',border:`2px solid ${level===2?'#eab308':'#a855f7'}`,borderRadius:'2px',pointerEvents:'none'}}/>
+                  <div className={`lm ${level===2?'lm2':'lm3'}`}>{'●'.repeat(level-1)}</div>
+                </>}
               </div>
-            );
+            )
           }))}
         </div>
       </div>
 
-      {/* Bianco */}
       <div className="player-row">
-        <div className="player-label" style={{borderLeft: `3px solid ${PERSONALITIES[whiteAI]?.color || '#94a3b8'}`}}>
+        <div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color||'#94a3b8'}`}}>
           <div className="player-name">
-            {thinking && turn === 'w' && <div className="thinking-dot"/>}
-            ⬜ {PERSONALITIES[whiteAI]?.name || 'Umano'}
+            {thinking&&turn==='w'&&<div className="thinking-dot"/>}
+            ⬜ {PERSONALITIES[wAI]?.name||'Umano'}
           </div>
-          {lastMove && <div className="last-move-hint">{lastMove.from} → {lastMove.to}</div>}
+          {last&&<div className="last-move-hint">{last.from} → {last.to}</div>}
         </div>
-        <div className="energy-badge" style={{borderLeft: '3px solid #38bdf8', color: pts.w >= 2 ? '#22c55e' : '#94a3b8'}}>
-          <span style={{fontSize: 16}}>⚡</span><span style={{fontSize: 11}}>{pts.w}</span>
+        <div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}>
+          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span>
         </div>
       </div>
 
-      {/* Panel */}
       <div className="panel">
         <div>
           <div className="charge-row">
-            <span>🔋 {turn === 'w' ? 'BIANCO' : 'NERO'}{isAITurn && thinking ? ' · calcolo in corso...' : ''}</span>
-            <span style={{color: curPts >= 2 ? '#22c55e' : '#38bdf8'}}>{curPts}/2{curPts >= 2 ? ' • PRONTO' : ''}</span>
+            <span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · calcolo...':''}</span>
+            <span style={{color:cp>=2?'#22c55e':'#38bdf8'}}>{cp}/2{cp>=2?' • PRONTO':''}</span>
           </div>
-          <div className="charge-track">
-            <div style={{width:`${chargePct}%`,height:'100%',background: curPts >= 2 ? '#22c55e' : '#38bdf8',transition:'width .3s',borderRadius:'3px'}}/>
-          </div>
+          <div className="charge-track"><div style={{width:`${cpct}%`,height:'100%',background:cp>=2?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'3px'}}/></div>
         </div>
         <div className="panel-bottom">
           <div className="piece-label">
-            {selData && evo ? (
-              <span style={{fontWeight:700, color: lvlInfo?.color || '#94a3b8'}}>
-                {selPiece && ICONS[selPiece.color][selPiece.type]} {lvlInfo?.name} Lv.{selData.level}
-                {abilMoves.length > 0 && <span style={{color:'#f59e0b',marginLeft:4}}>🟡{abilMoves.length}</span>}
-              </span>
-            ) : (<span style={{color:'#475569'}}>Seleziona un pezzo</span>)}
+            {sd&&evo?<span style={{fontWeight:700,color:li?.color||'#94a3b8'}}>{sp&&ICONS[sp.color][sp.type]} {li?.name} Lv.{sd.level}{abilM.length>0&&<span style={{color:'#f59e0b',marginLeft:4}}>🟡{abilM.length}</span>}</span>:<span style={{color:'#475569'}}>Seleziona un pezzo</span>}
           </div>
-          <button className="evolve-btn" onClick={() => doEvolve(sel)}
-            style={{
-              visibility: showEvolveBtn ? 'visible' : 'hidden',
-              background: canEvolve ? (lvlInfo?.color || '#38bdf8') : '#1e293b',
-              color: canEvolve ? '#030712' : '#475569',
-              cursor: canEvolve ? 'pointer' : 'default',
-            }}>
+          <button className="evolve-btn" onClick={()=>evolve(sel)}
+            style={{visibility:showEvo?'visible':'hidden',background:canEvo?(li?.color||'#38bdf8'):'#1e293b',color:canEvo?'#030712':'#475569',cursor:canEvo?'pointer':'default'}}>
             ⚡ EVOLVI
           </button>
-          <div className="turn-pill" style={{color: turn === 'w' ? '#38bdf8' : '#f43f5e'}}>
-            {game.in_check() ? 'SCACCO!' : turn === 'w' ? '⬜' : '⬛'}
-          </div>
+          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{game.in_check()?'SCACCO!':turn==='w'?'⬜':'⬛'}</div>
         </div>
       </div>
 
-      <AIBar forColor="b" current={blackAI} onChange={(k) => { setBlackAI(k); setTimeout(resetGame, 0); }}/>
+      <Bar color="b" cur={bAI} onChange={k=>{setBAI(k);setTimeout(reset,0)}}/>
 
-      {game.game_over() && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}>
-          <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>
-            {game.in_checkmate() ? (turn === 'w' ? '⬛ Nero vince!' : '⬜ Bianco vince!') : '🤝 Pareggio'}
-          </div>
-          <div style={{fontSize:12,color:'#64748b',letterSpacing:'.15em',textTransform:'uppercase'}}>
-            {game.in_checkmate() ? 'Scacco matto' : 'Patta'}
-          </div>
-          <button onClick={resetGame} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>
-            RIVINCITA
-          </button>
-        </div>
-      )}
+      {game.game_over()&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}>
+        <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{game.in_checkmate()?(turn==='w'?'⬛ Nero vince!':'⬜ Bianco vince!'):'🤝 Pareggio'}</div>
+        <div style={{fontSize:12,color:'#64748b'}}>{game.in_checkmate()?'Scacco matto':'Patta'}</div>
+        <button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>RIVINCITA</button>
+      </div>}
     </div>
-  );
+  )
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);

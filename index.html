@@ -25,12 +25,9 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,300px)/8*0.72);cursor:pointer;aspect-ratio:1/1}
 .cell.light{background:#f0d9b5}
 .cell.dark{background:#b58863}
-
-/* Evidenziazione mossa stile Chess.com */
 .cell.last-move.light{background:#f7ec74 !important}
 .cell.last-move.dark{background:#d8bf35 !important}
 .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important;z-index:2}
-
 .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;display:inline-block;line-height:1;user-select:none;z-index:1}
 .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
 .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
@@ -85,7 +82,7 @@ function sfGetMove(fen){
   return new Promise(resolve=>{
     const timeout=setTimeout(()=>{
       sfBusy=false;sfWorker.removeEventListener('message',h);resolve(null);
-    },8000);
+    },4000); // Tempo di timeout generoso per movetime 2000
     const h=e=>{
       if(typeof e.data==='string'&&e.data.startsWith('bestmove')){
         clearTimeout(timeout);sfBusy=false;sfWorker.removeEventListener('message',h);
@@ -97,14 +94,12 @@ function sfGetMove(fen){
     sfWorker.addEventListener('message',h);
     sfWorker.postMessage('ucinewgame');
     sfWorker.postMessage('position fen '+fen);
-    sfWorker.postMessage('go movetime 1000');
+    sfWorker.postMessage('go movetime 2000'); // Potenza alzata a 2s
   });
 }
 
-// ── NUOVE FUNZIONI HELPER PER APPROCCIO ORACOLO ────────────────────────────────
-
-// Valuta una posizione simulata con Stockfish per N ms e ritorna lo score numerico
-function sfEvalPosition(fen, movetime = 200) {
+// Valuta una posizione simulata con Stockfish per N ms
+function sfEvalPosition(fen, movetime = 600) {
   if (!sfWorker || sfBusy) return Promise.resolve(0);
   sfBusy = true;
 
@@ -120,7 +115,13 @@ function sfEvalPosition(fen, movetime = 200) {
       if (typeof e.data === 'string') {
         if (e.data.includes('score cp')) {
           const m = e.data.match(/score cp (-?\d+)/);
-          if (m) bestScore = parseInt(m[1]) / 100; // Converte centipawn in unità pedone
+          if (m) bestScore = parseInt(m[1]) / 100; // centipawn -> pawn
+        } else if (e.data.includes('score mate')) {
+          const m = e.data.match(/score mate (-?\d+)/);
+          if (m) {
+            const mateIn = parseInt(m[1]);
+            bestScore = mateIn > 0 ? 100 - mateIn : -100 - mateIn;
+          }
         }
         if (e.data.startsWith('bestmove')) {
           clearTimeout(timeout);
@@ -134,11 +135,11 @@ function sfEvalPosition(fen, movetime = 200) {
     sfWorker.addEventListener('message', h);
     sfWorker.postMessage('ucinewgame');
     sfWorker.postMessage('position fen ' + fen);
-    sfWorker.postMessage(`go movetime ${movetime}`);
+    sfWorker.postMessage(`go movetime ${movetime}`); // Potenza di simulazione 600ms
   });
 }
 
-// Clona lo stato di gioco per simulare mosse future senza intaccare la partita reale
+// Clona lo stato di gioco per simulare mosse
 function cloneGameState(game, pd, sm) {
   const g = new Chess(game.fen());
   const npd = JSON.parse(JSON.stringify(pd));
@@ -159,7 +160,7 @@ function cloneGameState(game, pd, sm) {
       if (captured) g.remove(to);
       g.put(piece, to);
       const pts = g.fen().split(' ');
-      pts[1] = pts[1] === 'w' ? 'b' : 'w'; // Cambia il turno sul FEN simulato
+      pts[1] = pts[1] === 'w' ? 'b' : 'w'; 
       const ng = new Chess();
       ng.load(pts.join(' '));
       this.game = ng;
@@ -167,26 +168,41 @@ function cloneGameState(game, pd, sm) {
   };
 }
 
+// Simula le evoluzioni disponibili per l'avversario
+function simulateOppEvolutions(game, pd, sm, oppColor, oppPts) {
+  const evolutions = [];
+  if (oppPts < 2) return evolutions;
+
+  for (const [sq, id] of Object.entries(sm)) {
+    const d = pd[id];
+    if (!d || d.color !== oppColor || d.type !== 'p' || d.level >= 3) continue;
+
+    const sim = cloneGameState(game, pd, sm);
+    sim.doEvolve(sq);
+    evolutions.push({sq, fen: sim.game.fen()});
+  }
+  return evolutions;
+}
+
 const PERSONALITIES = {
   human:     { name: 'Umano',         ai: false, color: '#94a3b8' },
   stockfish: { name: 'Stockfish RPG', ai: true,  color: '#38bdf8' }
 };
 
-// ── SISTEMA IBRIDO ORACOLO INTERFACCIA AI ─────────────────────────────────────
+// ── SISTEMA IBRIDO ORACOLO INTERFACCIA AI (CON DEEP SEARCH MINIMAX) ────────
 const RPG = {
   async chooseAction(game, pd, sm, pts, color) {
     const oppColor = color === 'w' ? 'b' : 'w';
     game._ptsW = pts.w;
     game._ptsB = pts.b;
 
-    // 1. Genera candidati realistici (Mosse standard, evoluzioni, abilità)
     const candidates = [];
 
     // A. Mossa standard migliore consigliata da Stockfish
     const sfMove = await sfGetMove(game.fen());
     if (sfMove) candidates.push({type: 'move', ...sfMove, label: 'SF Base'});
 
-    // B. Evoluzioni possibili (Se ha abbastanza energia)
+    // B. Evoluzioni possibili
     for (const [sq, id] of Object.entries(sm)) {
       const d = pd[id];
       if (!d || d.color !== color || d.type !== 'p' || d.level >= 3) continue;
@@ -198,7 +214,7 @@ const RPG = {
       }
     }
 
-    // C. Abilità offensive/defensive ad alto valore
+    // C. Abilità offensive
     for (const [sq, id] of Object.entries(sm)) {
       const d = pd[id];
       if (!d || d.color !== color) continue;
@@ -217,34 +233,73 @@ const RPG = {
       }
     }
 
-    // Fallback di sicurezza se non ci sono candidati calcolabili
     if (candidates.length === 0) {
       const legals = game.moves({ verbose: true });
       return legals.length ? {type: 'move', from: legals[0].from, to: legals[0].to} : null;
     }
 
-    // 2. Chiedi all'Oracolo (Stockfish) di votare ogni candidato simulato
+    // 2. Valuta ogni candidato considerando anche le risposte avversarie
     const scored = [];
     for (const cand of candidates) {
       const fenToEval = cand.fen || game.fen();
-      // Valutazione rapida a 200ms a candidato per fluidità video
-      let score = await sfEvalPosition(fenToEval, 200); 
-      
-      // Bilanciamento strategico: Se la mossa è un'evoluzione, aggiungiamo un piccolo bonus di sviluppo
-      if (cand.type === 'evolve') score += 0.40; 
-      
-      // Inverte il segno del punteggio se muove il Nero (Stockfish ragiona sempre lato Bianco)
-      const finalScore = color === 'w' ? score : -score;
+
+      // Valuta posizione dopo la mossa (Score base)
+      let score = await sfEvalPosition(fenToEval, 600);
+
+      // Simula: cosa può fare l'avversario se io faccio questa mossa?
+      const simAfter = cloneGameState(game, pd, sm);
+      if (cand.type === 'evolve') simAfter.doEvolve(cand.sq);
+      if (cand.type === 'ability') simAfter.execAbilityMove(cand.from, cand.to);
+      if (cand.type === 'move') {
+        const mv = {from: cand.from, to: cand.to};
+        if (cand.promotion) mv.promotion = cand.promotion;
+        else if (simAfter.game.get(cand.from)?.type === 'p' && (cand.to[1] === '8' || cand.to[1] === '1')) mv.promotion = 'q';
+        simAfter.game.move(mv);
+      }
+
+      // Guarda le migliori risposte avversarie: evoluzioni + mosse
+      const oppEvos = simulateOppEvolutions(simAfter.game, simAfter.pd, simAfter.sm, oppColor, pts[oppColor]);
+      const oppMoves = simAfter.game.moves({verbose: true}).slice(0, 3); // top 3 mosse legali
+
+      // Logica Minimax (Stockfish calcola sempre dal punto di vista del BIANCO)
+      // Se io sono Bianco, l'avversario cercherà di abbassare il mio score (Math.min)
+      // Se io sono Nero, l'avversario cercherà di alzare il suo score (Math.max)
+      let worstScoreForMe = color === 'w' ? Infinity : -Infinity;
+      let validResponses = 0;
+
+      // Controlla evoluzioni avversarie
+      for (const oppEvo of oppEvos) {
+        const oppScore = await sfEvalPosition(oppEvo.fen, 400);
+        worstScoreForMe = color === 'w' ? Math.min(worstScoreForMe, oppScore) : Math.max(worstScoreForMe, oppScore);
+        validResponses++;
+      }
+
+      // Controlla mosse avversarie
+      for (const oppMove of oppMoves) {
+        const simOpp = new Chess(simAfter.game.fen());
+        simOpp.move(oppMove);
+        const oppScore = await sfEvalPosition(simOpp.fen(), 400);
+        worstScoreForMe = color === 'w' ? Math.min(worstScoreForMe, oppScore) : Math.max(worstScoreForMe, oppScore);
+        validResponses++;
+      }
+
+      // Se l'avversario non ha mosse (es. scaccomatto generato da noi), teniamo lo score base
+      if (validResponses === 0) {
+        worstScoreForMe = score;
+      }
+
+      // Normalizza il punteggio finale in modo che i valori alti siano SEMPRE positivi per chi muove
+      const finalScore = color === 'w' ? worstScoreForMe : -worstScoreForMe;
 
       scored.push({...cand, score: finalScore});
-      console.log(`[Oracle] ${cand.label}: Punteggio di valutazione = ${finalScore.toFixed(2)}`);
+      console.log(`[Oracle Deep] ${cand.label}: Score Post-Risposta = ${finalScore.toFixed(2)}`);
     }
 
     // 3. Scegli l'azione con il punteggio migliore
     scored.sort((a, b) => b.score - a.score);
     const best = scored[0];
 
-    console.log(`[Oracle] Azione scelta: ${best.label} con valore effettivo di ${best.score.toFixed(2)}`);
+    console.log(`[Oracle Deep] 🏆 Scelta Definitiva: ${best.label} con score ${best.score.toFixed(2)}`);
 
     if (best.type === 'move') return {type: 'move', from: best.from, to: best.to};
     if (best.type === 'evolve') return {type: 'evolve', sq: best.sq};
@@ -370,7 +425,7 @@ function App(){
       if(!action)return;
       if(action.type==='evolve') doEvolve(action.sq);
       else makeMove(action.from,action.to,action.type==='ability');
-    }, 400); // Piccolo delay strutturale per scorrimento UI fluido
+    }, 400);
     
     return()=>clearTimeout(aiTimer.current);
   },[game,pd,sm,pts,whiteAI,blackAI,makeMove,doEvolve]);
@@ -487,7 +542,7 @@ function App(){
       <div className="panel">
         <div>
           <div className="charge-row">
-            <span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· Oracolo RPG atteso...':''}</span>
+            <span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· Elaborazione Oracolo...':''}</span>
             <span style={{color:curPts>=2?'#22c55e':'#38bdf8'}}>{curPts} ⚡{curPts>=2?' • PRONTO':''}</span>
           </div>
           <div className="charge-track">

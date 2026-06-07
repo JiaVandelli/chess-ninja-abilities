@@ -1,105 +1,83 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Battle</title>
-<style>
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0;overflow:hidden;background:#060913}
-#root{height:100%}
-.app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
-.top-bar{flex-shrink:0;height:42px;display:flex;gap:5px;align-items:center;overflow-x:auto}
-.mode-btn{flex:1;min-width:70px;height:100%;background:#0b0f19;border:1px solid #1e293b;color:#94a3b8;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap}
-.mode-btn.active{background:#38bdf8;color:#030712;border-color:#38bdf8}
-.board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
-.board{--side:min(92vw,calc(100vh - 220px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
-.cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side)/8*0.7);cursor:pointer;aspect-ratio:1/1}
-.cell.light{background:#f0d9b5}.cell.dark{background:#b58863}.cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
-.piece{font-family:"Segoe UI Symbol",sans-serif;display:inline-block;line-height:1;user-select:none}
-.piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
-.piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
-.evo2{filter:drop-shadow(0 0 5px #eab308) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
-.evo3{filter:drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 22px #a855f7)}
-.level-mark{position:absolute;top:2px;right:3px;font-size:9px;font-weight:800;pointer-events:none}
-.lm2{color:#eab308;text-shadow:0 0 5px #eab308}.lm3{color:#a855f7;text-shadow:0 0 8px #a855f7}
-.player-row{flex-shrink:0;height:44px;display:flex;gap:8px;align-items:center}
-.player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;align-items:center;justify-content:space-between;padding:0 12px;font-size:12px;font-weight:600}
-.energy-badge{padding:3px 7px;background:#1e293b;border-radius:6px;font-size:11px;font-weight:800}
-.panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:7px 10px;display:flex;flex-direction:column;gap:6px}
-.charge-row{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:#94a3b8}
-.charge-track{width:100%;height:5px;background:#1e293b;border-radius:3px;overflow:hidden}
-.panel-bottom{display:flex;align-items:center;gap:8px;flex:1}
-.piece-label{flex:1;font-size:11px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.evolve-btn{flex-shrink:0;padding:5px 9px;border:none;border-radius:6px;font-weight:800;font-size:11px;cursor:pointer;background:#38bdf8;color:#030712}
-.evolve-btn:disabled{background:#1e293b;color:#475569;cursor:not-allowed}
-.turn-pill{flex-shrink:0;padding:4px 9px;border-radius:16px;font-size:11px;font-weight:700;background:#1e293b}
-</style>
-</head>
-<body>
-<div id="root"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="evolutions.js"></script>
-<script type="text/babel">
-const {useState,useEffect,useCallback,useRef}=React;
-const Chess=window.Chess;
-const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
+// evolutions.js - Chess RPG Evolutions
+const EVOLUTIONS = {
+  p: {
+    levels: [
+      { name: 'Soldato', color: '#64748b' },
+      { name: 'Veterano', color: '#eab308' },
+      { name: 'Campione', color: '#a855f7' },
+    ],
+    getAbilityMoves(sq, game, level, color) {
+      const moves = [];
+      const file = sq.charCodeAt(0) - 97;
+      const rank = parseInt(sq[1]);
 
-const AI = {
-  pieceValues:{p:100,n:320,b:330,r:500,q:900,k:20000},
-  getEvoBonus(t,l){return t==='p'?l*180+(l===3?120:0):l*150;},
-  evaluate(g,pd,pts,col){if(g.in_checkmate())return g.turn()===col?-99999:99999;let s=0;const o=col==='w'?'b':'w';g.board().forEach((row,r)=>row.forEach((p,c)=>{if(!p)return;const sq='abcdefgh'[c]+(8-r);const id=Object.keys(pd).find(k=>k.endsWith('_'+sq)&&pd[k].color===p.color);const lv=id?pd[id].level:1;let v=AI.pieceValues[p.type]+AI.getEvoBonus(p.type,lv);s+=p.color===col?v:-v;}));s+=pts[col]*30-pts[o]*30;return s;},
-  getAllActions(g,pd,sm,pts,col){const a=[];Object.entries(sm).forEach(([sq,id])=>{const p=g.get(sq);if(!p||p.color!==col)return;const d=pd[id];g.moves({square:sq,verbose:true}).forEach(m=>a.push({type:'move',from:m.from,to:m.to,promotion:'q',captured:m.captured}));const e=EVOLUTIONS[p.type];if(e&&d)e.getAbilityMoves(sq,g,d.level,col).forEach(ab=>{const t=g.get(ab.to);a.push({type:'ability',from:ab.from,to:ab.to,captured:t?t.type:null});});});if(pts[col]>=2){Object.entries(pd).filter(([id,d])=>d.color===col&&d.level<3&&EVOLUTIONS[d.type]).forEach(([id,d])=>{const sq=Object.keys(sm).find(k=>sm[k]===id);if(sq)a.push({type:'evolve',square:sq});});}return a;},
-  simulate(g,pd,pts,act,col){const ng=new Chess(g.fen());const npd=JSON.parse(JSON.stringify(pd));const npts={...pts};if(act.type==='move'){ng.move({from:act.from,to:act.to,promotion:'q'});const m=ng.get(act.to);const oid=Object.keys(npd).find(id=>id.endsWith('_'+act.from));if(oid&&m){const nid=`${m.color}${m.type}_${act.to}`;npd[nid]={...npd[oid],type:m.type,id:nid};delete npd[oid];}}else if(act.type==='ability'){const p=ng.get(act.from);ng.remove(act.from);if(ng.get(act.to))ng.remove(act.to);ng.put(p,act.to);const pa=ng.fen().split(' ');pa[1]=pa[1]==='w'?'b':'w';pa[3]='-';ng.load(pa.join(' '));const oid=Object.keys(npd).find(id=>id.endsWith('_'+act.from));if(oid){const nid=`${p.color}${p.type}_${act.to}`;npd[nid]={...npd[oid],id:nid};delete npd[oid];}}else if(act.type==='evolve'){const id=Object.keys(npd).find(k=>k.endsWith('_'+act.square));if(id){npd[id].level++;npts[col]-=2;}}if(act.type!=='evolve'){let p=1;if(act.captured)p++;if(ng.in_check())p++;npts[col]+=p;}const nsm={};ng.board().forEach((row,r)=>row.forEach((c,cc)=>{if(c){const sq='abcdefgh'[cc]+(8-r);const id=Object.keys(npd).find(k=>k.endsWith('_'+sq)&&npd[k].color===c.color);if(id)nsm[sq]=id;}}));return{game:ng,pieceData:npd,points:npts,squareMap:nsm};},
-  choose(g,pd,sm,pts,col){const acts=AI.getAllActions(g,pd,sm,pts,col);let best=null,bs=-Infinity;for(let a of acts.slice(0,20)){const s=AI.simulate(g,pd,pts,a,col);const sc=AI.evaluate(s.game,s.pieceData,s.points,col)+(a.captured?50:0)+(a.type==='evolve'?80:0);if(sc>bs){bs=sc;best=a;}}return best;}
+      // Lv2: passo indietro
+      if (level >= 2) {
+        const backRank = color === 'w'? rank - 1 : rank + 1;
+        if (backRank >= 1 && backRank <= 8) {
+          const toSq = sq[0] + backRank;
+          if (!game.get(toSq)) moves.push({ from: sq, to: toSq, isCapture: false });
+        }
+      }
+
+      // Lv3: si muove come Re
+      if (level >= 3) {
+        [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]
+       .forEach(([df, dr]) => {
+          const nf = file + df, nr = rank + dr;
+          if (nf < 0 || nf > 7 || nr < 1 || nr > 8) return;
+          const toSq = String.fromCharCode(97 + nf) + nr;
+          const target = game.get(toSq);
+          if (target?.color === color) return;
+          moves.push({ from: sq, to: toSq, isCapture:!!target });
+        });
+      }
+      return moves;
+    },
+  },
+
+  n: {
+    levels: [
+      {name:'Pony',color:'#64748b'},
+      {name:'Destriero',color:'#eab308'},
+      {name:'Nightmare',color:'#a855f7'}
+    ],
+    getAbilityMoves:()=>[]
+  },
+
+  b: {
+    levels: [
+      {name:'Alfiere',color:'#64748b'},
+      {name:'Vescovo',color:'#eab308'},
+      {name:'Arcivescovo',color:'#a855f7'}
+    ],
+    getAbilityMoves:()=>[]
+  },
+
+  r: {
+    levels: [
+      {name:'Torre',color:'#64748b'},
+      {name:'Fortezza',color:'#eab308'},
+      {name:'Castello',color:'#a855f7'}
+    ],
+    getAbilityMoves:()=>[]
+  },
+
+  q: {
+    levels: [
+      {name:'Regina',color:'#64748b'},
+      {name:'Imperatrice',color:'#eab308'},
+      {name:'Dea',color:'#a855f7'}
+    ],
+    getAbilityMoves:()=>[]
+  },
+
+  k: {
+    levels: [
+      {name:'Re',color:'#64748b'},
+      {name:'Imperatore',color:'#eab308'},
+      {name:'Dio',color:'#a855f7'}
+    ],
+    getAbilityMoves:()=>[]
+  }
 };
-
-const PERSONALITIES={human:{name:'Umano',ai:false},easy:{name:'Bot',ai:true},medium:{name:'Maestro',ai:true},hard:{name:'GM',ai:true},necromante:{name:'Necromante',ai:true},berserker:{name:'Berserker',ai:true}};
-
-function buildState(g){const pd={},sm={};g.board().forEach((r,ri)=>r.forEach((c,ci)=>{if(c){const sq='abcdefgh'[ci]+(8-ri);const id=`${c.color}${c.type}_${sq}`;pd[id]={id,type:c.type,color:c.color,level:1};sm[sq]=id;}}));return{pd,sm};}
-
-function App(){
-  const[game,setGame]=useState(()=>new Chess());
-  const[pd,setPd]=useState({});
-  const[sm,setSm]=useState({});
-  const[sel,setSel]=useState(null);
-  const[std,setStd]=useState([]);
-  const[abl,setAbl]=useState([]);
-  const[pts,setPts]=useState({w:0,b:0});
-  const[white,setWhite]=useState('human');
-  const[black,setBlack]=useState('necromante');
-  const[lvlUp,setLvlUp]=useState(null);
-  const timer=useRef();
-
-  useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm);},[]);
-
-  const getMoves=sq=>{const p=game.get(sq);if(!p)return{std:[],abl:[]};const std=game.moves({square:sq,verbose:true});const id=sm[sq];const d=pd[id];const e=EVOLUTIONS[p.type];const abl=e&&d?e.getAbilityMoves(sq,game,d.level,p.color):[];return{std,abl};};
-
-  const makeMove=(from,to,isAb)=>{const turn=game.turn();let ng;if(isAb){const pc=game.get(from);ng=new Chess(game.fen());ng.remove(from);if(ng.get(to))ng.remove(to);ng.put(pc,to);const p=ng.fen().split(' ');p[1]=p[1]==='w'?'b':'w';p[3]='-';ng.load(p.join(' '));}else{ng=new Chess(game.fen());ng.move({from,to,promotion:'q'});}const mid=sm[from];const nsm={...sm};const npd={...pd};delete nsm[from];nsm[to]=mid;const np=ng.get(to);const promo=np&&np.type!==pd[mid]?.type;if(promo){npd[mid]={...npd[mid],type:np.type,level:1};const nid=`${np.color}${np.type}_${to}`;npd[nid]={...npd[mid],id:nid};delete npd[mid];nsm[to]=nid;}let p=1;if(game.get(to))p++;if(ng.in_check())p++;if(promo)p+=2;setPts(ps=>({...ps,[turn]:ps[turn]+p}));setGame(ng);setPd(npd);setSm(nsm);setSel(null);};
-
-  const evolve=()=>{if(!sel)return;const t=game.turn();if(pts[t]<2)return;const id=sm[sel];const d=pd[id];if(!d||d.level>=3)return;setPd(p=>({...p,[id]:{...d,level:d.level+1}}));setPts(p=>({...p,[t]:p[t]-2}));setLvlUp(sel);setTimeout(()=>setLvlUp(null),700);setSel(null);};
-
-  useEffect(()=>{const turn=game.turn();const ai=turn==='w'?PERSONALITIES[white]:PERSONALITIES[black];if(!ai.ai||game.game_over())return;clearTimeout(timer.current);timer.current=setTimeout(()=>{const act=AI.choose(game,pd,sm,pts,turn);if(!act)return;if(act.type==='evolve'){const id=Object.keys(pd).find(k=>k.endsWith('_'+act.square));if(id&&pts[turn]>=2){setPd(p=>({...p,[id]:{...p[id],level:p[id].level+1}}));setPts(p=>({...p,[turn]:p[turn]-2}));setLvlUp(act.square);setTimeout(()=>setLvlUp(null),700);}}else{makeMove(act.from,act.to,act.type==='ability');}},600);},[game,pd,sm,pts,white,black]);
-
-  const board=game.board();const turn=game.turn();const selId=sel?sm[sel]:null;const selD=selId?pd[selId]:null;const canEvo=selD&&selD.level<3&&game.get(sel)?.color===turn&&pts[turn]>=2&&EVOLUTIONS[game.get(sel)?.type];
-
-  const click=sq=>{const human=(turn==='w'&&!PERSONALITIES[white].ai)||(turn==='b'&&!PERSONALITIES[black].ai);if(!human)return;const pc=game.get(sq);if(sel){const s=std.find(m=>m.to===sq);const a=abl.find(m=>m.to===sq);if(s||a){makeMove(sel,sq,!!a);return;}if(pc?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abl);}else{setSel(null);}}else if(pc?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abl);}};
-
-  return(
-    <div className="app">
-      <div className="top-bar">{Object.keys(PERSONALITIES).slice(0,3).map(k=><button key={k} className={`mode-btn ${white===k?'active':''}`} onClick={()=>setWhite(k)}>W:{PERSONALITIES[k].name}</button>)}</div>
-      <div className="player-row"><div className="player-label">Nero: {PERSONALITIES[black].name}<span className="energy-badge">⚡{pts.b}</span></div></div>
-      <div className="board-wrap"><div className="board">{board.map((r,ri)=>r.map((c,ci)=>{const sq='abcdefgh'[ci]+(8-ri);const selc=sel===sq;const isStd=std.some(m=>m.to===sq);const isAb=abl.some(m=>m.to===sq);const id=sm[sq];const d=id?pd[id]:null;const lv=d?.level||1;return<div key={sq} onClick={()=>click(sq)} className={`cell ${(ri+ci)%2?'light':'dark'} ${selc?'sel':''}`}>{(isStd||isAb)&&!c&&<div style={{position:'absolute',width:'26%',height:'26%',borderRadius:'50%',background:isAb?'#f59e0b':'#22c55e'}}/>}{c&&<span className={`piece piece-${c.color} ${lv===2?'evo2':lv===3?'evo3':''}`} style={{transform:lvlUp===sq?'scale(1.4)':'scale(1)'}}>{ICONS[c.color][c.type]}</span>}{c&&lv>1&&<div className={`level-mark ${lv===2?'lm2':'lm3'}`}>{'●'.repeat(lv-1)}</div>}</div>;}))}</div></div>
-      <div className="player-row"><div className="player-label">Bianco: {PERSONALITIES[white].name}<span className="energy-badge">⚡{pts.w}</span></div></div>
-      <div className="panel"><div className="charge-row"><span>{turn==='w'?'Bianco':'Nero'}</span><span>{pts[turn]}/2</span></div><div className="charge-track"><div style={{width:`${Math.min(pts[turn]/2*100,100)}%`,height:'100%',background:pts[turn]>=2?'#22c55e':'#38bdf8'}}/></div><div className="panel-bottom"><div className="piece-label">{selD?`${EVOLUTIONS[game.get(sel)?.type]?.levels[selD.level-1]?.name} Lv${selD.level}`:'Seleziona'}</div><button className="evolve-btn" disabled={!canEvo} onClick={evolve}>EVOLVI</button><div className="turn-pill">{game.in_check()?'SCACCO':''}</div></div>
-      <div className="top-bar">{Object.keys(PERSONALITIES).slice(3).map(k=><button key={k} className={`mode-btn ${black===k?'active':''}`} onClick={()=>setBlack(k)}>B:{PERSONALITIES[k].name}</button>)}</div>
-    </div>
-  );
-}
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
-</script>
-</body>
-</html>

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG — Stockfish RPG Supreme</title>
+<title>Chess RPG — Stockfish RPG Omega</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -25,9 +25,12 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,300px)/8*0.72);cursor:pointer;aspect-ratio:1/1}
 .cell.light{background:#f0d9b5}
 .cell.dark{background:#b58863}
-.cell.last-move.light{background:#f7ec74 !important}
-.cell.last-move.dark{background:#d8bf35 !important}
+
+/* Evidenziazione mosse stile Chess.com */
+.cell.last-move.light{background:#fff59d !important}
+.cell.last-move.dark{background:#d4af37 !important}
 .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important;z-index:2}
+
 .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;display:inline-block;line-height:1;user-select:none;z-index:1}
 .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
 .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
@@ -64,7 +67,7 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-// ── STOCKFISH WORKER INTERFACE ───────────────────────────────────────────────
+// ── STOCKFISH OMEGA WORKER INTERFACE ─────────────────────────────────────────
 let sfWorker=null, sfBusy=false;
 try{
   const blob=new Blob(
@@ -72,62 +75,49 @@ try{
     {type:'application/javascript'}
   );
   sfWorker=new Worker(URL.createObjectURL(blob));
-  console.log('✅ Stockfish Caricato con Successo');
+  
+  // Setta parametri Boss
+  sfWorker.postMessage('setoption name Threads value 2');
+  sfWorker.postMessage('setoption name Hash value 128');
+  console.log('✅ Stockfish Omega Caricato (Hash 128, Threads 2)');
 }catch(e){ console.warn('⚠️ Stockfish non disponibile'); }
 
-// Trova la mossa migliore standard (Candidato Base)
-function sfGetMove(fen){
-  if(!sfWorker||sfBusy) return Promise.resolve(null);
-  sfBusy=true;
-  return new Promise(resolve=>{
-    const timeout=setTimeout(()=>{
-      sfBusy=false;sfWorker.removeEventListener('message',h);resolve(null);
-    },4000); // Tempo di timeout generoso per movetime 2000
-    const h=e=>{
-      if(typeof e.data==='string'&&e.data.startsWith('bestmove')){
-        clearTimeout(timeout);sfBusy=false;sfWorker.removeEventListener('message',h);
-        const mv=e.data.split(' ')[1];
-        if(!mv||mv==='(none)'){resolve(null);return;}
-        resolve({from:mv.slice(0,2),to:mv.slice(2,4),promotion:mv[4]||null});
-      }
-    };
-    sfWorker.addEventListener('message',h);
-    sfWorker.postMessage('ucinewgame');
-    sfWorker.postMessage('position fen '+fen);
-    sfWorker.postMessage('go movetime 2000'); // Potenza alzata a 2s
-  });
-}
+// ── FUNZIONI HELPER OMEGA ──────────────────────────────────────────────────
 
-// Valuta una posizione simulata con Stockfish per N ms
-function sfEvalPosition(fen, movetime = 600) {
-  if (!sfWorker || sfBusy) return Promise.resolve(0);
+// Cerca in profondità e restituisce mossa E punteggio simultaneamente
+function sfGetDeepAction(fen, movetime = 3000) {
+  if (!sfWorker || sfBusy) return Promise.resolve(null);
   sfBusy = true;
 
   return new Promise(resolve => {
+    let bestScore = 0;
     const timeout = setTimeout(() => {
       sfBusy = false;
       sfWorker.removeEventListener('message', h);
-      resolve(0);
-    }, movetime + 1000);
+      resolve(null);
+    }, movetime + 1500);
 
-    let bestScore = 0;
     const h = e => {
       if (typeof e.data === 'string') {
+        // Il punteggio (score cp) fornito in UCI è SEMPRE relativo a chi muove
         if (e.data.includes('score cp')) {
           const m = e.data.match(/score cp (-?\d+)/);
-          if (m) bestScore = parseInt(m[1]) / 100; // centipawn -> pawn
+          if (m) bestScore = parseInt(m[1]) / 100;
         } else if (e.data.includes('score mate')) {
           const m = e.data.match(/score mate (-?\d+)/);
           if (m) {
-            const mateIn = parseInt(m[1]);
-            bestScore = mateIn > 0 ? 100 - mateIn : -100 - mateIn;
+            const mate = parseInt(m[1]);
+            bestScore = mate > 0 ? 100 - mate : -100 - mate;
           }
         }
+        
         if (e.data.startsWith('bestmove')) {
           clearTimeout(timeout);
           sfBusy = false;
           sfWorker.removeEventListener('message', h);
-          resolve(bestScore);
+          const mv = e.data.split(' ')[1];
+          if (!mv || mv === '(none)') resolve(null);
+          else resolve({ from: mv.slice(0, 2), to: mv.slice(2, 4), promotion: mv[4] || null, score: bestScore });
         }
       }
     };
@@ -135,11 +125,23 @@ function sfEvalPosition(fen, movetime = 600) {
     sfWorker.addEventListener('message', h);
     sfWorker.postMessage('ucinewgame');
     sfWorker.postMessage('position fen ' + fen);
-    sfWorker.postMessage(`go movetime ${movetime}`); // Potenza di simulazione 600ms
+    sfWorker.postMessage(`go movetime ${movetime}`);
   });
 }
 
-// Clona lo stato di gioco per simulare mosse
+// Insegna a Stockfish il valore dei pezzi evoluti RPG
+function calculateRpgBonus(pd, myColor) {
+  let score = 0;
+  for (const p of Object.values(pd)) {
+    if (p.type === 'p') {
+      const bonus = p.level === 2 ? 0.5 : (p.level === 3 ? 1.5 : 0);
+      if (p.color === myColor) score += bonus;
+      else score -= bonus;
+    }
+  }
+  return score;
+}
+
 function cloneGameState(game, pd, sm) {
   const g = new Chess(game.fen());
   const npd = JSON.parse(JSON.stringify(pd));
@@ -168,53 +170,52 @@ function cloneGameState(game, pd, sm) {
   };
 }
 
-// Simula le evoluzioni disponibili per l'avversario
-function simulateOppEvolutions(game, pd, sm, oppColor, oppPts) {
-  const evolutions = [];
-  if (oppPts < 2) return evolutions;
-
-  for (const [sq, id] of Object.entries(sm)) {
-    const d = pd[id];
-    if (!d || d.color !== oppColor || d.type !== 'p' || d.level >= 3) continue;
-
-    const sim = cloneGameState(game, pd, sm);
-    sim.doEvolve(sq);
-    evolutions.push({sq, fen: sim.game.fen()});
-  }
-  return evolutions;
-}
-
 const PERSONALITIES = {
   human:     { name: 'Umano',         ai: false, color: '#94a3b8' },
-  stockfish: { name: 'Stockfish RPG', ai: true,  color: '#38bdf8' }
+  stockfish: { name: 'Stockfish Omega', ai: true,  color: '#eab308' } // Cambiato colore per il Boss
 };
 
-// ── SISTEMA IBRIDO ORACOLO INTERFACCIA AI (CON DEEP SEARCH MINIMAX) ────────
+// ── SISTEMA AI OMEGA (HYBRID DEEP SEARCH) ────────────────────────────────────
 const RPG = {
   async chooseAction(game, pd, sm, pts, color) {
-    const oppColor = color === 'w' ? 'b' : 'w';
     game._ptsW = pts.w;
     game._ptsB = pts.b;
 
-    const candidates = [];
+    // 1. Mossa standard (Ricerca Profonda 3 secondi)
+    const sfMove = await sfGetDeepAction(game.fen(), 3000); 
+    if (!sfMove) {
+      const legals = game.moves({ verbose: true });
+      return legals.length ? {type: 'move', from: legals[0].from, to: legals[0].to} : null;
+    }
 
-    // A. Mossa standard migliore consigliata da Stockfish
-    const sfMove = await sfGetMove(game.fen());
-    if (sfMove) candidates.push({type: 'move', ...sfMove, label: 'SF Base'});
+    // Calcolo Base: Score motore + Valore pezzi RPG attuali
+    const baseSfScore = sfMove.score; 
+    const currentRpgBonus = calculateRpgBonus(pd, color);
+    const currentEval = baseSfScore + currentRpgBonus;
 
-    // B. Evoluzioni possibili
+    let bestAction = { type: 'move', ...sfMove, label: 'SF Profondo', score: currentEval };
+    console.log(`[Omega] Mossa Standard -> SF Score: ${baseSfScore.toFixed(2)} | RPG Bonus: ${currentRpgBonus.toFixed(2)} | Totale: ${currentEval.toFixed(2)}`);
+
+    // 2. Valuta Evoluzioni Immediate (Non alterano la scacchiera scacchistica, solo il bonus RPG)
     for (const [sq, id] of Object.entries(sm)) {
       const d = pd[id];
       if (!d || d.color !== color || d.type !== 'p' || d.level >= 3) continue;
       if (pts[color] >= 2) {
         const sim = cloneGameState(game, pd, sm);
         sim.doEvolve(sq);
-        const fen = sim.game.fen();
-        candidates.push({type: 'evolve', sq, fen, label: `Evolve ${sq} Lv${d.level+1}`});
+        
+        const evoRpgBonus = calculateRpgBonus(sim.pd, color);
+        const evoEval = baseSfScore + evoRpgBonus;
+        
+        // Regola Boss: Se l'evoluzione dà un vantaggio RPG > 0.30 rispetto a non farla
+        if (evoEval - currentEval >= 0.30 && evoEval > bestAction.score) {
+          bestAction = { type: 'evolve', sq, score: evoEval, label: `Evolve ${sq} Lv${d.level+1}` };
+          console.log(`[Omega] ⚡ Simulazione Evoluzione ${sq} batte la mossa! (Vantaggio RPG)`);
+        }
       }
     }
 
-    // C. Abilità offensive
+    // 3. Valuta Abilità Speciali (Richiedono rivalutazione perché muovono fisicamente i pezzi)
     for (const [sq, id] of Object.entries(sm)) {
       const d = pd[id];
       if (!d || d.color !== color) continue;
@@ -227,85 +228,32 @@ const RPG = {
         if (target && target.color !== color) {
           const sim = cloneGameState(game, pd, sm);
           sim.execAbilityMove(ab.from, ab.to);
-          const fen = sim.game.fen();
-          candidates.push({type: 'ability', from: ab.from, to: ab.to, fen, label: `Ability ${ab.from}->${ab.to}`});
+          
+          // Dopo aver usato l'abilità, tocca all'avversario. Valutiamo rapidamente (1 secondo).
+          // Poiché il punteggio tornato è dell'avversario, lo invertiamo.
+          const abSfMove = await sfGetDeepAction(sim.game.fen(), 1000); 
+          const abSfRawScore = abSfMove ? abSfMove.score : 0; 
+          const abSfScore = -abSfRawScore; 
+          
+          const abRpgBonus = calculateRpgBonus(sim.pd, color);
+          const abEval = abSfScore + abRpgBonus;
+
+          // Regola Boss: Se l'abilità dà un vantaggio reale > 0.50 rispetto alla mossa normale
+          if (abEval - currentEval >= 0.50 && abEval > bestAction.score) {
+            bestAction = { type: 'ability', from: ab.from, to: ab.to, score: abEval, label: `Ability ${ab.from}->${ab.to}` };
+            console.log(`[Omega] 🗡️ Simulazione Abilità ${ab.from}->${ab.to} letale! Nuovo best score: ${abEval.toFixed(2)}`);
+          }
         }
       }
     }
 
-    if (candidates.length === 0) {
-      const legals = game.moves({ verbose: true });
-      return legals.length ? {type: 'move', from: legals[0].from, to: legals[0].to} : null;
-    }
+    console.log(`[Omega Boss] 🔥 Scelta Finale Eseguita: ${bestAction.label}`);
 
-    // 2. Valuta ogni candidato considerando anche le risposte avversarie
-    const scored = [];
-    for (const cand of candidates) {
-      const fenToEval = cand.fen || game.fen();
+    if (bestAction.type === 'move') return {type: 'move', from: bestAction.from, to: bestAction.to, promotion: bestAction.promotion};
+    if (bestAction.type === 'evolve') return {type: 'evolve', sq: bestAction.sq};
+    if (bestAction.type === 'ability') return {type: 'ability', from: bestAction.from, to: bestAction.to};
 
-      // Valuta posizione dopo la mossa (Score base)
-      let score = await sfEvalPosition(fenToEval, 600);
-
-      // Simula: cosa può fare l'avversario se io faccio questa mossa?
-      const simAfter = cloneGameState(game, pd, sm);
-      if (cand.type === 'evolve') simAfter.doEvolve(cand.sq);
-      if (cand.type === 'ability') simAfter.execAbilityMove(cand.from, cand.to);
-      if (cand.type === 'move') {
-        const mv = {from: cand.from, to: cand.to};
-        if (cand.promotion) mv.promotion = cand.promotion;
-        else if (simAfter.game.get(cand.from)?.type === 'p' && (cand.to[1] === '8' || cand.to[1] === '1')) mv.promotion = 'q';
-        simAfter.game.move(mv);
-      }
-
-      // Guarda le migliori risposte avversarie: evoluzioni + mosse
-      const oppEvos = simulateOppEvolutions(simAfter.game, simAfter.pd, simAfter.sm, oppColor, pts[oppColor]);
-      const oppMoves = simAfter.game.moves({verbose: true}).slice(0, 3); // top 3 mosse legali
-
-      // Logica Minimax (Stockfish calcola sempre dal punto di vista del BIANCO)
-      // Se io sono Bianco, l'avversario cercherà di abbassare il mio score (Math.min)
-      // Se io sono Nero, l'avversario cercherà di alzare il suo score (Math.max)
-      let worstScoreForMe = color === 'w' ? Infinity : -Infinity;
-      let validResponses = 0;
-
-      // Controlla evoluzioni avversarie
-      for (const oppEvo of oppEvos) {
-        const oppScore = await sfEvalPosition(oppEvo.fen, 400);
-        worstScoreForMe = color === 'w' ? Math.min(worstScoreForMe, oppScore) : Math.max(worstScoreForMe, oppScore);
-        validResponses++;
-      }
-
-      // Controlla mosse avversarie
-      for (const oppMove of oppMoves) {
-        const simOpp = new Chess(simAfter.game.fen());
-        simOpp.move(oppMove);
-        const oppScore = await sfEvalPosition(simOpp.fen(), 400);
-        worstScoreForMe = color === 'w' ? Math.min(worstScoreForMe, oppScore) : Math.max(worstScoreForMe, oppScore);
-        validResponses++;
-      }
-
-      // Se l'avversario non ha mosse (es. scaccomatto generato da noi), teniamo lo score base
-      if (validResponses === 0) {
-        worstScoreForMe = score;
-      }
-
-      // Normalizza il punteggio finale in modo che i valori alti siano SEMPRE positivi per chi muove
-      const finalScore = color === 'w' ? worstScoreForMe : -worstScoreForMe;
-
-      scored.push({...cand, score: finalScore});
-      console.log(`[Oracle Deep] ${cand.label}: Score Post-Risposta = ${finalScore.toFixed(2)}`);
-    }
-
-    // 3. Scegli l'azione con il punteggio migliore
-    scored.sort((a, b) => b.score - a.score);
-    const best = scored[0];
-
-    console.log(`[Oracle Deep] 🏆 Scelta Definitiva: ${best.label} con score ${best.score.toFixed(2)}`);
-
-    if (best.type === 'move') return {type: 'move', from: best.from, to: best.to};
-    if (best.type === 'evolve') return {type: 'evolve', sq: best.sq};
-    if (best.type === 'ability') return {type: 'ability', from: best.from, to: best.to};
-
-    return scored[0];
+    return bestAction;
   }
 };
 
@@ -348,6 +296,14 @@ function App(){
   const[thinking,setThinking]=useState(false);
   const aiTimer=useRef(null);
   const aiGen=useRef(0);
+
+  // Auto-Flip per quando l'umano gioca col Nero
+  useEffect(() => {
+    const humanWhite = !PERSONALITIES[whiteAI].ai;
+    const humanBlack = !PERSONALITIES[blackAI].ai;
+    if (humanBlack && !humanWhite) setFlipped(true);
+    else setFlipped(false);
+  }, [whiteAI, blackAI]);
 
   useEffect(()=>{const s=buildInitialState(game);setPd(s.pd);setSm(s.sm);},[]);
 
@@ -493,6 +449,7 @@ function App(){
             const rankIdx = flipped ? r : 7 - r;
             const sq = 'abcdefgh'[fileIdx] + (rankIdx + 1);
             
+            // Formula colore casa scacchiera pura
             const isLight = (fileIdx + rankIdx) % 2 !== 0;
             const isSel=sel===sq;
             const isStd=stdMoves.some(m=>m.to===sq);const isAbil=abilMoves.some(m=>m.to===sq);
@@ -542,7 +499,7 @@ function App(){
       <div className="panel">
         <div>
           <div className="charge-row">
-            <span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· Elaborazione Oracolo...':''}</span>
+            <span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· OMEGA sta calcolando...':''}</span>
             <span style={{color:curPts>=2?'#22c55e':'#38bdf8'}}>{curPts} ⚡{curPts>=2?' • PRONTO':''}</span>
           </div>
           <div className="charge-track">

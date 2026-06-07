@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Battle</title>
+<title>Chess RPG - Hybrid AI</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -18,8 +18,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 .cell.light{background:#f0d9b5}.cell.dark{background:#b58863}.cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
 .piece{font-family:"Segoe UI Symbol",sans-serif;display:inline-block;line-height:1;user-select:none}
 .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
-/* BUG 1 FIX: aggiunto 255 mancante */
-.piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+.piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
 .evo2{filter:drop-shadow(0 0 5px #eab308) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
 .evo3{filter:drop-shadow(0 0 10px #a855f7) drop-shadow(0 0 22px #a855f7)}
 .level-mark{position:absolute;top:2px;right:3px;font-size:9px;font-weight:800;pointer-events:none}
@@ -49,16 +48,91 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-const AI = {
-  pieceValues:{p:100,n:320,b:330,r:500,q:900,k:20000},
-  getEvoBonus(t,l){return t==='p'?l*180+(l===3?120:0):l*150;},
-  evaluate(g,pd,pts,col){if(g.in_checkmate())return g.turn()===col?-99999:99999;let s=0;const o=col==='w'?'b':'w';g.board().forEach((row,r)=>row.forEach((p,c)=>{if(!p)return;const sq='abcdefgh'[c]+(8-r);const id=Object.keys(pd).find(k=>k.endsWith('_'+sq)&&pd[k].color===p.color);const lv=id?pd[id].level:1;let v=AI.pieceValues[p.type]+AI.getEvoBonus(p.type,lv);s+=p.color===col?v:-v;}));s+=pts[col]*30-pts[o]*30;return s;},
-  getAllActions(g,pd,sm,pts,col){const a=[];Object.entries(sm).forEach(([sq,id])=>{const p=g.get(sq);if(!p||p.color!==col)return;const d=pd[id];g.moves({square:sq,verbose:true}).forEach(m=>a.push({type:'move',from:m.from,to:m.to,promotion:'q',captured:m.captured}));const e=EVOLUTIONS[p.type];if(e&&d)e.getAbilityMoves(sq,g,d.level,col).forEach(ab=>{const t=g.get(ab.to);a.push({type:'ability',from:ab.from,to:ab.to,captured:t?t.type:null});});});if(pts[col]>=2){Object.entries(pd).filter(([id,d])=>d.color===col&&d.level<3&&EVOLUTIONS[d.type]).forEach(([id,d])=>{const sq=Object.keys(sm).find(k=>sm[k]===id);if(sq)a.push({type:'evolve',square:sq});});}return a;},
-  simulate(g,pd,pts,act,col){const ng=new Chess(g.fen());const npd=JSON.parse(JSON.stringify(pd));const npts={...pts};if(act.type==='move'){ng.move({from:act.from,to:act.to,promotion:'q'});const m=ng.get(act.to);const oid=Object.keys(npd).find(id=>id.endsWith('_'+act.from));if(oid&&m){const nid=`${m.color}${m.type}_${act.to}`;npd[nid]={...npd[oid],type:m.type,id:nid};delete npd[oid];}}else if(act.type==='ability'){const p=ng.get(act.from);ng.remove(act.from);if(ng.get(act.to))ng.remove(act.to);ng.put(p,act.to);const pa=ng.fen().split(' ');pa[1]=pa[1]==='w'?'b':'w';pa[3]='-';ng.load(pa.join(' '));const oid=Object.keys(npd).find(id=>id.endsWith('_'+act.from));if(oid){const nid=`${p.color}${p.type}_${act.to}`;npd[nid]={...npd[oid],id:nid};delete npd[oid];}}else if(act.type==='evolve'){const id=Object.keys(npd).find(k=>k.endsWith('_'+act.square));if(id){npd[id].level++;npts[col]-=2;}}if(act.type!=='evolve'){let p=1;if(act.captured)p++;if(ng.in_check())p++;npts[col]+=p;}const nsm={};ng.board().forEach((row,r)=>row.forEach((c,cc)=>{if(c){const sq='abcdefgh'[cc]+(8-r);const id=Object.keys(npd).find(k=>k.endsWith('_'+sq)&&npd[k].color===c.color);if(id)nsm[sq]=id;}}));return{game:ng,pieceData:npd,points:npts,squareMap:nsm};},
-  choose(g,pd,sm,pts,col){const acts=AI.getAllActions(g,pd,sm,pts,col);let best=null,bs=-Infinity;for(let a of acts.slice(0,20)){const s=AI.simulate(g,pd,pts,a,col);const sc=AI.evaluate(s.game,s.pieceData,s.points,col)+(a.captured?50:0)+(a.type==='evolve'?80:0);if(sc>bs){bs=sc;best=a;}}return best;}
+// Worker Stockfish (Bypass CORS tramite Blob)
+const sfCode = `importScripts("https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js");`;
+const sfBlob = new Blob([sfCode], {type: 'application/javascript'});
+const sfWorker = new Worker(URL.createObjectURL(sfBlob));
+
+const PERSONALITIES = {
+  human: { name: 'Umano', ai: false, depth: 0, desc: 'Giocatore umano' },
+  apprendista: { name: 'Apprendista', ai: true, depth: 1, desc: 'Stockfish Lv.1 + Abilità Base' },
+  gladiatore: { name: 'Gladiatore', ai: true, depth: 5, desc: 'Stockfish Lv.5 + Evoluzioni' },
+  boss: { name: 'Gran Maestro', ai: true, depth: 10, desc: 'Stockfish Lv.10 + Terrore Puro' }
 };
 
-const PERSONALITIES={human:{name:'Umano',ai:false},easy:{name:'Bot',ai:true},medium:{name:'Maestro',ai:true},hard:{name:'GM',ai:true},necromante:{name:'Necromante',ai:true},berserker:{name:'Berserker',ai:true}};
+const HybridAI = {
+  getStockfishMove(fen, depth) {
+    return new Promise(resolve => {
+      sfWorker.postMessage("ucinewgame");
+      sfWorker.postMessage("position fen " + fen);
+      sfWorker.postMessage("go depth " + depth);
+      const handler = e => {
+        if (typeof e.data === "string" && e.data.startsWith("bestmove")) {
+          sfWorker.removeEventListener("message", handler);
+          const move = e.data.split(" ")[1];
+          resolve({ from: move.slice(0, 2), to: move.slice(2, 4) });
+        }
+      };
+      sfWorker.addEventListener("message", handler);
+    });
+  },
+
+  findBestAbility(game, pieceData, squareMap, color) {
+    let best = null;
+    let bestScore = -9999;
+    Object.entries(squareMap).forEach(([sq, id]) => {
+      const piece = game.get(sq);
+      if (!piece || piece.color!== color) return;
+      const data = pieceData[id];
+      const evo = EVOLUTIONS[piece.type];
+      if (!evo) return;
+      const abilities = evo.getAbilityMoves(sq, game, data.level, color);
+      abilities.forEach(ab => {
+        let score = 0;
+        const target = game.get(ab.to);
+        if (target) {
+          score += { p: 100, n: 300, b: 300, r: 500, q: 900, k: 5000 }[target.type] || 0;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = ab;
+        }
+      });
+    });
+    return { move: best, score: bestScore };
+  },
+
+  shouldEvolve(game, pieceData, squareMap, points, color) {
+    if (points[color] < 2) return null;
+    let bestSq = null;
+    let bestValue = 0;
+    Object.entries(squareMap).forEach(([sq, id]) => {
+      const p = pieceData[id];
+      if (p.color!== color || p.level >= 3) return;
+      let value = 0;
+      if (p.type === "p") value = 200 + p.level * 100;
+      if (p.type === "n" || p.type === "b") value = 150 + p.level * 50;
+      if (value > bestValue) {
+        bestValue = value;
+        bestSq = sq;
+      }
+    });
+    return bestSq;
+  },
+
+  async chooseAction(game, pieceData, squareMap, points, color, depth) {
+    const evolveSq = this.shouldEvolve(game, pieceData, squareMap, points, color);
+    if (evolveSq) return { type: "evolve", sq: evolveSq };
+
+    const ability = this.findBestAbility(game, pieceData, squareMap, color);
+    if (ability.score >= 300) {
+      return { type: "ability", from: ability.move.from, to: ability.move.to };
+    }
+
+    const sfMove = await this.getStockfishMove(game.fen(), depth);
+    return { type: "move", from: sfMove.from, to: sfMove.to };
+  }
+};
 
 function buildState(g){const pd={},sm={};g.board().forEach((r,ri)=>r.forEach((c,ci)=>{if(c){const sq='abcdefgh'[ci]+(8-ri);const id=`${c.color}${c.type}_${sq}`;pd[id]={id,type:c.type,color:c.color,level:1};sm[sq]=id;}}));return{pd,sm};}
 
@@ -71,7 +145,7 @@ function App(){
   const[abl,setAbl]=useState([]);
   const[pts,setPts]=useState({w:0,b:0});
   const[white,setWhite]=useState('human');
-  const[black,setBlack]=useState('necromante');
+  const[black,setBlack]=useState('gladiatore');
   const[lvlUp,setLvlUp]=useState(null);
   const timer=useRef();
 
@@ -94,16 +168,14 @@ function App(){
       ng.load(p.join(' '));
     }else{
       ng=new Chess(game.fen());
-      ng.move({from,to,promotion:'q'});
+      const mv=ng.move({from,to,promotion:'q'});
+      if(!mv)return;
     }
     const mid=sm[from];
     const nsm={...sm};
     const npd={...pd};
-
-    // BUG 2 FIX: rimuovi pezzo catturato da pd
     const capId = nsm[to];
     if(capId && npd[capId]?.color!== npd[mid]?.color) delete npd[capId];
-
     delete nsm[from];
     nsm[to]=mid;
     const np=ng.get(to);
@@ -119,54 +191,63 @@ function App(){
     if(game.get(to))p++;
     if(ng.in_check())p++;
     if(promo)p+=2;
-    setPts(ps=>({...ps,:ps+p}));
+    setPts(ps=>({...ps, [turn]: ps[turn] + p}));
     setGame(ng);
     setPd(npd);
     setSm(nsm);
     setSel(null);
   };
 
-  const evolve=()=>{
-    if(!sel)return;
+  const handleEvolveSq=(sq)=>{
     const t=game.turn();
     if(pts[t]<2)return;
-    const id=sm[sel];
+    const id=sm[sq];
     const d=pd[id];
     if(!d||d.level>=3)return;
     setPd(p=>({...p,[id]:{...d,level:d.level+1}}));
     setPts(p=>({...p,[t]:p[t]-2}));
-    setLvlUp(sel);
+    setLvlUp(sq);
     setTimeout(()=>setLvlUp(null),700);
     setSel(null);
   };
 
-  useEffect(()=>{
-    const turn=game.turn();
-    const ai=turn==='w'?PERSONALITIES[white]:PERSONALITIES[black];
-    if(!ai.ai||game.game_over())return;
-    clearTimeout(timer.current);
-    timer.current=setTimeout(()=>{
-      const act=AI.choose(game,pd,sm,pts,turn);
-      if(!act)return;
-      if(act.type==='evolve'){
-        const id=Object.keys(pd).find(k=>k.endsWith('_'+act.square));
-        if(id&&pts>=2){
-          setPd(p=>({...p,[id]:{...p[id],level:p[id].level+1}}));
-          setPts(p=>({...p,:p-2}));
-          setLvlUp(act.square);
-          setTimeout(()=>setLvlUp(null),700);
-        }
-      }else{
-        makeMove(act.from,act.to,act.type==='ability');
+  // AI TURN
+  useEffect(() => {
+    const turn = game.turn();
+    const aiType = turn === 'w'? white : black;
+    const personality = PERSONALITIES[aiType];
+
+    if (!personality.ai || game.game_over()) return;
+
+    let isActive = true;
+
+    const runAI = async () => {
+      const action = await HybridAI.chooseAction(game, pd, sm, pts, turn, personality.depth);
+
+      if (!isActive) return;
+
+      if (action.type === 'evolve') {
+        setSel(action.sq);
+        handleEvolveSq(action.sq);
+        setTimeout(() => {}, 600);
+      } else {
+        makeMove(action.from, action.to, action.type === 'ability');
       }
-    },600);
-  },[game,pd,sm,pts,white,black]);
+    };
+
+    timer.current = setTimeout(runAI, 500);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer.current);
+    };
+  }, [game, pd, sm, pts, white, black]);
 
   const board=game.board();
   const turn=game.turn();
   const selId=sel?sm[sel]:null;
   const selD=selId?pd[selId]:null;
-  const canEvo=selD&&selD.level<3&&game.get(sel)?.color===turn&&pts>=2&&EVOLUTIONS[game.get(sel)?.type];
+  const canEvo=selD&&selD.level<3&&game.get(sel)?.color===turn&&pts[turn]>=2&&EVOLUTIONS[game.get(sel)?.type];
 
   const click=sq=>{
     const human=(turn==='w'&&!PERSONALITIES[white].ai)||(turn==='b'&&!PERSONALITIES[black].ai);
@@ -188,34 +269,17 @@ function App(){
 
   return(
     <div className="app">
-      <div className="top-bar">{Object.keys(PERSONALITIES).slice(0,3).map(k=><button key={k} className={`mode-btn ${white===k?'active':''}`} onClick={()=>setWhite(k)}>W:{PERSONALITIES[k].name}</button>)}</div>
+      <div className="top-bar">{Object.keys(PERSONALITIES).map(k=><button key={'w'+k} className={`mode-btn ${white===k?'active':''}`} onClick={()=>setWhite(k)} title={PERSONALITIES[k].desc}>W:{PERSONALITIES[k].name}</button>)}</div>
       <div className="player-row"><div className="player-label">Nero: {PERSONALITIES[black].name}<span className="energy-badge">⚡{pts.b}</span></div></div>
       <div className="board-wrap"><div className="board">{board.map((r,ri)=>r.map((c,ci)=>{const sq='abcdefgh'[ci]+(8-ri);const selc=sel===sq;const isStd=std.some(m=>m.to===sq);const isAb=abl.some(m=>m.to===sq);const id=sm[sq];const d=id?pd[id]:null;const lv=d?.level||1;return<div key={sq} onClick={()=>click(sq)} className={`cell ${(ri+ci)%2?'light':'dark'} ${selc?'sel':''}`}>{(isStd||isAb)&&!c&&<div style={{position:'absolute',width:'26%',height:'26%',borderRadius:'50%',background:isAb?'#f59e0b':'#22c55e'}}/>}{c&&<span className={`piece piece-${c.color} ${lv===2?'evo2':lv===3?'evo3':''}`} style={{transform:lvlUp===sq?'scale(1.4)':'scale(1)'}}>{ICONS[c.color][c.type]}</span>}{c&&lv>1&&<div className={`level-mark ${lv===2?'lm2':'lm3'}`}>{'●'.repeat(lv-1)}</div>}</div>;}))}</div></div>
       <div className="player-row"><div className="player-label">Bianco: {PERSONALITIES[white].name}<span className="energy-badge">⚡{pts.w}</span></div></div>
-      <div className="panel"><div className="charge-row"><span>{turn==='w'?'Bianco':'Nero'}</span><span>{pts}/2</span></div><div className="charge-track"><div style={{width:`${Math.min(pts/2*100,100)}%`,height:'100%',background:pts>=2?'#22c55e':'#38bdf8'}}/></div><div className="panel-bottom"><div className="piece-label">{selD?`${EVOLUTIONS[game.get(sel)?.type]?.levels[selD.level-1]?.name} Lv${selD.level}`:'Seleziona'}</div><button className="evolve-btn" disabled={!canEvo} onClick={evolve}>EVOLVI</button><div className="turn-pill">{game.in_check()?'SCACCO':''}</div></div>
-      <div className="top-bar">{Object.keys(PERSONALITIES).slice(3).map(k=><button key={k} className={`mode-btn ${black===k?'active':''}`} onClick={()=>setBlack(k)}>B:{PERSONALITIES[k].name}</button>)}</div>
+      <div className="panel"><div className="charge-row"><span>{turn==='w'?'Bianco':'Nero'}</span><span>{pts[turn]}/2</span></div><div className="charge-track"><div style={{width:`${Math.min(pts[turn]/2*100,100)}%`,height:'100%',background:pts[turn]>=2?'#22c55e':'#38bdf8'}}/></div><div className="panel-bottom"><div className="piece-label">{selD?`${EVOLUTIONS[game.get(sel)?.type]?.levels[selD.level-1]?.name} Lv${selD.level}`:'Seleziona'}</div><button className="evolve-btn" disabled={!canEvo} onClick={()=>handleEvolveSq(sel)}>EVOLVI</button><div className="turn-pill">{game.in_check()?'SCACCO':''}</div></div></div>
+      <div className="top-bar">{Object.keys(PERSONALITIES).map(k=><button key={'b'+k} className={`mode-btn ${black===k?'active':''}`} onClick={()=>setBlack(k)} title={PERSONALITIES[k].desc}>B:{PERSONALITIES[k].name}</button>)}</div>
 
-      {/* BUG 3 FIX: Pulsante Nuova Partita */}
       {game.game_over() && (
-        <div style={{
-          position:'fixed',inset:0,background:'rgba(0,0,0,.85)',
-          display:'flex',flexDirection:'column',
-          alignItems:'center',justifyContent:'center',zIndex:99,gap:12
-        }}>
-          <div style={{fontSize:22,fontWeight:800,color:'#38bdf8'}}>
-            {game.in_checkmate()?`${turn==='w'?'Nero':'Bianco'} vince!`:'Pareggio'}
-          </div>
-          <button onClick={()=>{
-            const g=new Chess();
-            const s=buildState(g);
-            setGame(g);setPd(s.pd);setSm(s.sm);
-            setPts({w:0,b:0});setSel(null);
-          }} style={{
-            padding:'10px 28px',background:'#38bdf8',border:'none',
-            borderRadius:8,fontWeight:800,fontSize:14,cursor:'pointer'
-          }}>
-            RIVINCITA
-          </button>
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:12}}>
+          <div style={{fontSize:22,fontWeight:800,color:'#38bdf8'}}>{game.in_checkmate()?`${turn==='w'?'Nero':'Bianco'} vince!`:'Pareggio'}</div>
+          <button onClick={()=>{const g=new Chess();const s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);}} style={{padding:'10px 28px',background:'#38bdf8',border:'none',borderRadius:8,fontWeight:800,fontSize:14,cursor:'pointer'}}>RIVINCITA</button>
         </div>
       )}
     </div>

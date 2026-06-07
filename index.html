@@ -10,8 +10,9 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 #root{height:100%}
 .app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
 .top-bar{flex-shrink:0;height:44px;display:flex;gap:8px;align-items:center;justify-content:center;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;padding:4px}
-.mode-btn{flex:1;height:100%;background:transparent;border:none;color:#94a3b8;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer;transition:all.2s}
+.mode-btn{flex:1;height:100%;background:transparent;border:none;color:#94a3b8;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer;transition:all .2s}
 .mode-btn.active{background:#1e293b;color:#f1f5f9}
+.action-btn{flex-shrink:0;padding:0 12px;height:100%;background:#1e293b;border:none;color:#f1f5f9;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer}
 .board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
 .board{
   --side:min(calc(100vw - 16px),calc(100vh - 310px));
@@ -22,12 +23,15 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
   box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)
 }
 .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,300px)/8*0.72);cursor:pointer;aspect-ratio:1/1}
-.cell.light{background:#f0d9b5}.cell.dark{background:#b58863}
-.cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
-/* Ultima mossa stile Chess.com */
-.cell.last-move.light{background:#f7ec74!important}
-.cell.last-move.dark{background:#d8bf35!important}
-.piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;display:inline-block;line-height:1;user-select:none}
+.cell.light{background:#f0d9b5}
+.cell.dark{background:#b58863}
+
+/* Evidenziazione stile Chess.com */
+.cell.last-move.light{background:#f7ec74 !important}
+.cell.last-move.dark{background:#d8bf35 !important}
+.cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important;z-index:2}
+
+.piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;display:inline-block;line-height:1;user-select:none;z-index:1}
 .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
 .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
 .evo2{filter:drop-shadow(0 0 5px #eab308) drop-shadow(0 2px 4px rgba(0,0,0,.6))}
@@ -35,17 +39,18 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 .lm{position:absolute;top:2px;right:3px;font-size:9px;font-weight:800;pointer-events:none}
 .lm2{color:#eab308;text-shadow:0 0 5px #eab308}.lm3{color:#a855f7;text-shadow:0 0 8px #a855f7}
 .player-row{flex-shrink:0;height:48px;display:flex;gap:8px;align-items:center}
-.player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;align-items:center;padding:0 12px;font-size:14px;font-weight:700;gap:8px;overflow:hidden}
+.player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;justify-content:center;padding:0 12px;overflow:hidden}
+.player-name{font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+.last-move-text{font-size:11px;color:#94a3b8;margin-top:2px;font-weight:600}
 .thinking-dot{width:8px;height:8px;border-radius:50%;background:#38bdf8;animation:blink 1s infinite}
 @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
 .energy-badge{flex-shrink:0;width:64px;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900}
-.last-move-text{font-size:10px;color:#64748b;margin-top:2px}
 .panel{flex-shrink:0;height:88px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:8px 12px;display:flex;flex-direction:column;gap:7px}
 .charge-row{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:#94a3b8}
 .charge-track{width:100%;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;margin-top:4px}
 .panel-bottom{display:flex;align-items:center;gap:8px;flex:1}
 .piece-label{flex:1;font-size:13px;min-width:0}
-.evolve-btn{flex-shrink:0;padding:6px 12px;border:none;border-radius:7px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;transition:all.15s}
+.evolve-btn{flex-shrink:0;padding:6px 12px;border:none;border-radius:7px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;transition:all .15s}
 .turn-pill{flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
 @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.6)}100%{transform:scale(1)}}
 </style>
@@ -62,17 +67,24 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
+// ── STOCKFISH WORKER (STABILIZZATO A MOVETIME 1200) ──────────────────────────
 let sfWorker=null, sfBusy=false;
 try{
-  const blob=new Blob([`importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');`],{type:'application/javascript'});
+  const blob=new Blob(
+    [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');`],
+    {type:'application/javascript'}
+  );
   sfWorker=new Worker(URL.createObjectURL(blob));
-}catch(e){}
+  console.log('✅ Stockfish Caricato con Successo');
+}catch(e){ console.warn('⚠️ Stockfish non disponibile'); }
 
-function sfGetMove(fen,movetime=1200){
+function sfGetMove(fen){
   if(!sfWorker||sfBusy) return Promise.resolve(null);
   sfBusy=true;
   return new Promise(resolve=>{
-    const timeout=setTimeout(()=>{sfBusy=false;sfWorker.removeEventListener('message',h);resolve(null);},8000);
+    const timeout=setTimeout(()=>{
+      sfBusy=false;sfWorker.removeEventListener('message',h);resolve(null);
+    },8000);
     const h=e=>{
       if(typeof e.data==='string'&&e.data.startsWith('bestmove')){
         clearTimeout(timeout);sfBusy=false;sfWorker.removeEventListener('message',h);
@@ -84,63 +96,147 @@ function sfGetMove(fen,movetime=1200){
     sfWorker.addEventListener('message',h);
     sfWorker.postMessage('ucinewgame');
     sfWorker.postMessage('position fen '+fen);
-    sfWorker.postMessage('go movetime '+movetime);
+    // Usa movetime per stabilità e prevedibilità (Youtube friendly)
+    sfWorker.postMessage('go movetime 1200');
   });
 }
 
 const PERSONALITIES = {
-  human: { name: 'Umano', ai: false, color: '#94a3b8' },
-  stockfish: { name: 'Stockfish RPG', ai: true, color: '#38bdf8' }
+  human:     { name: 'Umano',         ai: false, color: '#94a3b8' },
+  stockfish: { name: 'Stockfish RPG', ai: true,  color: '#38bdf8' }
 };
 
 const PV = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+
 function getRpgValue(type, level) {
-  if (type === 'p') {if (level === 1) return 100;if (level === 2) return 180;if (level === 3) return 350;}
+  if (type === 'p') {
+    if (level === 1) return 100;
+    if (level === 2) return 180;
+    if (level === 3) return 350;
+  }
   return PV[type] || 0;
 }
 
+// ── INTERFACCIA AI INTEGRATA (IBRIDA) ──────────────────────────────────────────
 const RPG = {
   shouldEvolve(game, pd, sm, pts, color) {
     if (pts[color] < 2) return null;
-    let bestSq = null; let bestScore = -999;
+    let bestSq = null;
+    let bestScore = -999;
+    
     for (const [sq, id] of Object.entries(sm)) {
       const d = pd[id];
-      if (!d || d.color!== color || d.type!== 'p' || d.level >= 3) continue;
+      if (!d || d.color !== color || d.type !== 'p' || d.level >= 3) continue;
+      
       let score = 0;
       const rank = parseInt(sq[1]);
-      score += color==='w'? rank*10 : (9-rank)*10;
-      score += d.level*20;
-      // NUOVO: conta abilità sbloccate
-      const evo = EVOLUTIONS.p;
+      if (color === 'w') score += rank * 10;
+      else score += (9 - rank) * 10;
+      
+      // LOGICA MIGLIORATA: Cerca l'evoluzione che sblocca più mosse reali
+      const nextLvl = d.level + 1;
+      const evo = EVOLUTIONS['p'];
       if (evo) {
-        const abilities = evo.getAbilityMoves(sq, game, d.level+1, color);
+        const abilities = evo.getAbilityMoves(sq, game, nextLvl, color);
         score += abilities.length * 100;
       }
-      if (score > bestScore) {bestScore = score; bestSq = sq;}
+      
+      if (score > bestScore) {
+        bestScore = score;
+        bestSq = sq;
+      }
     }
     return bestSq;
   },
 
+  getDangerousAbilityTargets(game, pd, sm, attackerColor) {
+    const threats = [];
+    for (const [sq, id] of Object.entries(sm)) {
+      const piece = game.get(sq);
+      if (!piece || piece.color !== attackerColor) continue;
+      
+      const d = pd[id];
+      const evo = EVOLUTIONS[piece.type];
+      if (!evo) continue;
+      
+      const currentPts = attackerColor === 'w' ? game._ptsW : game._ptsB;
+      const maxSimulatedLevel = (currentPts >= 2 && d.type === 'p') ? Math.min(d.level + 1, 3) : d.level;
+      
+      for (let lvl = d.level; lvl <= maxSimulatedLevel; lvl++) {
+        for (const ab of evo.getAbilityMoves(sq, game, lvl, attackerColor)) {
+          const target = game.get(ab.to);
+          if (target && target.color !== attackerColor) {
+            threats.push({ from: ab.from, to: ab.to, value: getRpgValue(target.type, pd[sm[ab.to]]?.level || 1) });
+          }
+        }
+      }
+    }
+    return threats;
+  },
+
   async chooseAction(game, pd, sm, pts, color) {
-    // STOCKFISH PRIMA - cervello principale
-    const sfMove = await sfGetMove(game.fen(), 1200);
+    const oppColor = color === 'w' ? 'b' : 'w';
+    game._ptsW = pts.w;
+    game._ptsB = pts.b;
 
-    // Poi aggiusta con RPG solo se necessario
-    const oppColor = color==='w'?'b':'w';
-    if (pts[oppColor] >= 2) {
-      // Controllo difesa veloce
-      const legals = game.moves({verbose:true});
-      //... (logica difesa come prima ma più leggera)
-    }
-
-    // Evoluzione solo se Stockfish non ha trovato tattica migliore
+    // FASE 1: ATTACCO DA BURST
     const evoSq = this.shouldEvolve(game, pd, sm, pts, color);
-    if (evoSq && pts[color] >= 4 && Math.random() < 0.3) {
-      return { type: 'evolve', sq: evoSq };
+    if (evoSq) {
+      const piece = pd[sm[evoSq]];
+      if ((piece.level === 1 && pts[color] >= 4) || (piece.level === 2 && pts[color] >= 6)) {
+        const evo = EVOLUTIONS[piece.type];
+        if (evo) {
+          const simulatedAbilities = evo.getAbilityMoves(evoSq, game, piece.level + 1, color);
+          const hasHighValueTarget = simulatedAbilities.some(ab => {
+            const target = game.get(ab.to);
+            return target && getRpgValue(target.type, pd[sm[ab.to]]?.level || 1) >= 300;
+          });
+          if (hasHighValueTarget) return { type: 'evolve', sq: evoSq };
+        }
+      }
     }
 
-    if (sfMove) return { type: 'move',...sfMove };
+    for (const [sq, id] of Object.entries(sm)) {
+      const piece = game.get(sq);
+      if (!piece || piece.color !== color) continue;
+      const d = pd[id];
+      const evo = EVOLUTIONS[piece.type];
+      if (!evo) continue;
+      
+      for (const ab of evo.getAbilityMoves(sq, game, d.level, color)) {
+        const target = game.get(ab.to);
+        if (target) {
+          const targetVal = getRpgValue(target.type, pd[sm[ab.to]]?.level || 1);
+          if (targetVal >= 320) return { type: 'ability', from: ab.from, to: ab.to };
+        }
+      }
+    }
 
+    // FASE 2: PREVENZIONE
+    if (pts[oppColor] >= 2) {
+      const humanThreats = this.getDangerousAbilityTargets(game, pd, sm, oppColor);
+      const criticalThreat = humanThreats.reduce((max, t) => t.value > max.value ? t : max, { value: 0 });
+      
+      if (criticalThreat.value >= 500) {
+        const threatenedSquare = criticalThreat.to;
+        const legals = game.moves({ verbose: true });
+        const escapeMove = legals.find(m => m.from === threatenedSquare || m.to === criticalThreat.from);
+        if (escapeMove) return { type: 'move', from: escapeMove.from, to: escapeMove.to };
+      }
+    }
+
+    // FASE 3: INVESTIMENTO ENERGETICO
+    if (evoSq) {
+      const piece = pd[sm[evoSq]];
+      if (piece.level === 1 && pts[color] >= 4) return { type: 'evolve', sq: evoSq };
+      if (piece.level === 2 && pts[color] >= 6) return { type: 'evolve', sq: evoSq };
+    }
+
+    // FASE 4: STRATEGIA DI BASE (STOCKFISH) - ORA IL VERO CERVELLO
+    const sfMove = await sfGetMove(game.fen());
+    if (sfMove) return { type: 'move', ...sfMove };
+
+    // Fallback disperato
     const legals = game.moves({ verbose: true });
     if (!legals.length) return null;
     return { type: 'move', from: legals[0].from, to: legals[0].to };
@@ -166,15 +262,26 @@ function execAbilityMove(game,from,to){
   return{newGame:ng,capturedPiece:captured};
 }
 
+// ── CORE COMPONENT REACT ──────────────────────────────────────────────────────
 function App(){
   const[game,setGame]=useState(()=>new Chess());
-  const[pd,setPd]=useState({});const[sm,setSm]=useState({});
-  const[sel,setSel]=useState(null);const[stdMoves,setStdMoves]=useState([]);
-  const[abilMoves,setAbilMoves]=useState([]);const[lvlUpSq,setLvlUpSq]=useState(null);
-  const[pts,setPts]=useState({w:0,b:0});const[lastMove,setLastMove]=useState(null);
-  const[whiteAI,setWhiteAI]=useState('human');const[blackAI,setBlackAI]=useState('stockfish');
-  const[thinking,setThinking]=useState(false);const[flipped,setFlipped]=useState(false);
-  const aiTimer=useRef(null);const aiGen=useRef(0);
+  const[pd,setPd]=useState({});
+  const[sm,setSm]=useState({});
+  const[sel,setSel]=useState(null);
+  const[stdMoves,setStdMoves]=useState([]);
+  const[abilMoves,setAbilMoves]=useState([]);
+  const[lvlUpSq,setLvlUpSq]=useState(null);
+  const[pts,setPts]=useState({w:0,b:0});
+  
+  const[lastMove,setLastMove]=useState(null);
+  const[flipped,setFlipped]=useState(false); // ROTAZIONE BOARD
+  
+  const[whiteAI,setWhiteAI]=useState('human');
+  const[blackAI,setBlackAI]=useState('stockfish');
+  
+  const[thinking,setThinking]=useState(false);
+  const aiTimer=useRef(null);
+  const aiGen=useRef(0);
 
   useEffect(()=>{const s=buildInitialState(game);setPd(s.pd);setSm(s.sm);},[]);
 
@@ -188,13 +295,21 @@ function App(){
 
   const makeMove=useCallback((from,to,isAbility=false)=>{
     const turn=game.turn();let newGame,cap=null;
-    if(isAbility){const res=execAbilityMove(game,from,to);newGame=res.newGame;cap=res.capturedPiece;}
-    else{newGame=new Chess(game.fen());const mv=newGame.move({from,to,promotion:'q'});if(!mv)return;if(mv.captured)cap={type:mv.captured};if(mv.flags?.includes('e'))cap={type:'p',_sq:to[0]+from[1]};}
+    if(isAbility){
+      const res=execAbilityMove(game,from,to);newGame=res.newGame;cap=res.capturedPiece;
+    }else{
+      newGame=new Chess(game.fen());
+      const mv=newGame.move({from,to,promotion:'q'});
+      if(!mv)return;
+      if(mv.captured)cap={type:mv.captured};
+      if(mv.flags?.includes('e'))cap={type:'p',_sq:to[0]+from[1]};
+    }
     const mid=sm[from];const nsm={...sm};const npd={...pd};
     if(cap){const cSq=cap._sq??to;const cId=nsm[cSq];delete npd[cId];delete nsm[cSq];}
     const np=newGame.get(to);let isPromo=false;
     if(np&&np.type!==pd[mid]?.type){npd[mid]={...npd[mid],type:np.type,level:1};isPromo=true;}
     delete nsm[from];nsm[to]=mid;
+    
     let p=1;if(cap)p++;if(newGame.in_check())p++;if(isPromo)p+=2;
     setPts(ps=>({...ps,[turn]:ps[turn]+p}));
     setGame(newGame);setPd(npd);setSm(nsm);setSel(null);setStdMoves([]);setAbilMoves([]);
@@ -202,123 +317,220 @@ function App(){
   },[game,sm,pd]);
 
   const doEvolve=useCallback(sq=>{
-    if(!sq)return;const turn=game.turn();const piece=game.get(sq);if(!piece||piece.color!==turn)return;
-    if(pts[turn]<2)return;const id=sm[sq];const d=pd[id];if(!d||d.level>=3||!EVOLUTIONS[d.type])return;
-    setPd(prev=>({...prev,[id]:{...d,level:d.level+1}}));setPts(prev=>({...prev,[turn]:prev[turn]-2}));
-    setLvlUpSq(sq);setTimeout(()=>setLvlUpSq(null),900);setSel(null);setStdMoves([]);setAbilMoves([]);
+    if(!sq)return;const turn=game.turn();
+    const piece=game.get(sq);if(!piece||piece.color!==turn)return;
+    if(pts[turn]<2)return;
+    const id=sm[sq];const d=pd[id];
+    if(!d||d.level>=3||!EVOLUTIONS[d.type])return;
+    setPd(prev=>({...prev,[id]:{...d,level:d.level+1}}));
+    setPts(prev=>({...prev,[turn]:prev[turn]-2}));
+    setLvlUpSq(sq);setTimeout(()=>setLvlUpSq(null),900);
+    setSel(null);setStdMoves([]);setAbilMoves([]);
   },[game,pts,sm,pd]);
 
   const handleClick=useCallback(sq=>{
-    const turn=game.turn();const isHuman=turn==='w'?!PERSONALITIES[whiteAI].ai:!PERSONALITIES[blackAI].ai;
-    if(!isHuman||thinking)return;const piece=game.get(sq);
-    if(sel){const sM=stdMoves.find(m=>m.to===sq);const aM=abilMoves.find(m=>m.to===sq);if(sM||aM){makeMove(sel,sq,!!aM);return;}
+    const turn=game.turn();
+    const isHuman=turn==='w'?!PERSONALITIES[whiteAI].ai:!PERSONALITIES[blackAI].ai;
+    if(!isHuman||thinking)return;
+    const piece=game.get(sq);
+    if(sel){
+      const sM=stdMoves.find(m=>m.to===sq);const aM=abilMoves.find(m=>m.to===sq);
+      if(sM||aM){makeMove(sel,sq,!!aM);return;}
       if(piece?.color===turn){setSel(sq);const{std,abil}=getMovesFor(sq);setStdMoves(std);setAbilMoves(abil);return;}
-      setSel(null);setStdMoves([]);setAbilMoves([]);return;}
+      setSel(null);setStdMoves([]);setAbilMoves([]);return;
+    }
     if(piece?.color===turn){setSel(sq);const{std,abil}=getMovesFor(sq);setStdMoves(std);setAbilMoves(abil);}
   },[game,sel,stdMoves,abilMoves,getMovesFor,makeMove,whiteAI,blackAI,thinking]);
 
   useEffect(()=>{
-    const turn=game.turn();const aiType=turn==='w'?whiteAI:blackAI;
+    const turn=game.turn();
+    const aiType=turn==='w'?whiteAI:blackAI;
     if(!PERSONALITIES[aiType].ai||game.game_over())return;
-    aiGen.current+=1;const myGen=aiGen.current;clearTimeout(aiTimer.current);
+    
+    aiGen.current+=1;const myGen=aiGen.current;
+    clearTimeout(aiTimer.current);
+    
+    // Essendo l'IA gestita da movetime interno, il timeout serve solo per evitare micro-scatti
     aiTimer.current=setTimeout(async()=>{
-      setThinking(true);const action=await RPG.chooseAction(game,pd,sm,pts,turn);
-      if(aiGen.current!==myGen){setThinking(false);return;}setThinking(false);
-      if(!action)return;if(action.type==='evolve') doEvolve(action.sq);else makeMove(action.from,action.to,action.type==='ability');
-    }, 1500 + Math.random()*400);
+      setThinking(true);
+      const action=await RPG.chooseAction(game,pd,sm,pts,turn);
+      if(aiGen.current!==myGen){setThinking(false);return;}
+      setThinking(false);
+      
+      if(!action)return;
+      if(action.type==='evolve') doEvolve(action.sq);
+      else makeMove(action.from,action.to,action.type==='ability');
+    }, 100);
+    
     return()=>clearTimeout(aiTimer.current);
   },[game,pd,sm,pts,whiteAI,blackAI,makeMove,doEvolve]);
 
+  // Gestione Rotazione Board
+  const rawBoard = game.board();
+  const boardData = flipped ? [...rawBoard].reverse().map(r=>[...r].reverse()) : rawBoard;
+
   const turn=game.turn();
   const selId=sel?sm[sel]:null;const selData=selId?pd[selId]:null;
-  const selPiece=sel?game.get(sel):null;const evo=selPiece?EVOLUTIONS[selPiece.type]:null;
-  const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;const curPts=pts[turn];
-  const chargePct=Math.min(curPts/6*100,100);
+  const selPiece=sel?game.get(sel):null;
+  const evo=selPiece?EVOLUTIONS[selPiece.type]:null;
+  const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;
+  const curPts=pts[turn];
+  const chargePct=Math.min(curPts/6*100,100); 
   const canEvolve=!!(evo&&selData&&selData.level<3&&selPiece?.color===turn&&curPts>=2);
   const showEvolveBtn=!!(evo&&selData&&selData.level<3);
   const isAITurn=PERSONALITIES[turn==='w'?whiteAI:blackAI].ai;
 
-  const boardData = flipped? [...game.board()].reverse().map(r=>[...r].reverse()) : game.board();
-
   const PersonalityBar=({forColor,current,onChange})=>(
     <div className="top-bar">
       {Object.entries(PERSONALITIES).map(([k,v])=>(
-        <button key={k} className={`mode-btn ${current===k?'active':''}`} onClick={()=>onChange(k)}>
+        <button key={k}
+          className={`mode-btn ${current===k?'active':''}`}
+          onClick={()=>onChange(k)}>
           {forColor==='w'?'⬜':'⬛'} {v.name}
         </button>
       ))}
-      <button className="mode-btn" onClick={()=>setFlipped(f=>!f)} style={{flex:'0 0 44px'}}>🔄</button>
+      {forColor==='w' && (
+         <button className="action-btn" onClick={()=>setFlipped(f=>!f)} title="Ruota scacchiera">🔄</button>
+      )}
     </div>
   );
 
   const resetGame=()=>{
     const g=new Chess();const s=buildInitialState(g);
     setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);
-    setStdMoves([]);setAbilMoves([]);setThinking(false);setLastMove(null);
+    setStdMoves([]);setAbilMoves([]);setThinking(false);
+    setLastMove(null);
     if(sfWorker){sfWorker.postMessage('ucinewgame');}
   };
 
   return(
     <div className="app">
+
       <PersonalityBar forColor="w" current={whiteAI} onChange={v=>{setWhiteAI(v);resetGame();}}/>
+
       <div className="player-row">
         <div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[blackAI].color}`}}>
-          {thinking&&turn==='b'&&<div className="thinking-dot"/>}
-          Nero: {PERSONALITIES[blackAI].name}
-          {lastMove&&turn==='w'&&<span className="last-move-text">{lastMove.from}→{lastMove.to}</span>}
+          <div className="player-name">
+            {thinking&&turn==='b'&&<div className="thinking-dot"/>}
+            Nero: {PERSONALITIES[blackAI].name}
+          </div>
+          {lastMove&&turn==='w'&&<div className="last-move-text">Ultima: {lastMove.from}→{lastMove.to}</div>}
         </div>
         <div className="energy-badge" style={{color:pts.b>=2?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:12}}>{pts.b}</span>
+          <span style={{fontSize:16}}>⚡</span>
+          <span style={{fontSize:12}}>{pts.b}</span>
         </div>
       </div>
+
       <div className="board-wrap">
         <div className="board">
           {boardData.map((row,r)=>row.map((cell,c)=>{
-            const file = flipped? 'hgfedcba'[c] : 'abcdefgh'[c];
-            const rank = flipped? (r+1) : (8-r);
-            const sq = file + rank;
-            const isLight=(r+c)%2===0;const isSel=sel===sq;
+            const fileIdx = flipped ? 7 - c : c;
+            const rankIdx = flipped ? r : 7 - r;
+            const sq = 'abcdefgh'[fileIdx] + (rankIdx + 1);
+            
+            // Standard chess coloring rule: se file+rank è dispari è bianco
+            const isLight = (fileIdx + rankIdx) % 2 !== 0;
+            
+            const isSel=sel===sq;
             const isStd=stdMoves.some(m=>m.to===sq);const isAbil=abilMoves.some(m=>m.to===sq);
             const isAny=isStd||isAbil;const id=sm[sq];const data=id?pd[id]:null;
             const level=data?.level??1;const isLvlUp=lvlUpSq===sq;
             const evoClass=level===2?'evo2':level===3?'evo3':'';
+            
             const isLastMove = lastMove && (lastMove.from === sq || lastMove.to === sq);
+
             return(
-              <div key={sq} onClick={()=>handleClick(sq)} className={`cell ${isLight?'light':'dark'} ${isSel?'sel':''} ${isLastMove?'last-move':''}`}>
-                {isAny&&!cell&&(<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:isAbil?'#f59e0b':'#22c55e',boxShadow:`0 0 10px ${isAbil?'#f59e0b':'#22c55e'}`}}/>)}
-                {isAny&&cell&&(<div style={{position:'absolute',inset:0,border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`,borderRadius:'3px'}}/>)}
-                {cell&&(<span className={`piece piece-${cell.color} ${evoClass}`} style={{transform:isLvlUp?'scale(1.5)':'scale(1)',transition:'transform.15s',animation:isLvlUp?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>)}
-                {cell&&EVOLUTIONS[cell.type]&&level>1&&(<><div style={{position:'absolute',inset:'2px',border:`2px solid ${level===2?'#eab308':'#a855f7'}`,borderRadius:'2px',pointerEvents:'none'}}/><div className={`lm ${level===2?'lm2':'lm3'}`}>{'●'.repeat(level-1)}</div></>)}
+              <div key={sq} onClick={()=>handleClick(sq)}
+                className={`cell ${isLight?'light':'dark'} ${isSel?'sel':''} ${isLastMove?'last-move':''}`}>
+                {isAny&&!cell&&(<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:isAbil?'#f59e0b':'#22c55e',boxShadow:`0 0 10px ${isAbil?'#f59e0b':'#22c55e'}`,zIndex:3}}/>)}
+                {isAny&&cell&&(<div style={{position:'absolute',inset:0,border:`3px solid ${isAbil?'#f59e0b':'#f43f5e'}`,borderRadius:'3px',zIndex:3}}/>)}
+                {cell&&(
+                  <span className={`piece piece-${cell.color} ${evoClass}`}
+                    style={{transform:isLvlUp?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:isLvlUp?'lvlup 1s ease':undefined}}>
+                    {ICONS[cell.color][cell.type]}
+                  </span>
+                )}
+                {cell&&EVOLUTIONS[cell.type]&&level>1&&(
+                  <>
+                    <div style={{position:'absolute',inset:'2px',border:`2px solid ${level===2?'#eab308':'#a855f7'}`,borderRadius:'2px',pointerEvents:'none',zIndex:2}}/>
+                    <div className={`lm ${level===2?'lm2':'lm3'}`} style={{zIndex:3}}>{'●'.repeat(level-1)}</div>
+                  </>
+                )}
               </div>
             );
           }))}
         </div>
       </div>
+
       <div className="player-row">
         <div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[whiteAI].color}`}}>
-          {thinking&&turn==='w'&&<div className="thinking-dot"/>}
-          Bianco: {PERSONALITIES[whiteAI].name}
-          {lastMove&&turn==='b'&&<span className="last-move-text">{lastMove.from}→{lastMove.to}</span>}
+          <div className="player-name">
+            {thinking&&turn==='w'&&<div className="thinking-dot"/>}
+            Bianco: {PERSONALITIES[whiteAI].name}
+          </div>
+          {lastMove&&turn==='b'&&<div className="last-move-text">Ultima: {lastMove.from}→{lastMove.to}</div>}
         </div>
         <div className="energy-badge" style={{color:pts.w>=2?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:12}}>{pts.w}</span>
-        </div>
-      <div className="panel">
-        <div>
-          <div className="charge-row"><span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· Calcolo...':''}</span><span style={{color:curPts>=2?'#22c55e':'#38bdf8'}}>{curPts} ⚡{curPts>=2?' • PRONTO':''}</span></div>
-          <div className="charge-track"><div style={{width:`${chargePct}%`,height:'100%',background:curPts>=2?'#22c55e':'#38bdf8',transition:'width.3s',borderRadius:'3px'}}/></div>
-        </div>
-        <div className="panel-bottom">
-          <div className="piece-label">{selData&&evo?(<span style={{fontWeight:700,color:lvlInfo.color}}>{ICONS[selPiece.color][selPiece.type]} {lvlInfo.name} Lv.{selData.level}{abilMoves.length>0&&<span style={{color:'#f59e0b',marginLeft:4}}>🟡{abilMoves.length}</span>}</span>):(<span style={{color:'#475569'}}>Seleziona un pezzo</span>)}</div>
-          <button className="evolve-btn" onClick={()=>doEvolve(sel)} style={{visibility:showEvolveBtn?'visible':'hidden',background:canEvolve?(lvlInfo?.color||'#38bdf8'):'#1e293b',color:canEvolve?'#030712':'#475569',cursor:canEvolve?'pointer':'default'}}>⚡ EVOLVI (2)</button>
-          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{game.in_check()?'SCACCO!':turn==='w'?'⬜':'⬛'}</div>
+          <span style={{fontSize:16}}>⚡</span>
+          <span style={{fontSize:12}}>{pts.w}</span>
         </div>
       </div>
+
+      <div className="panel">
+        <div>
+          <div className="charge-row">
+            <span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· Calcolo RPG...':''}</span>
+            <span style={{color:curPts>=2?'#22c55e':'#38bdf8'}}>{curPts} ⚡{curPts>=2?' • PRONTO':''}</span>
+          </div>
+          <div className="charge-track">
+            <div style={{width:`${chargePct}%`,height:'100%',background:curPts>=2?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'3px'}}/>
+          </div>
+        </div>
+        <div className="panel-bottom">
+          <div className="piece-label">
+            {selData&&evo?(
+              <span style={{fontWeight:700,color:lvlInfo.color}}>
+                {ICONS[selPiece.color][selPiece.type]} {lvlInfo.name} Lv.{selData.level}
+                {abilMoves.length>0&&<span style={{color:'#f59e0b',marginLeft:4}}>🟡{abilMoves.length}</span>}
+              </span>
+            ):(<span style={{color:'#475569'}}>Seleziona un pezzo</span>)}
+          </div>
+          <button className="evolve-btn" onClick={()=>doEvolve(sel)}
+            style={{
+              visibility:showEvolveBtn?'visible':'hidden',
+              background:canEvolve?(lvlInfo?.color||'#38bdf8'):'#1e293b',
+              color:canEvolve?'#030712':'#475569',
+              cursor:canEvolve?'pointer':'default',
+            }}>
+            ⚡ EVOLVI (2)
+          </button>
+          <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>
+            {game.in_check()?'SCACCO!':turn==='w'?'⬜':'⬛'}
+          </div>
+        </div>
+      </div>
+
       <PersonalityBar forColor="b" current={blackAI} onChange={v=>{setBlackAI(v);resetGame();}}/>
-      {game.game_over()&&(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.88)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}><div style={{fontSize:26,fontWeight:900,letterSpacing:'0.08em',color:'#f1f5f9'}}>{game.in_checkmate()?(turn==='w'?'⬛ Nero vince!':'⬜ Bianco vince!'):'🤝 Pareggio'}</div><div style={{fontSize:12,color:'#64748b'}}>{game.in_checkmate()?'Scacco matto':'Patta'}</div><button onClick={resetGame} style={{padding:'11px 36px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:4}}>RIVINCITA</button></div>)}
+
+      {game.game_over()&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.88)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}>
+          <div style={{fontSize:26,fontWeight:900,letterSpacing:'0.08em',color:'#f1f5f9'}}>
+            {game.in_checkmate()?(turn==='w'?'⬛ Nero vince!':'⬜ Bianco vince!'):'🤝 Pareggio'}
+          </div>
+          <div style={{fontSize:12,color:'#64748b'}}>
+            {game.in_checkmate()?'Scacco matto':'Patta'}
+          </div>
+          <button onClick={resetGame} style={{padding:'11px 36px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:4}}>
+            RIVINCITA
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }
+
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>

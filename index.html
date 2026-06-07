@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG — Stockfish RPG</title>
+<title>Chess RPG — Stockfish RPG Supreme</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -66,8 +66,8 @@ try{
     {type:'application/javascript'}
   );
   sfWorker=new Worker(URL.createObjectURL(blob));
-  console.log('✅ Stockfish caricato');
-}catch(e){ console.warn('⚠️ Stockfish non disponibile, uso AI fallback'); }
+  console.log('✅ Stockfish Caricato con Successo');
+}catch(e){ console.warn('⚠️ Stockfish non disponibile'); }
 
 function sfGetMove(fen,depth){
   if(!sfWorker||sfBusy) return Promise.resolve(null);
@@ -91,7 +91,7 @@ function sfGetMove(fen,depth){
   });
 }
 
-// ── PERSONALITIES & VALUES ────────────────────────────────────────────────────
+// ── CONFIGURAZIONI E VALORI RPG ───────────────────────────────────────────────
 const PERSONALITIES = {
   human:     { name: 'Umano',         ai: false, color: '#94a3b8' },
   stockfish: { name: 'Stockfish RPG', ai: true,  color: '#38bdf8', depth: 10 }
@@ -99,7 +99,6 @@ const PERSONALITIES = {
 
 const PV = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
 
-// Ritorna il vero valore del pezzo nel contesto RPG
 function getRpgValue(type, level) {
   if (type === 'p') {
     if (level === 1) return 100;
@@ -109,9 +108,9 @@ function getRpgValue(type, level) {
   return PV[type] || 0;
 }
 
-// ── RPG AI ────────────────────────────────────────────────────────────────────
+// ── INTERFACCIA AI INTEGRATA (IBRIDA) ──────────────────────────────────────────
 const RPG = {
-  // Valuta se conviene evolvere un pedone (cerca il migliore)
+  // Funzione di valutazione strategica per decidere se far evolvere un pedone
   shouldEvolve(game, pd, sm, pts, color) {
     if (pts[color] < 2) return null;
     let bestSq = null;
@@ -123,10 +122,11 @@ const RPG = {
       
       let score = 0;
       const rank = parseInt(sq[1]);
-      // Più è vicino alla promozione, più vale la pena evolverlo
-      if (color === 'w') score += rank * 10;
-      else score += (9 - rank) * 10;
-      
+      if (color === 'w') {
+        score += rank * 10;
+      } else {
+        score += (9 - rank) * 10;
+      }
       score += d.level * 20;
       
       if (score > bestScore) {
@@ -137,77 +137,140 @@ const RPG = {
     return bestSq;
   },
 
-  // Cerca la migliore abilità disponibile usando i veri valori RPG
-  findBestAbility(game, pd, sm, color) {
-    let best = null, bs = 0;
+  // Trova le minacce di attacco tramite abilità speciali
+  getDangerousAbilityTargets(game, pd, sm, attackerColor) {
+    const threats = [];
+    for (const [sq, id] of Object.entries(sm)) {
+      const piece = game.get(sq);
+      if (!piece || piece.color !== attackerColor) continue;
+      
+      const d = pd[id];
+      const evo = EVOLUTIONS[piece.type];
+      if (!evo) continue;
+      
+      // Controlla il livello attuale o il potenziale livello successivo se ha energia per evolvere
+      const currentPts = attackerColor === 'w' ? game._ptsW : game._ptsB;
+      const maxSimulatedLevel = (currentPts >= 2 && d.type === 'p') ? Math.min(d.level + 1, 3) : d.level;
+      
+      for (let lvl = d.level; lvl <= maxSimulatedLevel; lvl++) {
+        for (const ab of evo.getAbilityMoves(sq, game, lvl, attackerColor)) {
+          const target = game.get(ab.to);
+          if (target && target.color !== attackerColor) {
+            threats.push({ from: ab.from, to: ab.to, value: getRpgValue(target.type, pd[sm[ab.to]]?.level || 1) });
+          }
+        }
+      }
+    }
+    return threats;
+  },
+
+  // SISTEMA DECISIONALE SUPREMO DELL'IA
+  async chooseAction(game, pd, sm, pts, color) {
+    const oppColor = color === 'w' ? 'b' : 'w';
+    
+    // Iniettiamo temporaneamente i punti dentro l'istanza per i calcoli geometrici delle abilità
+    game._ptsW = pts.w;
+    game._ptsB = pts.b;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FASE 1: ATTACCO DA BURST IMMEDIATO (L'IA può uccidere qualcosa adesso?)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Controlla se l'IA può evolvere un pezzo ed eseguire un'uccisione speciale nello stesso turno
+    const evoSq = this.shouldEvolve(game, pd, sm, pts, color);
+    if (evoSq) {
+      const piece = pd[sm[evoSq]];
+      // L'IA accumula energia strategicamente come da te richiesto
+      if ((piece.level === 1 && pts[color] >= 4) || (piece.level === 2 && pts[color] >= 6)) {
+        // Controlla se questa evoluzione sblocca una cattura istantanea ad alto valore
+        const nextLvl = piece.level + 1;
+        const evo = EVOLUTIONS[piece.type];
+        if (evo) {
+          const simulatedAbilities = evo.getAbilityMoves(evoSq, game, nextLvl, color);
+          const hasHighValueTarget = simulatedAbilities.some(ab => {
+            const target = game.get(ab.to);
+            return target && getRpgValue(target.type, pd[sm[ab.to]]?.level || 1) >= 300; // Almeno un pezzo grosso
+          });
+          if (hasHighValueTarget) {
+            return { type: 'evolve', sq: evoSq }; // Evolve per colpire subito!
+          }
+        }
+      }
+    }
+
+    // Controlla se c'è un'abilità già sbloccata che distrugge un bersaglio prioritario
     for (const [sq, id] of Object.entries(sm)) {
       const piece = game.get(sq);
       if (!piece || piece.color !== color) continue;
-      
       const d = pd[id];
       const evo = EVOLUTIONS[piece.type];
       if (!evo) continue;
       
       for (const ab of evo.getAbilityMoves(sq, game, d.level, color)) {
         const target = game.get(ab.to);
-        let score = 0;
-        
-        // Se l'abilità cattura, valuta quanto vale davvero il bersaglio
         if (target) {
-          const targetId = sm[ab.to];
-          const targetData = targetId ? pd[targetId] : null;
-          const targetLevel = targetData ? targetData.level : 1;
-          score = getRpgValue(target.type, targetLevel);
-        }
-        
-        // L'IA userà l'abilità solo se cattura un pezzo di valore (es. >= 150)
-        if (score > bs && score >= 150) {
-          bs = score;
-          best = ab;
+          const targetVal = getRpgValue(target.type, pd[sm[ab.to]]?.level || 1);
+          if (targetVal >= 320) { // Cattura Cavalli, Alfieri o superiori immediatamente via magia
+            return { type: 'ability', from: ab.from, to: ab.to };
+          }
         }
       }
     }
-    return best;
-  },
 
-  // Flusso decisionale: Evoluzione Strategica ↓ Abilità ↓ Stockfish ↓ Fallback
-  async chooseAction(game, pd, sm, pts, color) {
-    // 1. Evoluzione (accumula energia prima di evolvere)
-    const evoSq = this.shouldEvolve(game, pd, sm, pts, color);
+    // ─────────────────────────────────────────────────────────────────────────
+    // FASE 2: PREVENZIONE/DIFESA CONTRO L'ENERGIA DELL'UMANO (Previsione dei Turni)
+    // ─────────────────────────────────────────────────────────────────────────
+    // L'IA analizza se l'umano ha abbastanza energia per evolversi e devastare le sue linee
+    if (pts[oppColor] >= 2) {
+      const humanThreats = this.getDangerousAbilityTargets(game, pd, sm, oppColor);
+      // Trova la minaccia più grave creata dalle possibili mosse speciali dell'umano
+      const criticalThreat = humanThreats.reduce((max, t) => t.value > max.value ? t : max, { value: 0 });
+      
+      if (criticalThreat.value >= 500) { // Se la Regina o la Torre dell'IA sono in pericolo di "Evoluzione + Abilità"
+        const threatenedSquare = criticalThreat.to;
+        const legals = game.moves({ verbose: true });
+        
+        // Cerca una mossa di fuga o una cattura difensiva che tolga il pezzo dalla casella mirata
+        const escapeMove = legals.find(m => m.from === threatenedSquare || m.to === criticalThreat.from);
+        if (escapeMove) {
+          return { type: 'move', from: escapeMove.from, to: escapeMove.to }; // Schiva la trappola RPG!
+        }
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FASE 3: INVESTIMENTO ENERGETICO PASSIVO
+    // ─────────────────────────────────────────────────────────────────────────
+    // Se non ci sono emergenze o attacchi immediati, evolvi per pura crescita posizionale
     if (evoSq) {
       const piece = pd[sm[evoSq]];
       if (piece.level === 1 && pts[color] >= 4) return { type: 'evolve', sq: evoSq };
       if (piece.level === 2 && pts[color] >= 6) return { type: 'evolve', sq: evoSq };
     }
 
-    // 2. Abilità speciale forte
-    const abilMove = this.findBestAbility(game, pd, sm, color);
-    if (abilMove) return { type: 'ability', from: abilMove.from, to: abilMove.to };
-
-    // 3. Mossa scacchistica via Stockfish
+    // ─────────────────────────────────────────────────────────────────────────
+    // FASE 4: STRATEGIA DI BASE (STOCKFISH) E FALLBACK GREEDY
+    // ─────────────────────────────────────────────────────────────────────────
     const sfMove = await sfGetMove(game.fen(), PERSONALITIES.stockfish.depth);
     if (sfMove) return { type: 'move', ...sfMove };
 
-    // 4. Fallback (calcola il vantaggio materiale RPG)
+    // Fallback cosciente dei veri pesi RPG dei pezzi
     const legals = game.moves({ verbose: true });
     if (!legals.length) return null;
-    
     const best = legals.reduce((b, m) => {
       let v = 0;
       if (m.captured) {
-        // Applica il valore corretto anche nel fallback
         const capSq = m.flags.includes('e') ? m.to[0] + m.from[1] : m.to;
         const capData = pd[sm[capSq]];
         v = getRpgValue(m.captured, capData ? capData.level : 1);
       }
       return v > b.v ? { m, v } : b;
     }, { m: legals[0], v: -1 });
-    
+
     return { type: 'move', from: best.m.from, to: best.m.to };
   }
 };
 
-// ── HELPERS ──────────────────────────────────────────────────────────────────
+// ── HELPERS LOGICI STRUTTURALI ───────────────────────────────────────────────
 function buildInitialState(g){
   const pd={},sm={};
   g.board().forEach((row,r)=>row.forEach((cell,c)=>{
@@ -227,7 +290,7 @@ function execAbilityMove(game,from,to){
   return{newGame:ng,capturedPiece:captured};
 }
 
-// ── APP ───────────────────────────────────────────────────────────────────────
+// ── CORE COMPONENT REACT ──────────────────────────────────────────────────────
 function App(){
   const[game,setGame]=useState(()=>new Chess());
   const[pd,setPd]=useState({});
@@ -238,7 +301,6 @@ function App(){
   const[lvlUpSq,setLvlUpSq]=useState(null);
   const[pts,setPts]=useState({w:0,b:0});
   
-  // Default: Umano vs Stockfish RPG
   const[whiteAI,setWhiteAI]=useState('human');
   const[blackAI,setBlackAI]=useState('stockfish');
   
@@ -290,7 +352,6 @@ function App(){
     setSel(null);setStdMoves([]);setAbilMoves([]);
   },[game,pts,sm,pd]);
 
-  // ── CLICK UMANO ──
   const handleClick=useCallback(sq=>{
     const turn=game.turn();
     const isHuman=turn==='w'?!PERSONALITIES[whiteAI].ai:!PERSONALITIES[blackAI].ai;
@@ -305,7 +366,6 @@ function App(){
     if(piece?.color===turn){setSel(sq);const{std,abil}=getMovesFor(sq);setStdMoves(std);setAbilMoves(abil);}
   },[game,sel,stdMoves,abilMoves,getMovesFor,makeMove,whiteAI,blackAI,thinking]);
 
-  // ── AI TURN ──
   useEffect(()=>{
     const turn=game.turn();
     const aiType=turn==='w'?whiteAI:blackAI;
@@ -328,14 +388,12 @@ function App(){
     return()=>clearTimeout(aiTimer.current);
   },[game,pd,sm,pts,whiteAI,blackAI,makeMove,doEvolve]);
 
-  // ── RENDER ──
   const board=game.board();const turn=game.turn();
   const selId=sel?sm[sel]:null;const selData=selId?pd[selId]:null;
   const selPiece=sel?game.get(sel):null;
   const evo=selPiece?EVOLUTIONS[selPiece.type]:null;
   const lvlInfo=evo&&selData?evo.levels[selData.level-1]:null;
   const curPts=pts[turn];
-  // Track visuale scalata fino a 6 (il massimo richiesto per un'evoluzione IA)
   const chargePct=Math.min(curPts/6*100,100); 
   const canEvolve=!!(evo&&selData&&selData.level<3&&selPiece?.color===turn&&curPts>=2);
   const showEvolveBtn=!!(evo&&selData&&selData.level<3);
@@ -380,7 +438,7 @@ function App(){
         <div className="board">
           {board.map((row,r)=>row.map((cell,c)=>{
             const sq='abcdefgh'[c]+(8-r);
-            const isLight=(r+c)%2===0; /* Correzione applicata qui */
+            const isLight=(r+c)%2===0;
             const isSel=sel===sq;
             const isStd=stdMoves.some(m=>m.to===sq);const isAbil=abilMoves.some(m=>m.to===sq);
             const isAny=isStd||isAbil;const id=sm[sq];const data=id?pd[id]:null;
@@ -423,8 +481,8 @@ function App(){
       <div className="panel">
         <div>
           <div className="charge-row">
-            <span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· Pensa...':''}</span>
-            <span style={{color:curPts>=2?'#22c55e':'#38bdf8'}}>{curPts} ⚡{curPts>=2?' • OK':''}</span>
+            <span>🔋 {turn==='w'?'BIANCO':'NERO'} {isAITurn&&thinking?'· Calcolo RPG...':''}</span>
+            <span style={{color:curPts>=2?'#22c55e':'#38bdf8'}}>{curPts} ⚡{curPts>=2?' • PRONTO':''}</span>
           </div>
           <div className="charge-track">
             <div style={{width:`${chargePct}%`,height:'100%',background:curPts>=2?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'3px'}}/>

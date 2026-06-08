@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Omega V4.1 Learning</title>
+<title>Chess RPG - Omega V4.1 Pro WakeLock</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -69,8 +69,6 @@ const ICONS={
 const LEARN={
   load:()=>{try{return JSON.parse(localStorage.getItem('chessRPG_brain')||'{}')}catch(e){return{}}},
   save:(brain)=>{try{localStorage.setItem('chessRPG_brain',JSON.stringify(brain))}catch(e){console.warn('Storage pieno')}},
-  
-  // Registra una mossa dopo la partita
   reward:(fen,move,win)=>{
     const brain=LEARN.load();
     const key=fen.split(' ').slice(0,2).join('_')+'_'+move;
@@ -79,17 +77,13 @@ const LEARN={
     if(win)brain[key].w++;
     LEARN.save(brain);
   },
-  
-  // Bonus apprendimento (-1 a +1)
   getBonus:(fen,move)=>{
     const brain=LEARN.load();
     const key=fen.split(' ').slice(0,2).join('_')+'_'+move;
     const data=brain[key];
-    if(!data||data.g<3)return 0; // Minimo 3 partite per fidarsi
-    return(data.w/data.g-0.5)*2; // Winrate 100%=+1, 0%=-1, 50%=0
+    if(!data||data.g<3)return 0;
+    return(data.w/data.g-0.5)*2;
   },
-  
-  // Statistiche
   getStats:()=>{
     const brain=LEARN.load();
     const keys=Object.keys(brain);
@@ -198,7 +192,7 @@ const OMEGA_V4={
     for(let i=0;i<depth;i++){if(s.game.game_over())break;const acts=generateAllActions(s.game,s.pd,s.sm,s.pts,cur);if(!acts.length)break;const caps=acts.filter(a=>a.type!=='evolve'&&s.game.get(a.to));const chosen=caps.length&&Math.random()<0.55?caps[Math.floor(Math.random()*caps.length)]:acts[Math.floor(Math.random()*acts.length)];const n=applyAction(s.game,s.pd,s.sm,s.pts,chosen);if(!n)continue;s=n;cur=cur==='w'?'b':'w';}
     if(s.game.in_checkmate())return s.game.turn()===color?-100:100;
     if(s.game.in_draw())return 0;
-    return evalRpg(s.game,s.pd,s.sm,s.pts,color)/10;
+    return evalRpg(s.game,s.pd,s.sm,state.pts,color)/10;
   },
 
   async chooseAction(game,pd,sm,pts,color){
@@ -222,7 +216,6 @@ const OMEGA_V4={
       let mcSum=0;for(let j=0;j<25;j++)mcSum+=this.monteCarloRollout(next,color,6);
       const mcScore=mcSum/25;
 
-      // 🧠 BONUS APPRENDIMENTO
       const moveKey=action.type==='evolve'?action.sq+'_evolve':(action.from||'')+(action.to||'');
       const learnBonus=LEARN.getBonus(currentFen,moveKey);
 
@@ -241,34 +234,31 @@ const OMEGA_V4={
 // ═══════════════════════════════════════════════════════════
 async function trainAI(games=100,onProgress=()=>{}){
   let gameCount=0,wins={w:0,b:0};
-  
+
   for(let i=0;i<games;i++){
     const g=new Chess();
     const state={game:g,...buildState(g)};
     const history=[];
-    
+
     for(let moveCount=0;moveCount<200;moveCount++){
       if(state.game.game_over())break;
       const action=await OMEGA_V4.chooseAction(state.game,state.pd,state.sm,state.pts,state.game.turn());
       if(!action)break;
-      
-      // Registra stato prima della mossa
+
       history.push({
         fen:state.game.fen(),
         move:action.type==='evolve'?action.sq+'_evolve':(action.from||'')+(action.to||''),
         color:state.game.turn()
       });
-      
+
       const next=applyAction(state.game,state.pd,state.sm,state.pts,action);
       if(!next)break;
       Object.assign(state,next);
     }
-    
-    // Determina vincitore
+
     let winner=null;
     if(state.game.in_checkmate())winner=state.game.turn()==='w'?'b':'w';
-    
-    // Premia tutte le mosse del vincitore
+
     if(winner){
       wins[winner]++;
       for(const h of history){
@@ -276,11 +266,11 @@ async function trainAI(games=100,onProgress=()=>{}){
         else LEARN.reward(h.fen,h.move,false);
       }
     }
-    
+
     gameCount++;
     onProgress({current:gameCount,total:games,wins});
   }
-  
+
   return{total:gameCount,wins};
 }
 
@@ -301,9 +291,19 @@ function App(){
   const[brainStats,setBrainStats]=useState(LEARN.getStats());
   const timer=useRef(null);const gen=useRef(0);
   const lastFenRef=useRef(null);
+  const wakeLockRef=useRef(null);
 
   useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm);lastFenRef.current=game.fen();},[]);
   useEffect(()=>{setFlip(!PERSONALITIES[bAI]?.ai&&PERSONALITIES[wAI]?.ai);},[wAI,bAI]);
+
+  // Hook per il cleanup all'unmount del componente
+  useEffect(() => {
+    return () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+      }
+    };
+  }, []);
 
   const getMoves=useCallback(sq=>{const p=game.get(sq);if(!p)return{std:[],abil:[]};const std=game.moves({square:sq,verbose:true});const id=sm[sq],d=pd[id],evo=EVOLUTIONS[p.type];let abil=evo&&d?evo.getAbilityMoves(sq,game,d.level,p.color):[];if(['r','b','q'].includes(p.type))abil=[...abil,...getGhostExtendedMoves(game,sq,sm,pd)];return{std,abil};},[game,sm,pd]);
 
@@ -311,14 +311,11 @@ function App(){
     const turn=game.turn();
     const action={type:isAbil?'ability':'move',from,to,promotion:'q'};
     const next=applyAction(game,pd,sm,pts,action);if(!next)return;
-    
-    // 🧠 Apprendimento dopo la partita (viene fatto quando game_over)
+
     lastFenRef.current=game.fen();
-    
     setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);
     setSel(null);setStd([]);setAbl([]);setLast({from,to});
-    
-    // Se la partita è finita, premia le mosse
+
     if(next.game.game_over()){
       const winner=next.game.in_checkmate()?(turn==='w'?'b':'w'):null;
       if(winner&&lastFenRef.current){
@@ -343,12 +340,39 @@ function App(){
 
   useEffect(()=>{const turn=game.turn(),ai=turn==='w'?wAI:bAI;if(!PERSONALITIES[ai]?.ai||game.game_over()||training)return;gen.current++;const myGen=gen.current;clearTimeout(timer.current);timer.current=setTimeout(async()=>{setThink(true);setDebug('🎲 RPG + 🧠 Learn...');const t0=Date.now();lastFenRef.current=game.fen();const action=await OMEGA_V4.chooseAction(game,pd,sm,pts,turn);const elapsed=((Date.now()-t0)/1000).toFixed(1)+'s';setDebug(`✅ ${action?.label||'?'} | ${elapsed}`);if(gen.current!==myGen){setThink(false);return;}setThink(false);if(!action)return;if(action.type==='evolve')evolve(action.sq);else move(action.from,action.to,action.type==='ability');},300+Math.random()*200);return()=>clearTimeout(timer.current);},[game,pd,sm,pts,wAI,bAI,move,evolve,training]);
 
+  // Funzione startTraining ottimizzata con listener di rilascio e feedback visivo
   const startTraining=async()=>{
     setTraining(true);
     setDebug('🎮 Auto-training...');
+    
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        setDebug('🔒 Anti-Standby Attivo · Training...');
+
+        wakeLockRef.current.addEventListener('release', () => {
+          console.log('Wake Lock rilasciato manualmente');
+          setDebug('⚠️ Schermo sbloccato, il training continua...');
+        });
+
+      } catch (err) {
+        console.warn('Impossibile bloccare lo standby dello schermo:', err);
+      }
+    }
+
     await trainAI(50,(progress)=>{
       setTrainProgress(`${progress.current}/${progress.total} | W:${progress.wins.w} B:${progress.wins.b}`);
     });
+
+    if (wakeLockRef.current) {
+      try {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
     setBrainStats(LEARN.getStats());
     setTraining(false);
     setDebug('✅ Training completato!');

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Omega Supreme</title>
+<title>Chess RPG - Omega Supreme V2</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -21,7 +21,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
 .energy-badge{flex-shrink:0;width:58px;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900}
 .board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
-.board{--side:min(calc(100vw - 16px),calc(100vh - 310px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
+.board{--side:min(calc(100vw - 16px),calc(100vh - 280px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
 .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,300px)/8*.72);cursor:pointer;aspect-ratio:1/1}
 .cell.light{background:#f0d9b5}.cell.dark{background:#b58863}
 .cell.last-from.light,.cell.last-to.light{background:#f6f669}
@@ -36,15 +36,15 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 @keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 12px #a855f7)}50%{filter:drop-shadow(0 0 22px #c084fc) drop-shadow(0 0 36px #a855f7)}}
 .lm{position:absolute;top:2px;right:3px;font-size:9px;font-weight:800;pointer-events:none;z-index:3}
 .lm2{color:#eab308;text-shadow:0 0 5px #eab308}.lm3{color:#a855f7;text-shadow:0 0 8px #a855f7}
-.panel{flex-shrink:0;height:88px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:8px 12px;display:flex;flex-direction:column;gap:7px}
-.charge-row{display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:#94a3b8}
-.charge-track{width:100%;height:5px;background:#1e293b;border-radius:3px;overflow:hidden;margin-top:4px}
-.panel-bottom{display:flex;align-items:center;gap:8px;flex:1}
-.piece-label{flex:1;font-size:12px;min-width:0}
-.evolve-btn{flex-shrink:0;padding:6px 12px;border:none;border-radius:7px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap}
-.turn-pill{flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;background:#1e293b}
+.panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:5px}
+.charge-row{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#94a3b8}
+.charge-track{width:100%;height:4px;background:#1e293b;border-radius:2px;overflow:hidden;margin-top:2px}
+.panel-bottom{display:flex;align-items:center;gap:6px;flex:1}
+.piece-label{flex:1;font-size:11px;min-width:0}
+.evolve-btn{flex-shrink:0;padding:5px 10px;border:none;border-radius:6px;font-weight:800;font-size:11px;cursor:pointer;white-space:nowrap}
+.turn-pill{flex-shrink:0;padding:3px 8px;border-radius:16px;font-size:11px;font-weight:700;background:#1e293b}
 @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.8) rotate(10deg)}100%{transform:scale(1)}}
-.stats-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(6,9,19,.95);padding:6px 12px;font-size:10px;color:#64748b;display:flex;justify-content:space-around;border-top:1px solid #1e293b;z-index:50}
+.debug-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(6,9,19,.95);padding:4px 10px;font-size:9px;color:#64748b;display:flex;justify-content:space-between;border-top:1px solid #1e293b;z-index:50}
 </style>
 </head>
 <body>
@@ -58,6 +58,9 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
+// ═══════════════════════════════════════════════════════════════
+//  GAME ENGINE (Condiviso tra UI e AI)
+// ═══════════════════════════════════════════════════════════════
 function moveLeavesKingInCheck(fen,from,to,piece){
   const g=new Chess(fen);g.remove(from);g.put(piece,to);return g.in_check();
 }
@@ -92,26 +95,30 @@ function getGhostExtendedMoves(game,sq,sm,pd){
   return extended.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,piece));
 }
 
+function execAbilityMove(game,from,to){
+  const piece=game.get(from),captured=game.get(to)||null;
+  const g=new Chess(game.fen());g.remove(from);if(captured)g.remove(to);g.put(piece,to);
+  const parts=g.fen().split(' '),wasW=parts[1]==='w';
+  parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';
+  const ng=new Chess();ng.load(parts.join(' '));
+  return{newGame:ng,capturedPiece:captured};
+}
+
+function applyEvolve(pd,id){const d=pd[id];if(!d||d.level>=3)return null;return{...pd,[id]:{...d,level:d.level+1}};}
+
+// ═══════════════════════════════════════════════════════════════
+//  EVOLUTIONS
+// ═══════════════════════════════════════════════════════════════
 const EVOLUTIONS={
   p:{
     levels:[
       {name:'Pedone',color:'#64748b',desc:'Standard'},
-      {name:'Assaltatore',color:'#eab308',desc:'Avanza/cattura frontale x3'},
-      {name:'Fantasma',color:'#a855f7',desc:'Attraversabile da alleati R/B/Q'},
+      {name:'Assaltatore',color:'#eab308',desc:'Triangolo frontale'},
+      {name:'Fantasma',color:'#a855f7',desc:'Attraversabile da R/B/Q alleati'},
     ],
     getAbilityMoves(sq,game,level,color){
       const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),dir=color==='w'?1:-1;
-      if(level>=2){
-        const r=rank+dir;
-        if(r>=1&&r<=8){
-          const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);
-          if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});
-          for(const df of[-1,1]){
-            const f=file+df;
-            if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false});}
-          }
-        }
-      }
+      if(level>=2){const r=rank+dir;if(r>=1&&r<=8){const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});for(const df of[-1,1]){const f=file+df;if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false});}}}}
       return moves.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,game.get(sq)));
     }
   },
@@ -123,226 +130,292 @@ const EVOLUTIONS={
 };
 
 // ═══════════════════════════════════════════════════════════════
-//  STOCKFISH — MULTI-LIVELLO
+//  VALUTAZIONE RPG (Condivisa)
 // ═══════════════════════════════════════════════════════════════
-let sfWorker=null,sfBusy=false;
+const BASE_VALS={p:1,n:3.2,b:3.3,r:5,q:9,k:200};
+function rpgVal(type,level){const b=BASE_VALS[type]||0;if(type==='p'){if(level===2)return b+0.6;if(level===3)return b+1.0;}return b;}
+
+function evalRpg(game,pd,sm,pts,color){
+  const opp=color==='w'?'b':'w';let score=0;
+  for(const d of Object.values(pd)){if(!d)continue;score+=d.color===color?rpgVal(d.type,d.level):-rpgVal(d.type,d.level);}
+  score+=(pts[color]-pts[opp])*0.35;
+  // Sinergia fantasma
+  for(const[sq,id]of Object.entries(sm)){
+    const d=pd[id];if(!d||d.color!==color||d.type!=='p'||d.level<3)continue;
+    const file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),behindDir=color==='w'?-1:1;
+    for(let r=rank+behindDir;r>=1&&r<=8;r+=behindDir){const bSq=String.fromCharCode(97+file)+r,p=game.get(bSq);if(p){if(p.color===color&&['r','q'].includes(p.type))score+=0.55;break;}}
+  }
+  // Controllo centro e sicurezza re (semplificato)
+  const kingSq=Object.entries(sm).find(([sq,id])=>pd[id]?.type==='k'&&pd[id]?.color===color)?.[0];
+  if(kingSq){const kf=kingSq.charCodeAt(0)-97,kr=parseInt(kingSq[1]);score+=(kr>=2&&kr<=7?0.1:-0.2);}
+  return score;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  GENERATORE MOSSE UNIFICATO
+//  Restituisce TUTTE le azioni possibili: mosse, abilità, evoluzioni
+// ═══════════════════════════════════════════════════════════════
+function generateAllActions(game,pd,sm,pts,color){
+  const actions=[];
+  
+  // 1. Mosse standard
+  for(const m of game.moves({verbose:true})){
+    actions.push({type:'move',from:m.from,to:m.to,promotion:m.promotion||'q'});
+  }
+  
+  // 2. Mosse abilità (incluse ghost-extended)
+  for(const[sq,id]of Object.entries(sm)){
+    const piece=game.get(sq);if(!piece||piece.color!==color)continue;
+    const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
+    for(const ab of evo.getAbilityMoves(sq,game,d.level,color)){
+      actions.push({type:'ability',from:ab.from,to:ab.to});
+    }
+    if(['r','b','q'].includes(piece.type)){
+      for(const gm of getGhostExtendedMoves(game,sq,sm,pd)){
+        actions.push({type:'ability',from:gm.from,to:gm.to});
+      }
+    }
+  }
+  
+  // 3. Evoluzioni (solo pedoni, costo 2 energia)
+  if(pts[color]>=2){
+    for(const[sq,id]of Object.entries(sm)){
+      const d=pd[id];if(!d||d.color!==color||d.type!=='p'||d.level>=3)continue;
+      actions.push({type:'evolve',sq,id});
+    }
+  }
+  
+  return actions;
+}
+
+function applyAction(game,pd,sm,pts,action){
+  const color=game.turn();
+  if(action.type==='evolve'){
+    const npd=applyEvolve(pd,action.id);
+    const npts={...pts,[color]:pts[color]-2};
+    return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:npts}; // stesso game, stesso turno
+  }
+  
+  let ng,cap=null;
+  if(action.type==='ability'){
+    const r=execAbilityMove(game,action.from,action.to);
+    ng=r.newGame;cap=r.capturedPiece;
+  }else{
+    ng=new Chess(game.fen());
+    const mv=ng.move({from:action.from,to:action.to,promotion:action.promotion||'q'});
+    if(!mv)return null;
+    if(mv.captured)cap={type:mv.captured};
+    if(mv.flags?.includes('e'))cap={type:'p',_sq:action.to[0]+action.from[1]};
+  }
+  
+  const mid=sm[action.from],nsm={...sm},npd={...pd};
+  if(cap){const cs=cap._sq||action.to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs];}}
+  const np=ng.get(action.to);
+  if(np&&mid&&npd[mid]&&np.type!==npd[mid].type){npd[mid]={...npd[mid],type:np.type,level:1};}
+  delete nsm[action.from];nsm[action.to]=mid;
+  
+  let p=1;if(cap)p++;if(ng.in_check())p++;if(np&&mid&&npd[mid]&&np.type!==npd[mid].type)p+=2;
+  const npts={...pts,[color]:pts[color]+p};
+  
+  return{game:ng,pd:npd,sm:nsm,pts:npts};
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  STOCKFISH (MultiPV 20, Depth 18)
+// ═══════════════════════════════════════════════════════════════
+let sfWorker=null;
 try{
   sfWorker=new Worker(URL.createObjectURL(new Blob(
     [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');`],
     {type:'application/javascript'}
   )));
   sfWorker.postMessage('setoption name Hash value 256');
-  sfWorker.postMessage('setoption name Skill Level value 20');
-  sfWorker.postMessage('setoption name MultiPV value 3');
-  console.log('✅ Stockfish SUPREME ready (Hash 256MB, Skill 20, MultiPV 3)');
+  sfWorker.postMessage('setoption name MultiPV value 20');
+  console.log('✅ Stockfish ready (MultiPV 20, Hash 256)');
 }catch(e){console.warn('⚠️ Stockfish offline');}
 
-// Analisi tattica profonda: restituisce le 3 migliori mosse
-function sfDeepEval(fen,movetime){
-  if(!sfWorker||sfBusy)return Promise.resolve(null);
-  sfBusy=true;
+function sfGetAllMoves(fen,timeMs=5000){
   return new Promise(resolve=>{
     const moves=[];
-    const t=setTimeout(()=>{sfBusy=false;sfWorker.removeEventListener('message',h);resolve(moves.length?moves:null);},movetime+2000);
+    let resolved=false;
+    const t=setTimeout(()=>{if(!resolved){resolved=true;resolve(moves);}},timeMs+1500);
     const h=e=>{
-      if(typeof e.data!=='string')return;
+      if(typeof e.data!=='string'||resolved)return;
       const msg=e.data;
-      if(msg.startsWith('bestmove')){
-        clearTimeout(t);sfBusy=false;sfWorker.removeEventListener('message',h);
-        const mv=msg.split(' ')[1];
-        if(mv&&mv!=='(none)'&&!moves.find(m=>m.from===mv.slice(0,2)&&m.to===mv.slice(2,4))){
-          moves.push({from:mv.slice(0,2),to:mv.slice(2,4),promotion:mv[4]||null,score:0});
-        }
-        resolve(moves.length?moves:null);
-      }
-      // Intercetta le linee MultiPV
-      if(msg.includes('multipv')){
-        const pvMatch=msg.match(/multipv (\d+).*score cp (-?\d+)/);
-        const mateMatch=msg.match(/multipv (\d+).*score mate (-?\d+)/);
-        const moveMatch=msg.match(/pv ([a-h][1-8][a-h][1-8])/);
-        if(moveMatch){
-          const pv=parseInt(pvMatch?pvMatch[1]:mateMatch?mateMatch[1]:1);
-          let score=0;
-          if(pvMatch)score=parseInt(pvMatch[2])/100;
-          else if(mateMatch)score=parseInt(mateMatch[2])>0?100:-100;
-          const from=moveMatch[1].slice(0,2),to=moveMatch[1].slice(2,4);
-          if(!moves.find(m=>m.from===from&&m.to===to)){
-            moves.push({from,to,promotion:moveMatch[1][4]||null,score});
-          }
+      if(msg.startsWith('bestmove')){clearTimeout(t);resolved=true;resolve(moves);return;}
+      const mm=msg.match(/multipv (\d+).*pv ([a-h][1-8][a-h][1-8])/);
+      const sm=msg.match(/multipv (\d+).*score cp (-?\d+)/);
+      const mm2=msg.match(/multipv (\d+).*score mate (-?\d+)/);
+      if(mm){
+        const pv=parseInt(mm[1]),mv=mm[2];
+        let score=0;
+        if(sm)score=parseInt(sm[2])/100;
+        else if(mm2)score=parseInt(mm2[2])>0?100:-100;
+        if(!moves.find(m=>m.from===mv.slice(0,2)&&m.to===mv.slice(2,4))){
+          moves.push({from:mv.slice(0,2),to:mv.slice(2,4),promotion:mv[4]||null,score,multipv:pv});
         }
       }
     };
     sfWorker.addEventListener('message',h);
     sfWorker.postMessage('ucinewgame');
     sfWorker.postMessage('position fen '+fen);
-    sfWorker.postMessage('go movetime '+movetime);
+    sfWorker.postMessage('go depth 18');
   });
 }
 
-const BASE_VALS={p:1,n:3.2,b:3.3,r:5,q:9,k:200};
-function rpgVal(type,level){
-  const base=BASE_VALS[type]||0;
-  if(type==='p'){
-    if(level===2)return base+0.6;
-    if(level===3)return base+1.0;
-  }
-  return base;
-}
-
 // ═══════════════════════════════════════════════════════════════
-//  OMEGA SUPREME — Motore potenziato
+//  OMEGA SUPREME V2 — Ricerca ad albero unificata
 // ═══════════════════════════════════════════════════════════════
-const OMEGA_SUPREME={
-  // Parametri configurabili
-  THINK_TIME: 4000,       // millisecondi per mossa principale
-  ABILITY_THINK: 1200,    // millisecondi per valutare abilità
-  WT: 0.55, WS: 0.45,     // Pesi fusione (più strategico!)
+const OMEGA_V2={
+  // Parametri
+  SF_TIME: 5000,
+  RPG_PLY: 3,
+  MONTE_CARLO_SIMS: 50,
   
-  ghostSynergy(game,pd,sm,color){
-    let bonus=0;
-    for(const[sq,id]of Object.entries(sm)){
-      const d=pd[id];
-      if(!d||d.color!==color||d.type!=='p'||d.level<3)continue;
-      const file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),behindDir=color==='w'?-1:1;
-      for(let r=rank+behindDir;r>=1&&r<=8;r+=behindDir){
-        const bSq=String.fromCharCode(97+file)+r,p=game.get(bSq);
-        if(p){if(p.color===color&&['r','q'].includes(p.type))bonus+=0.55;break;}
-      }
-      for(const[df,dr]of[[1,behindDir],[-1,behindDir]]){
-        let f=file+df,r=rank+dr;
-        while(f>=0&&f<=7&&r>=1&&r<=8){
-          const dSq=String.fromCharCode(97+f)+r,p=game.get(dSq);
-          if(p){if(p.color===color&&['b','q'].includes(p.type))bonus+=0.4;break;}
-          f+=df;r+=dr;
-        }
-      }
+  // Pesi fusione finale
+  W_SF: 0.40,
+  W_RPG: 0.30,
+  W_MC: 0.30,
+  
+  // Ricerca RPG ad albero (depth-limited, senza Stockfish)
+  rpgSearch(state,depth,color){
+    if(depth<=0||state.game.game_over()){
+      return evalRpg(state.game,state.pd,state.sm,state.pts,color);
     }
-    return bonus;
-  },
-
-  evalRpg(game,pd,sm,pts,color){
-    const opp=color==='w'?'b':'w';let score=0;
-    for(const d of Object.values(pd)){if(!d)continue;score+=d.color===color?rpgVal(d.type,d.level):-rpgVal(d.type,d.level);}
-    score+=(pts[color]-pts[opp])*0.35;
-    score+=this.ghostSynergy(game,pd,sm,color)-this.ghostSynergy(game,pd,sm,opp);
-    return score;
-  },
-
-  findEvoTarget(game,pd,sm,pts,color){
-    if(pts[color]<2)return null;
-    let best=null,bs=-999;
-    for(const[sq,id]of Object.entries(sm)){
-      const d=pd[id];if(!d||d.color!==color||d.type!=='p'||d.level>=3)continue;
-      const rank=parseInt(sq[1]),adv=color==='w'?rank:9-rank;
-      let score=adv*15+d.level*20;
-      if(d.level===2){const file=sq.charCodeAt(0)-97,behindDir=color==='w'?-1:1;
-        for(let r=rank+behindDir;r>=1&&r<=8;r+=behindDir){const bSq=String.fromCharCode(97+file)+r,p=game.get(bSq);
-          if(p&&p.color===color&&['r','q'].includes(p.type)){score+=50;break;}}
+    
+    const opp=color==='w'?'b':'w';
+    const actions=generateAllActions(state.game,state.pd,state.sm,state.pts,state.game.turn());
+    
+    if(state.game.turn()===color){
+      // Massimizza
+      let best=-Infinity;
+      for(const action of actions.slice(0,30)){ // Limita a 30 azioni per performance
+        const next=applyAction(state.game,state.pd,state.sm,state.pts,action);
+        if(!next)continue;
+        const val=this.rpgSearch(next,depth-1,color);
+        if(val>best)best=val;
       }
-      if(score>bs){bs=score;best={sq,id,d};}
+      return best;
+    }else{
+      // Minimizza (avversario)
+      let best=Infinity;
+      // Per l'avversario usiamo solo mosse standard per velocità
+      const stdMoves=state.game.moves({verbose:true}).slice(0,15);
+      for(const m of stdMoves){
+        const next=applyAction(state.game,state.pd,state.sm,state.pts,{type:'move',from:m.from,to:m.to});
+        if(!next)continue;
+        const val=this.rpgSearch(next,depth-1,color);
+        if(val<best)best=val;
+      }
+      return best;
     }
-    return best;
   },
-
-  collectAllAbilities(game,pd,sm,color){
-    const list=[];
-    for(const[sq,id]of Object.entries(sm)){
-      const piece=game.get(sq);if(!piece||piece.color!==color)continue;
-      const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
-      for(const ab of evo.getAbilityMoves(sq,game,d.level,color)){
-        const target=game.get(ab.to);if(!target)continue;
-        const tId=sm[ab.to],capV=rpgVal(target.type,tId?pd[tId]?.level||1:1);
-        list.push({from:ab.from,to:ab.to,capV,tId});
-      }
-      if(['r','b','q'].includes(piece.type)){
-        for(const gm of getGhostExtendedMoves(game,sq,sm,pd)){
-          const target=game.get(gm.to);if(!target)continue;
-          const tId=sm[gm.to],capV=rpgVal(target.type,tId?pd[tId]?.level||1:1);
-          list.push({from:gm.from,to:gm.to,capV:capV+0.7,tId});
-        }
-      }
+  
+  // Monte Carlo veloce
+  monteCarloRollout(state,color,numMoves=8){
+    let s={game:new Chess(state.game.fen()),pd:{...state.pd},sm:{...state.sm},pts:{...state.pts}};
+    let currentColor=state.game.turn();
+    
+    for(let i=0;i<numMoves;i++){
+      if(s.game.game_over())break;
+      const actions=generateAllActions(s.game,s.pd,s.sm,s.pts,currentColor);
+      if(!actions.length)break;
+      
+      // Azione casuale pesata (preferisci catture)
+      const captures=actions.filter(a=>a.type!=='evolve'&&s.game.get(a.to));
+      const chosen=captures.length&&Math.random()<0.6?captures[Math.floor(Math.random()*captures.length)]:actions[Math.floor(Math.random()*actions.length)];
+      
+      const next=applyAction(s.game,s.pd,s.sm,s.pts,chosen);
+      if(!next)continue;
+      s=next;
+      currentColor=currentColor==='w'?'b':'w';
     }
-    return list.sort((a,b)=>b.capV-a.capV);
+    
+    // Valuta lo stato finale
+    if(s.game.in_checkmate())return s.game.turn()===color?-100:100;
+    if(s.game.in_draw())return 0;
+    return evalRpg(s.game,s.pd,s.sm,s.pts,color)/10; // Normalizza
   },
-
-  simAbilityGame(game,from,to){
-    const piece=game.get(from),g=new Chess(game.fen());
-    g.remove(from);if(g.get(to))g.remove(to);g.put(piece,to);
-    const parts=g.fen().split(' ');parts[1]=parts[1]==='w'?'b':'w';parts[3]='-';
-    const ng=new Chess();ng.load(parts.join(' '));return ng;
-  },
-
+  
+  // DECISIONE PRINCIPALE
   async chooseAction(game,pd,sm,pts,color){
-    const sfResults=await sfDeepEval(game.fen(),this.THINK_TIME);
-    if(!sfResults||!sfResults.length){
-      const legals=game.moves({verbose:true});if(!legals.length)return null;
-      const top=legals.reduce((b,m)=>{const tId=sm[m.to],v=m.captured?rpgVal(m.captured,pd[tId]?.level||1):0;return v>b.v?{m,v}:b;},{m:legals[0],v:-1});
-      return{type:'move',from:top.m.from,to:top.m.to};
-    }
-
-    const baseRpg=this.evalRpg(game,pd,sm,pts,color);
-    let best=null,bs=-Infinity;
-
-    // Valuta le 3 migliori mosse di Stockfish
-    for(const sf of sfResults.slice(0,3)){
-      const score=sf.score*this.WT+baseRpg*this.WS;
-      if(score>bs){bs=score;best={type:'move',from:sf.from,to:sf.to,promotion:sf.promotion,score,label:`SF(${sf.score.toFixed(2)})`};}
-    }
-
-    // Evoluzione?
-    if(pts[color]>=2){
-      const evo=this.findEvoTarget(game,pd,sm,pts,color);
-      if(evo){
-        const{sq,id,d}=evo,newLevel=d.level+1;
-        const pd2={...pd,[id]:{...d,level:newLevel}},pts2={...pts,[color]:pts[color]-2};
-        const evoRpg=this.evalRpg(game,pd2,sm,pts2,color);
-        const evoScore=(sfResults[0].score+0.1)*this.WT+evoRpg*this.WS;
-        const label=`Evo ${sq}→Lv${newLevel}${newLevel===3?' FANTASMA!':''}`;
-        if(evoScore>bs+0.08){bs=evoScore;best={type:'evolve',sq,score:evoScore,label};}
+    console.log('[OMEGA V2] Inizio analisi...');
+    
+    // 1. Stockfish MultiPV 20
+    const sfMoves=await sfGetAllMoves(game.fen(),this.SF_TIME);
+    console.log(`[OMEGA V2] Stockfish: ${sfMoves.length} mosse analizzate`);
+    
+    // 2. Genera TUTTE le azioni candidate
+    const allActions=generateAllActions(game,pd,sm,pts,color);
+    console.log(`[OMEGA V2] Azioni totali: ${allActions.length}`);
+    
+    // 3. Valuta ogni azione con ricerca RPG + Monte Carlo
+    const evaluated=[];
+    
+    for(const action of allActions){
+      const next=applyAction(game,pd,sm,pts,action);
+      if(!next)continue;
+      
+      // Score Stockfish (se l'azione è una mossa standard)
+      let sfScore=0;
+      if(action.type==='move'){
+        const sfMatch=sfMoves.find(m=>m.from===action.from&&m.to===action.to);
+        if(sfMatch)sfScore=sfMatch.score;
+        else sfScore=-2; // Penalità se Stockfish non la considera
+      }else{
+        sfScore=0; // Azioni non-standard: neutre per Stockfish
       }
-    }
-
-    // Abilità (solo le top 5 catture)
-    const abilities=this.collectAllAbilities(game,pd,sm,color);
-    const strong=abilities.filter(ab=>ab.capV>=2.5).slice(0,5);
-
-    for(const ab of strong){
-      const simGame=this.simAbilityGame(game,ab.from,ab.to);
-      const abSf=await sfDeepEval(simGame.fen(),this.ABILITY_THINK);
-      const abTactic=abSf&&abSf.length?-(abSf[0].score):0;
-      const pd_ab={...pd};if(ab.tId)delete pd_ab[ab.tId];
-      const abRpg=this.evalRpg(simGame,pd_ab,sm,pts,color);
-      const abScore=abTactic*this.WT+abRpg*this.WS;
-      if(abScore>bs+0.3){
-        bs=abScore;best={type:'ability',from:ab.from,to:ab.to,score:abScore,label:`⚡${ab.from}→${ab.to} (${ab.capV.toFixed(1)})`};
+      
+      // Score RPG (ricerca ad albero)
+      const rpgScore=this.rpgSearch(next,this.RPG_PLY,color);
+      
+      // Monte Carlo (media di N simulazioni)
+      let mcSum=0;
+      for(let i=0;i<this.MONTE_CARLO_SIMS;i++){
+        mcSum+=this.monteCarloRollout(next,color,6);
       }
+      const mcScore=mcSum/this.MONTE_CARLO_SIMS;
+      
+      // Fusione finale
+      const finalScore=sfScore*this.W_SF+rpgScore*this.W_RPG+mcScore*this.W_MC;
+      
+      evaluated.push({
+        ...action,
+        sfScore,rpgScore,mcScore,finalScore,
+        label:`${action.type} ${action.from||''}→${action.to||action.sq||''}`
+      });
     }
-
-    console.log(`[OMEGA SUPREME] ▶ ${best.label} = ${best.score.toFixed(2)}`);
+    
+    // Ordina per score finale
+    evaluated.sort((a,b)=>b.finalScore-a.finalScore);
+    
+    if(evaluated.length===0)return null;
+    
+    const best=evaluated[0];
+    console.log(`[OMEGA V2] ▶ ${best.label} SF:${best.sfScore.toFixed(2)} RPG:${best.rpgScore.toFixed(2)} MC:${best.mcScore.toFixed(2)} = ${best.finalScore.toFixed(2)}`);
+    
+    // Log delle top 5
+    evaluated.slice(0,5).forEach((a,i)=>{
+      console.log(`  ${i+1}. ${a.label} = ${a.finalScore.toFixed(2)}`);
+    });
+    
     return best;
   }
 };
 
 // ═══════════════════════════════════════════════════════════════
-//  APP
+//  APP (UI invariata, ma ora chiama OMEGA_V2)
 // ═══════════════════════════════════════════════════════════════
-const PERSONALITIES={
-  human:{name:'Umano',ai:false,color:'#94a3b8'},
-  omega:{name:'Omega Supreme',ai:true,color:'#eab308'}
-};
-
+const PERSONALITIES={human:{name:'Umano',ai:false,color:'#94a3b8'},omega:{name:'Omega V2',ai:true,color:'#eab308'}};
 function buildState(g){const pd={},sm={};g.board().forEach((row,r)=>row.forEach((cell,c)=>{if(cell){const sq='abcdefgh'[c]+(8-r);pd[`${cell.color}${cell.type}_${sq}`]={type:cell.type,color:cell.color,level:1};sm[sq]=`${cell.color}${cell.type}_${sq}`;}}));return{pd,sm};}
-function execAbilityMove(game,from,to){const piece=game.get(from),captured=game.get(to)||null,g=new Chess(game.fen());g.remove(from);if(captured)g.remove(to);g.put(piece,to);const parts=g.fen().split(' '),wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';const ng=new Chess();ng.load(parts.join(' '));return{newGame:ng,capturedPiece:captured};}
 
 function App(){
-  const[game,setGame]=useState(()=>new Chess());
-  const[pd,setPd]=useState({});const[sm,setSm]=useState({});
+  const[game,setGame]=useState(()=>new Chess());const[pd,setPd]=useState({});const[sm,setSm]=useState({});
   const[sel,setSel]=useState(null);const[stdM,setStd]=useState([]);const[abilM,setAbl]=useState([]);
   const[lvlUp,setLvlUp]=useState(null);const[pts,setPts]=useState({w:0,b:0});
   const[wAI,setWAI]=useState('human');const[bAI,setBAI]=useState('omega');
-  const[thinking,setThink]=useState(false);const[last,setLast]=useState(null);
-  const[flipped,setFlip]=useState(false);const[stats,setStats]=useState({games:0,wins:0,losses:0});
-  const timer=useRef(null);const gen=useRef(0);
+  const[thinking,setThink]=useState(false);const[last,setLast]=useState(null);const[flipped,setFlip]=useState(false);
+  const[debug,setDebug]=useState('');const timer=useRef(null);const gen=useRef(0);
 
   useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm);},[]);
   useEffect(()=>{setFlip(!PERSONALITIES[bAI]?.ai&&PERSONALITIES[wAI]?.ai);},[wAI,bAI]);
@@ -355,9 +428,9 @@ function App(){
 
   const click=useCallback(sq=>{const turn=game.turn(),isHuman=turn==='w'?!PERSONALITIES[wAI]?.ai:!PERSONALITIES[bAI]?.ai;if(!isHuman||thinking)return;const p=game.get(sq);if(sel){if(stdM.some(m=>m.to===sq)){move(sel,sq,false);return;}if(abilM.some(m=>m.to===sq)){move(sel,sq,true);return;}if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);return;}setSel(null);setStd([]);setAbl([]);return;}if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);}},[game,sel,stdM,abilM,getMoves,move,wAI,bAI,thinking]);
 
-  useEffect(()=>{const turn=game.turn(),ai=turn==='w'?wAI:bAI;if(!PERSONALITIES[ai]?.ai||game.game_over()){if(game.game_over()&&PERSONALITIES[ai]?.ai){const winner=game.in_checkmate()?(turn==='w'?'b':'w'):null;if(winner)setStats(s=>({...s,games:s.games+1,wins:winner==='w'?s.wins+1:s.wins,losses:winner==='b'?s.losses+1:s.losses}));}return;}gen.current++;const myGen=gen.current;clearTimeout(timer.current);timer.current=setTimeout(async()=>{setThink(true);const action=await OMEGA_SUPREME.chooseAction(game,pd,sm,pts,turn);if(gen.current!==myGen){setThink(false);return;}setThink(false);if(!action)return;if(action.type==='evolve')evolve(action.sq);else move(action.from,action.to,action.type==='ability');},500+Math.random()*300);return()=>clearTimeout(timer.current);},[game,pd,sm,pts,wAI,bAI,move,evolve]);
+  useEffect(()=>{const turn=game.turn(),ai=turn==='w'?wAI:bAI;if(!PERSONALITIES[ai]?.ai||game.game_over())return;gen.current++;const myGen=gen.current;clearTimeout(timer.current);timer.current=setTimeout(async()=>{setThink(true);setDebug('Analisi in corso...');const start=Date.now();const action=await OMEGA_V2.chooseAction(game,pd,sm,pts,turn);const elapsed=Date.now()-start;setDebug(`Decisione: ${(elapsed/1000).toFixed(1)}s`);if(gen.current!==myGen){setThink(false);return;}setThink(false);if(!action)return;if(action.type==='evolve')evolve(action.sq);else move(action.from,action.to,action.type==='ability');},300+Math.random()*200);return()=>clearTimeout(timer.current);},[game,pd,sm,pts,wAI,bAI,move,evolve]);
 
-  const reset=()=>{const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);gen.current++;if(sfWorker)sfWorker.postMessage('ucinewgame');};
+  const reset=()=>{const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);setDebug('');gen.current++;if(sfWorker)sfWorker.postMessage('ucinewgame');};
 
   const raw=game.board(),bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw,turn=game.turn(),sid=sel?sm[sel]:null,sd=sid?pd[sid]:null,sp=sel?game.get(sel):null,evo=sp?EVOLUTIONS[sp.type]:null,li=evo&&sd?evo.levels[sd.level-1]:null,cp=pts[turn],cpct=Math.min(cp/2*100,100),canEvo=!!(evo&&sd&&sd.level<3&&sp?.color===turn&&cp>=2),isAI=PERSONALITIES[turn==='w'?wAI:bAI]?.ai;
 
@@ -366,21 +439,14 @@ function App(){
   return(<div className="app">
     <Bar color="w" cur={wAI} onChange={k=>{setWAI(k);setTimeout(reset,0);}}/>
     <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[bAI]?.color}`}}><div className="player-name">{thinking&&turn==='b'&&<div className="thinking-dot"/>}⬛ {PERSONALITIES[bAI]?.name}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span></div></div>
-
     <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,evoCls=level===2?'evo2':level===3?'evo3':'',isGhost=data&&data.type==='p'&&level>=3;return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${evoCls} ${isGhost&&cell.color===turn?'ghost-friendly':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}{level>=2&&<><div style={{position:'absolute',inset:'2px',border:`2px solid ${level===2?'#eab308':'#a855f7'}`,borderRadius:'2px',pointerEvents:'none',zIndex:0}}/><div className={`lm ${level===2?'lm2':'lm3'}`}>{'●'.repeat(level-1)}</div></>}</div>);}))}</div></div>
-
-    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>Supreme...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
-
-    <div className="panel"><div><div className="charge-row"><span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · SUPREME pensa...':''}</span><span style={{color:cp>=2?'#22c55e':'#38bdf8'}}>{cp}/2{cp>=2?' • PRONTO':''}</span></div><div className="charge-track"><div style={{width:`${cpct}%`,height:'100%',background:cp>=2?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'3px'}}/></div></div><div className="panel-bottom"><div className="piece-label">{sd&&evo?<span style={{fontWeight:700,color:li?.color||'#94a3b8'}}>{sp&&ICONS[sp.color][sp.type]} {li?.name} Lv.{sd.level}<span style={{fontSize:9,color:'#64748b',marginLeft:4}}>{li?.desc}</span></span>:<span style={{color:'#475569'}}>Seleziona un pezzo</span>}</div><button className="evolve-btn" onClick={()=>evolve(sel)} style={{visibility:evo&&sd&&sd.level<3?'visible':'hidden',background:canEvo?(li?.color||'#38bdf8'):'#1e293b',color:canEvo?'#030712':'#475569',cursor:canEvo?'pointer':'default'}}>⚡ EVOLVI (2)</button><div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{game.in_check()?'SCACCO!':turn==='w'?'⬜':'⬛'}</div></div></div>
-
+    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>V2...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
+    <div className="panel"><div><div className="charge-row"><span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · V2 pensa...':''}</span><span style={{color:cp>=2?'#22c55e':'#38bdf8'}}>{cp}/2{cp>=2?' • PRONTO':''}</span></div><div className="charge-track"><div style={{width:`${cpct}%`,height:'100%',background:cp>=2?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'2px'}}/></div></div><div className="panel-bottom"><div className="piece-label">{sd&&evo?<span style={{fontWeight:700,color:li?.color||'#94a3b8'}}>{sp&&ICONS[sp.color][sp.type]} {li?.name} Lv.{sd.level}<span style={{fontSize:9,color:'#64748b',marginLeft:4}}>{li?.desc}</span></span>:<span style={{color:'#475569'}}>Seleziona un pezzo</span>}</div><button className="evolve-btn" onClick={()=>evolve(sel)} style={{visibility:evo&&sd&&sd.level<3?'visible':'hidden',background:canEvo?(li?.color||'#38bdf8'):'#1e293b',color:canEvo?'#030712':'#475569',cursor:canEvo?'pointer':'default'}}>⚡ EVOLVI (2)</button><div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{game.in_check()?'SCACCO!':turn==='w'?'⬜':'⬛'}</div></div></div>
     <Bar color="b" cur={bAI} onChange={k=>{setBAI(k);setTimeout(reset,0);}}/>
-
     {game.game_over()&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}><div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{game.in_checkmate()?(turn==='w'?'⬛ Nero vince!':'⬜ Bianco vince!'):'🤝 Pareggio'}</div><div style={{fontSize:12,color:'#64748b'}}>{game.in_checkmate()?'Scacco matto':'Patta'}</div><button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>RIVINCITA</button></div>}
-
-    <div className="stats-bar">🧠 Hash 256MB | Skill 20/20 | MultiPV 3 | 🕐 4s/pensata | ⚔️ {stats.games} partite | 🏆 {stats.wins}W/{stats.losses}L</div>
+    <div className="debug-bar">🧠 MultiPV 20 | 🌳 RPG {OMEGA_V2.RPG_PLY}ply | 🎲 MC {OMEGA_V2.MONTE_CARLO_SIMS}sim | {debug}</div>
   </div>);
 }
-
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>

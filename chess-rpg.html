@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Omega V2.1</title>
+<title>Chess RPG - Omega V2.1 Final</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -152,14 +152,13 @@ function applyAction(game,pd,sm,pts,action){
   const np=ng.get(action.to);if(np&&mid&&npd[mid]&&np.type!==npd[mid].type)npd[mid]={...npd[mid],type:np.type,level:1};
   delete nsm[action.from];nsm[action.to]=mid;
   let p=1;if(cap)p++;if(ng.in_check())p++;if(np&&mid&&npd[mid]&&np.type!==npd[mid].type)p+=2;
-  // Campione Lv4: cattura dà +1 energia extra
   if(cap&&mid&&npd[mid]&&npd[mid].type==='p'&&npd[mid].level>=4)p+=1;
   const npts={...pts,[color]:pts[color]+p};
   return{game:ng,pd:npd,sm:nsm,pts:npts};
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  STOCKFISH (Memory-leak free)
+//  STOCKFISH (Memory-leak free + movetime esplicito)
 // ═══════════════════════════════════════════════════════════════
 let sfWorker=null;
 function initSF(){
@@ -184,7 +183,6 @@ function sfGetAllMoves(fen,timeMs=4000){
         sfWorker.removeEventListener('message',h);
         clearTimeout(t);
         resolved=true;
-        // Aggiungi la bestmove se non già presente
         const mv=msg.split(' ')[1];
         if(mv&&mv!=='(none)'&&!moves.find(m=>m.from===mv.slice(0,2)&&m.to===mv.slice(2,4))){
           moves.push({from:mv.slice(0,2),to:mv.slice(2,4),promotion:mv[4]||null,score:0});
@@ -211,12 +209,13 @@ function sfGetAllMoves(fen,timeMs=4000){
         resolved=true;
         resolve(moves);
       }
-    },timeMs+1500);
+    },timeMs+2000);
     sfWorker.addEventListener('message',h);
     sfWorker.postMessage('stop');
     sfWorker.postMessage('ucinewgame');
     sfWorker.postMessage('position fen '+fen);
-    sfWorker.postMessage('go depth 16');
+    // FIX 3: movetime esplicito per evitare timeout brutali
+    sfWorker.postMessage(`go movetime ${timeMs} depth 16`);
   });
 }
 
@@ -279,7 +278,6 @@ const OMEGA_V2={
     const sfMoves=await sfGetAllMoves(game.fen(),this.SF_TIME);
     const allActions=generateAllActions(game,pd,sm,pts,color);
     
-    // Ordina azioni per priorità (catture prime, evoluzioni dopo)
     allActions.sort((a,b)=>{
       const aCap=a.type!=='evolve'&&game.get(a.to)?1:0;
       const bCap=b.type!=='evolve'&&game.get(b.to)?1:0;
@@ -365,7 +363,16 @@ function App(){
 
   const reset=()=>{sfWorker?.postMessage('stop');sfWorker?.postMessage('ucinewgame');const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);setDebug('');gen.current++;};
 
-  const raw=game.board(),bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw,turn=game.turn(),sid=sel?sm[sel]:null,sd=sid?pd[sid]:null,sp=sel?game.get(sel):null,evo=sp?EVOLUTIONS[sp.type]:null,li=evo&&sd?evo.levels[sd.level-1]:null,cp=pts[turn],cpct=Math.min(cp/2*100,100),canEvo=!!(evo&&sd&&sd.level<4&&sp?.color===turn&&cp>=2),isAI=PERSONALITIES[turn==='w'?wAI:bAI]?.ai;
+  const raw=game.board(),bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw,turn=game.turn(),sid=sel?sm[sel]:null,sd=sid?pd[sid]:null,sp=sel?game.get(sel):null,evo=sp?EVOLUTIONS[sp.type]:null,li=evo&&sd?evo.levels[sd.level-1]:null,cp=pts[turn];
+  
+  // FIX 1: costo dinamico per canEvo
+  const nextCost=sd?(EVOLUTIONS.p.levels[sd.level]?.cost||2):2;
+  const canEvo=!!(evo&&sd&&sd.level<4&&sp?.color===turn&&cp>=nextCost);
+  
+  // FIX 2: barra energia tarata su massimo 4
+  const cpct=Math.min((cp/4)*100,100);
+  
+  const isAI=PERSONALITIES[turn==='w'?wAI:bAI]?.ai;
 
   const Bar=({color,cur,onChange})=>(<div className="top-bar">{Object.entries(PERSONALITIES).map(([k,v])=>(<button key={k} className={`mode-btn ${cur===k?'active':''}`} style={cur===k?{background:v.color,borderColor:v.color}:{}} onClick={()=>onChange(k)}>{color==='w'?'⬜':'⬛'} {v.name}</button>))}{color==='w'&&<button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄</button>}</div>);
 
@@ -377,7 +384,7 @@ function App(){
     <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[bAI]?.color}`}}><div className="player-name">{thinking&&turn==='b'&&<div className="thinking-dot"/>}⬛ {PERSONALITIES[bAI]?.name}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span></div></div>
     <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,isGhost=data&&data.type==='p'&&level>=3;return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${getEvoClass(level)} ${isGhost&&cell.color===turn?'ghost-friendly':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}{level>=2&&<><div style={{position:'absolute',inset:'2px',border:`2px solid ${level===2?'#eab308':level===3?'#a855f7':'#ff4500'}`,borderRadius:'2px',pointerEvents:'none',zIndex:0}}/><div className={`lm ${getLmClass(level)}`}>{'●'.repeat(level-1)}</div></>}</div>);}))}</div></div>
     <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>V2...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
-    <div className="panel"><div><div className="charge-row"><span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · V2 pensa...':''}</span><span style={{color:cp>=2?'#22c55e':'#38bdf8'}}>{cp}/2{cp>=2?' • PRONTO':''}</span></div><div className="charge-track"><div style={{width:`${cpct}%`,height:'100%',background:cp>=2?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'2px'}}/></div></div><div className="panel-bottom"><div className="piece-label">{sd&&evo?<span style={{fontWeight:700,color:li?.color||'#94a3b8'}}>{sp&&ICONS[sp.color][sp.type]} {li?.name} Lv.{sd.level}<span style={{fontSize:9,color:'#64748b',marginLeft:4}}>{li?.desc}</span></span>:<span style={{color:'#475569'}}>Seleziona un pezzo</span>}</div><button className="evolve-btn" onClick={()=>evolve(sel)} style={{visibility:evo&&sd&&sd.level<4?'visible':'hidden',background:canEvo?(li?.color||'#38bdf8'):'#1e293b',color:canEvo?'#030712':'#475569',cursor:canEvo?'pointer':'default'}}>⚡ EVOLVI ({EVOLUTIONS.p.levels[sd?.level||1]?.cost||2})</button><div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{game.in_check()?'SCACCO!':turn==='w'?'⬜':'⬛'}</div></div></div>
+    <div className="panel"><div><div className="charge-row"><span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · V2 pensa...':''}</span><span style={{color:cp>=2?'#22c55e':'#38bdf8'}}>{cp}/{nextCost}{cp>=nextCost?' • PRONTO':''}</span></div><div className="charge-track"><div style={{width:`${cpct}%`,height:'100%',background:cp>=nextCost?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'2px'}}/></div></div><div className="panel-bottom"><div className="piece-label">{sd&&evo?<span style={{fontWeight:700,color:li?.color||'#94a3b8'}}>{sp&&ICONS[sp.color][sp.type]} {li?.name} Lv.{sd.level}<span style={{fontSize:9,color:'#64748b',marginLeft:4}}>{li?.desc}</span></span>:<span style={{color:'#475569'}}>Seleziona un pezzo</span>}</div><button className="evolve-btn" onClick={()=>evolve(sel)} style={{visibility:evo&&sd&&sd.level<4?'visible':'hidden',background:canEvo?(li?.color||'#38bdf8'):'#1e293b',color:canEvo?'#030712':'#475569',cursor:canEvo?'pointer':'default'}}>⚡ EVOLVI ({nextCost})</button><div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{game.in_check()?'SCACCO!':turn==='w'?'⬜':'⬛'}</div></div></div>
     <Bar color="b" cur={bAI} onChange={k=>{setBAI(k);setTimeout(reset,0);}}/>
     {game.game_over()&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}><div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{game.in_checkmate()?(turn==='w'?'⬛ Nero vince!':'⬜ Bianco vince!'):'🤝 Pareggio'}</div><div style={{fontSize:12,color:'#64748b'}}>{game.in_checkmate()?'Scacco matto':'Patta'}</div><button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>RIVINCITA</button></div>}
     <div className="debug-bar">🧠 MultiPV 15 | 🌳 RPG {OMEGA_V2.RPG_PLY}ply | 🎲 MC {OMEGA_V2.MONTE_CARLO_SIMS}sim | {debug}</div>

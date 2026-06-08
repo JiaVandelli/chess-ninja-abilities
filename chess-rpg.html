@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-<title>Chess RPG - Omega V3</title>
+<title>Chess RPG - Omega V4 Pure</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -27,17 +27,13 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 .cell.last-from.light,.cell.last-to.light{background:#f6f669}
 .cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
 .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
-
-/* ✅ FIX: entrambi i colori usano glifhi pieni, differenziati da CSS */
 .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
 .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
 .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
-
 .evo2{filter:drop-shadow(0 0 6px #eab308) drop-shadow(0 2px 4px rgba(0,0,0,.6))!important}
 .evo3{filter:drop-shadow(0 0 12px #a855f7) drop-shadow(0 0 24px #a855f7)!important;animation:glowPulse 2s ease-in-out infinite}
 .ghost-friendly{opacity:.35;filter:grayscale(50%) drop-shadow(0 0 10px #a855f7)!important}
 @keyframes glowPulse{0%,100%{filter:drop-shadow(0 0 12px #a855f7)}50%{filter:drop-shadow(0 0 22px #c084fc) drop-shadow(0 0 36px #a855f7)}}
-
 .lm{position:absolute;top:2px;right:3px;font-size:9px;font-weight:800;pointer-events:none;z-index:3}
 .lm2{color:#eab308;text-shadow:0 0 5px #eab308}.lm3{color:#a855f7;text-shadow:0 0 8px #a855f7}
 .panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:5px}
@@ -61,7 +57,6 @@ html,body{height:100%;margin:0;overflow:hidden;background:#060913}
 const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 
-// ✅ FIX: glifhi pieni per entrambi i colori (differenziati da CSS, non dal glifo)
 const ICONS={
   w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},
   b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}
@@ -105,7 +100,7 @@ function execAbilityMove(game,from,to){
 }
 
 // ═══════════════════════════════════════════════════════════
-//  EVOLUTIONS — max 3 livelli, niente Lv4
+//  EVOLUTIONS — 3 livelli pedone
 // ═══════════════════════════════════════════════════════════
 const EVOLUTIONS={
   p:{
@@ -148,7 +143,6 @@ function evalRpg(game,pd,sm,pts,color){
   const opp=color==='w'?'b':'w';let score=0;
   for(const d of Object.values(pd)){if(!d)continue;score+=d.color===color?rpgVal(d.type,d.level):-rpgVal(d.type,d.level);}
   score+=(pts[color]-pts[opp])*0.35;
-  // Bonus sinergia fantasma (pezzi maggiori alleati dietro)
   for(const[sq,id]of Object.entries(sm)){
     const d=pd[id];if(!d||d.color!==color||d.type!=='p'||d.level<3)continue;
     const file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),bDir=color==='w'?-1:1;
@@ -210,95 +204,68 @@ function applyAction(game,pd,sm,pts,action){
 }
 
 // ═══════════════════════════════════════════════════════════
-//  STOCKFISH — MultiPV con score aggiornati all'ultima profondità
+//  OMEGA V4 — Puro RPG, niente Stockfish
 // ═══════════════════════════════════════════════════════════
-let sfWorker=null;
-(function initSF(){
-  try{
-    sfWorker=new Worker(URL.createObjectURL(new Blob(
-      [`importScripts('https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.0/stockfish.js');`],
-      {type:'application/javascript'}
-    )));
-    sfWorker.postMessage('setoption name Hash value 128');
-    sfWorker.postMessage('setoption name MultiPV value 15');
-    console.log('✅ Stockfish Omega V3 ready');
-  }catch(e){sfWorker=null;console.warn('⚠️ Stockfish offline');}
-})();
+const OMEGA_V4={
+  MAX_CANDS: 20,
+  W_RPG: 0.65,
+  W_MC: 0.35,
+  URGENCY_EVO: 0.5,
 
-function sfGetAllMoves(fen,timeMs=3000){
-  if(!sfWorker)return Promise.resolve([]);
-  return new Promise(resolve=>{
-    // Map: move_key → {from,to,promotion,score} per aggiornare sempre con l'ultima profondità
-    const moveMap=new Map();
-    let resolved=false;
-    const t=setTimeout(()=>{if(!resolved){resolved=true;sfWorker.removeEventListener('message',h);resolve([...moveMap.values()].sort((a,b)=>b.score-a.score));}},timeMs+1500);
-    const h=e=>{
-      if(typeof e.data!=='string'||resolved)return;
-      const msg=e.data;
-      // Bestmove: fine ricerca
-      if(msg.startsWith('bestmove')){
-        clearTimeout(t);resolved=true;sfWorker.removeEventListener('message',h);
-        const mv=msg.split(' ')[1];
-        if(mv&&mv!=='(none)'&&!moveMap.has(mv.slice(0,4)))
-          moveMap.set(mv.slice(0,4),{from:mv.slice(0,2),to:mv.slice(2,4),promotion:mv[4]||null,score:0});
-        resolve([...moveMap.values()].sort((a,b)=>b.score-a.score));
-        return;
+  // Cache per RPG search (fen+turno → score)
+  _cache: new Map(),
+
+  // Controllo matto in 1 (scansione veloce, costo zero)
+  findMateIn1(game,pd,sm,pts,color){
+    for(const m of game.moves({verbose:true})){
+      const ng=new Chess(game.fen());ng.move({from:m.from,to:m.to,promotion:'q'});
+      if(ng.in_checkmate())return{type:'move',from:m.from,to:m.to};
+    }
+    // Controlla anche abilità che danno scacco matto
+    for(const[sq,id]of Object.entries(sm)){
+      const piece=game.get(sq);if(!piece||piece.color!==color)continue;
+      const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
+      for(const ab of evo.getAbilityMoves(sq,game,d.level,color)){
+        const ng2=execAbilityMove(game,ab.from,ab.to).newGame;
+        if(ng2.in_checkmate())return{type:'ability',from:ab.from,to:ab.to};
       }
-      // Info lines con multipv, score e pv sulla stessa riga
-      const hasPV   =msg.includes('multipv')&&msg.includes(' pv ');
-      const hasScore=msg.includes('score cp')||msg.includes('score mate');
-      if(!hasPV)return;
-      const pvM=msg.match(/pv ([a-h][1-8][a-h][1-8][qrbn]?)/);
-      if(!pvM)return;
-      const mvStr=pvM[1],key=mvStr.slice(0,4);
-      let score=0;
-      const cpM=msg.match(/score cp (-?\d+)/);
-      const mateM=msg.match(/score mate (-?\d+)/);
-      if(cpM)score=parseInt(cpM[1])/100;
-      else if(mateM)score=parseInt(mateM[1])>0?200:-200;
-      // ✅ AGGIORNA sempre (sovrascrive con profondità maggiore)
-      moveMap.set(key,{from:mvStr.slice(0,2),to:mvStr.slice(2,4),promotion:mvStr[4]||null,score});
-    };
-    sfWorker.addEventListener('message',h);
-    sfWorker.postMessage('stop');
-    sfWorker.postMessage('ucinewgame');
-    sfWorker.postMessage('position fen '+fen);
-    sfWorker.postMessage(`go movetime ${timeMs} depth 16`);
-  });
-}
-
-// ═══════════════════════════════════════════════════════════
-//  OMEGA V3 — Stockfish dominante, sicurezza tattica garantita
-// ═══════════════════════════════════════════════════════════
-const OMEGA={
-  RPG_PLY:   2,
-  MC_SIMS:   8,
-  MC_DEPTH:  4,
-  MAX_CANDS: 14,
-
-  // ✅ FIX PRINCIPALE: Stockfish domina (0.65) per evitare errori tattici
-  W_SF:  0.65,
-  W_RPG: 0.25,
-  W_MC:  0.10,
-
-  // Mosse con SF < -3.5 sono blunder: non giocarle mai
-  BLUNDER_THRESHOLD: -3.5,
+    }
+    return null;
+  },
 
   rpgSearch(state,depth,color){
-    if(depth<=0||state.game.game_over())return evalRpg(state.game,state.pd,state.sm,state.pts,color);
+    if(depth<=0||state.game.game_over()){
+      return evalRpg(state.game,state.pd,state.sm,state.pts,color);
+    }
+    // Cache: evita di rivalutare lo stesso stato
+    const cacheKey=state.game.fen().split(' ').slice(0,2).join('_');
+    if(this._cache.has(cacheKey)){
+      return this._cache.get(cacheKey);
+    }
+
     const acts=generateAllActions(state.game,state.pd,state.sm,state.pts,state.game.turn()).slice(0,10);
+    let result;
     if(state.game.turn()===color){
       let best=-Infinity;
-      for(const a of acts){const n=applyAction(state.game,state.pd,state.sm,state.pts,a);if(!n)continue;const v=this.rpgSearch(n,depth-1,color);if(v>best)best=v;}
-      return best===-Infinity?evalRpg(state.game,state.pd,state.sm,state.pts,color):best;
+      for(const a of acts){
+        const n=applyAction(state.game,state.pd,state.sm,state.pts,a);
+        if(!n)continue;
+        const v=this.rpgSearch(n,depth-1,color);
+        if(v>best)best=v;
+      }
+      result=best===-Infinity?evalRpg(state.game,state.pd,state.sm,state.pts,color):best;
     }else{
       let best=Infinity;
       for(const m of state.game.moves({verbose:true}).slice(0,8)){
         const n=applyAction(state.game,state.pd,state.sm,state.pts,{type:'move',from:m.from,to:m.to});
-        if(!n)continue;const v=this.rpgSearch(n,depth-1,color);if(v<best)best=v;
+        if(!n)continue;
+        const v=this.rpgSearch(n,depth-1,color);
+        if(v<best)best=v;
       }
-      return best===Infinity?evalRpg(state.game,state.pd,state.sm,state.pts,color):best;
+      result=best===Infinity?evalRpg(state.game,state.pd,state.sm,state.pts,color):best;
     }
+    this._cache.set(cacheKey,result);
+    return result;
   },
 
   monteCarloRollout(state,color,depth){
@@ -318,76 +285,62 @@ const OMEGA={
   },
 
   async chooseAction(game,pd,sm,pts,color){
-    // ── 1. Stockfish: top 15 mosse con punteggi ─────────────────────────────
-    const sfMoves=await sfGetAllMoves(game.fen(),3000);
-    // Mappa rapida: "e2e4" → score
-    const sfMap=new Map(sfMoves.map(m=>[m.from+m.to,m.score]));
+    // 1. Controllo matto in 1 (priorità assoluta)
+    const mateIn1=this.findMateIn1(game,pd,sm,pts,color);
+    if(mateIn1){
+      console.log('[OMEGA V4] ⚡ MATTO IN 1!');
+      return mateIn1;
+    }
 
-    // ── 2. Candidati: mosse SF + azioni RPG ─────────────────────────────────
+    // 2. Pulisci cache
+    this._cache.clear();
+
+    // 3. Tutte le azioni possibili
     const allActions=generateAllActions(game,pd,sm,pts,color);
 
-    // Ordina: prima mosse SF consigliate, poi catture ability, poi evoluzioni
+    // 4. Ordina per euristica veloce (catture prime)
     allActions.sort((a,b)=>{
-      const aInSF=a.type==='move'&&sfMap.has(a.from+a.to)?1:0;
-      const bInSF=b.type==='move'&&sfMap.has(b.from+b.to)?1:0;
-      if(aInSF!==bInSF)return bInSF-aInSF;
-      const aCap=a.type!=='evolve'&&game.get(a.to)?1:0;
-      const bCap=b.type!=='evolve'&&game.get(b.to)?1:0;
-      return bCap-aCap;
+      const aVal=a.type!=='evolve'&&game.get(a.to)?rpgVal(game.get(a.to).type,1):0;
+      const bVal=b.type!=='evolve'&&game.get(b.to)?rpgVal(game.get(b.to).type,1):0;
+      return bVal-aVal;
     });
+
+    // 5. Bonus urgenza evoluzione
+    const hasEvolved=Object.values(pd).some(d=>d.color===color&&d.type==='p'&&d.level>=2);
+    allActions.forEach(a=>{
+      if(a.type==='evolve'&&!hasEvolved&&pts[color]>=2) a._urgency=this.URGENCY_EVO;
+    });
+    allActions.sort((a,b)=>(b._urgency||0)-(a._urgency||0));
 
     const candidates=allActions.slice(0,this.MAX_CANDS);
     const evaluated=[];
 
-    for(const action of candidates){
-      // ── Calcola SF score per questa azione ──────────────────────────────
-      let sfScore;
-      if(action.type==='move'){
-        const key=action.from+action.to;
-        if(sfMap.has(key)){
-          sfScore=sfMap.get(key);
-        }else{
-          // Mossa non nel top-15 di SF → forte penalità
-          sfScore=-2.5;
-        }
-      }else if(action.type==='evolve'){
-        // Evoluzione non cambia il FEN → riusa il top SF score (posizione invariata)
-        sfScore=sfMoves.length>0?sfMoves[0].score:0;
-      }else{
-        // Ability: valore tattico grezzo = valore del pezzo catturato
-        const target=game.get(action.to);
-        const tId=sm[action.to];
-        sfScore=target?rpgVal(target.type,tId?pd[tId]?.level||1:1)*0.9:0;
-      }
-
-      // ✅ FILTRO SICUREZZA: non giocare mai mosse che SF considera blunder
-      if(action.type==='move'&&sfScore<this.BLUNDER_THRESHOLD) continue;
-
+    for(let i=0;i<candidates.length;i++){
+      const action=candidates[i];
       const next=applyAction(game,pd,sm,pts,action);
       if(!next)continue;
 
-      // ── RPG search ──────────────────────────────────────────────────────
-      const rpgScore=this.rpgSearch(next,this.RPG_PLY,color);
+      // Profondità adattiva: 4 per top 8, 2 per resto
+      const rpgDepth=i<8?4:2;
+      const rpgScore=this.rpgSearch(next,rpgDepth,color);
 
-      // ── Monte Carlo rollout ─────────────────────────────────────────────
+      // Monte Carlo: 25 simulazioni, profondità 6
       let mcSum=0;
-      for(let i=0;i<this.MC_SIMS;i++)mcSum+=this.monteCarloRollout(next,color,this.MC_DEPTH);
-      const mcScore=mcSum/this.MC_SIMS;
+      for(let j=0;j<25;j++)mcSum+=this.monteCarloRollout(next,color,6);
+      const mcScore=mcSum/25;
 
-      // ── Fusione ─────────────────────────────────────────────────────────
-      const finalScore=sfScore*this.W_SF+rpgScore*this.W_RPG+mcScore*this.W_MC;
-      evaluated.push({...action,sfScore,rpgScore,mcScore,finalScore,
-        label:`${action.type} ${action.from||''}→${action.to||action.sq||''} [SF:${sfScore.toFixed(1)} RPG:${rpgScore.toFixed(1)} MC:${mcScore.toFixed(1)}]`});
+      const finalScore=rpgScore*this.W_RPG+mcScore*this.W_MC+(action._urgency||0);
+      evaluated.push({...action,rpgScore,mcScore,finalScore,
+        label:`${action.type} ${action.from||''}→${action.to||action.sq||''}`});
     }
 
     evaluated.sort((a,b)=>b.finalScore-a.finalScore);
     if(!evaluated.length){
-      // Fallback di emergenza: prima mossa legale
       const legals=game.moves({verbose:true});
       if(legals.length)return{type:'move',from:legals[0].from,to:legals[0].to};
       return null;
     }
-    console.log(`[OMEGA V3] ▶ ${evaluated[0].label} → Final: ${evaluated[0].finalScore.toFixed(3)}`);
+    console.log(`[OMEGA V4] ▶ ${evaluated[0].label} → ${evaluated[0].finalScore.toFixed(3)} (RPG:${evaluated[0].rpgScore.toFixed(2)} MC:${evaluated[0].mcScore.toFixed(2)})`);
     return evaluated[0];
   }
 };
@@ -397,7 +350,7 @@ const OMEGA={
 // ═══════════════════════════════════════════════════════════
 const PERSONALITIES={
   human:{name:'Umano',  ai:false,color:'#94a3b8'},
-  omega:{name:'Omega V3',ai:true, color:'#eab308'}
+  omega:{name:'Omega V4',ai:true, color:'#eab308'}
 };
 
 function buildState(g){
@@ -466,9 +419,9 @@ function App(){
     gen.current++;const myGen=gen.current;
     clearTimeout(timer.current);
     timer.current=setTimeout(async()=>{
-      setThink(true);setDebug('🧠 Analisi...');
+      setThink(true);setDebug('🎲 RPG puro...');
       const t0=Date.now();
-      const action=await OMEGA.chooseAction(game,pd,sm,pts,turn);
+      const action=await OMEGA_V4.chooseAction(game,pd,sm,pts,turn);
       const elapsed=((Date.now()-t0)/1000).toFixed(1)+'s';
       setDebug(`✅ ${action?.label||'?'} | ${elapsed}`);
       if(gen.current!==myGen){setThink(false);return;}
@@ -476,12 +429,11 @@ function App(){
       if(!action)return;
       if(action.type==='evolve')evolve(action.sq);
       else move(action.from,action.to,action.type==='ability');
-    },350+Math.random()*200);
+    },300+Math.random()*200);
     return()=>clearTimeout(timer.current);
   },[game,pd,sm,pts,wAI,bAI,move,evolve]);
 
   const reset=()=>{
-    sfWorker?.postMessage('stop');sfWorker?.postMessage('ucinewgame');
     const g=new Chess(),s=buildState(g);
     setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});
     setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);setDebug('');gen.current++;
@@ -558,7 +510,7 @@ function App(){
         <div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}>
           <div className="player-name">
             {thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}
-            {isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>V3...</span>}
+            {isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>V4...</span>}
           </div>
           {last&&<div className="last-move-hint">{last.from} → {last.to}</div>}
         </div>
@@ -570,7 +522,7 @@ function App(){
       <div className="panel">
         <div>
           <div className="charge-row">
-            <span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · analisi...':''}</span>
+            <span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · analisi RPG...':''}</span>
             <span style={{color:cp>=2?'#22c55e':'#38bdf8'}}>{cp}/2{cp>=2?' • PRONTO':''}</span>
           </div>
           <div className="charge-track">
@@ -610,7 +562,7 @@ function App(){
         </div>
       )}
 
-      <div className="debug-bar">⚙ SF·65% RPG·25% MC·10% | {debug||'pronto'}</div>
+      <div className="debug-bar">🎲 RPG·65% MC·35% | {debug||'pronto'}</div>
     </div>
   );
 }

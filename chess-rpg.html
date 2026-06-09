@@ -73,7 +73,7 @@ function execAbilityMove(game,from,to){const piece=game.get(from),captured=game.
 const EVOLUTIONS={
   p:{levels:[{name:'Pedone',color:'#64748b',desc:'Standard'},{name:'Assaltatore',color:'#eab308',desc:'Triangolo frontale'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),dir=color==='w'?1:-1;const r=rank+dir;if(r>=1&&r<=8){const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});for(const df of[-1,1]){const f=file+df;if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false})}}}return moves.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,game.get(sq)))}},
-  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'Salto a L + croce (come i 5 del poker)'}],
+  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'Salto a L + croce (cattura già al salto)'}],
     getAbilityMoves(sq,game,level,color){
       if(level<2)return[];
       const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
@@ -83,7 +83,14 @@ const EVOLUTIONS={
         const mf=file+df1,mr=rank+dr1;
         if(mf<0||mf>7||mr<1||mr>8)continue;
         const midSq=String.fromCharCode(97+mf)+mr;
-        if(game.get(midSq))continue; // la casella di atterraggio del salto deve essere vuota
+        const midPiece=game.get(midSq);
+        if(midPiece&&midPiece.color===color)continue; // non si salta sopra un alleato
+        if(midPiece&&midPiece.color!==color){
+          // Cattura diretta sul primo salto L
+          if(!moveLeavesKingInCheck(game.fen(),sq,midSq,piece))moves.push({from:sq,to:midSq,isCapture:true});
+          continue; // non si prosegue con la croce dopo una cattura
+        }
+        // Casella vuota: esegui la croce
         for(const[df2,dr2]of CROSS){
           const ef=mf+df2,er=mr+dr2;
           if(ef<0||ef>7||er<1||er>8)continue;
@@ -122,12 +129,21 @@ function generateAllActions(game,pd,sm,pts,color,cooldowns){
   return actions;
 }
 
+// ═══════════ APPLY ACTION (FIX PARENTESI) ═══════════
 function applyAction(game,pd,sm,pts,action,cooldowns){
   const color=game.turn();
   if(action.type==='ability'&&action.isSwap){const p1=game.get(action.from),p2=game.get(action.to),g=new Chess(game.fen());g.remove(action.from);g.remove(action.to);g.put(p1,action.to);g.put(p2,action.from);const parts=g.fen().split(' '),wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';const ng=new Chess();ng.load(parts.join(' '));const nsm={...sm},id1=nsm[action.from],id2=nsm[action.to];nsm[action.from]=id2;nsm[action.to]=id1;return{game:ng,pd:{...pd},sm:nsm,pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}}}
   if(action.type==='summon'){const queenSq=action.queenSq,targetSq=action.targetSq;if(!targetSq)return null;const newId=`${color}p_summoned_${Date.now()}`,npd={...pd,[newId]:{type:'p',color,level:1,summoned:true}},nsm={...sm,[targetSq]:newId},ng=new Chess(game.fen());ng.put({type:'p',color},targetSq);const parts=ng.fen().split(' ');parts[1]=color==='w'?'b':'w';parts[3]='-';const finalGame=new Chess();finalGame.load(parts.join(' '));return{game:finalGame,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]-2},cooldowns:{...cooldowns}}}
-  if(action.type==='devolve'){const targetData=pd[action.targetId];if(!targetData||targetData.level<=1)return null;const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}},newCooldowns={...cooldowns,towerDeevolve:3};return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:{...pts,[color]:pts[color]+1},cooldowns:newCooldowns}
-  let ng,cap=null;if(action.type==='ability'){const r=execAbilityMove(game,action.from,action.to);ng=r.newGame;cap=r.capturedPiece}else{ng=new Chess(game.fen());const mv=ng.move({from:action.from,to:action.to,promotion:action.promotion||'q'});if(!mv)return null;if(mv.captured)cap={type:mv.captured};if(mv.flags?.includes('e'))cap={type:'p',_sq:action.to[0]+action.from[1]}}
+  if(action.type==='devolve'){
+    const targetData=pd[action.targetId];
+    if(!targetData||targetData.level<=1)return null;
+    const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}},
+          newCooldowns={...cooldowns,towerDeevolve:3};
+    return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:{...pts,[color]:pts[color]+1},cooldowns:newCooldowns};
+  }
+  let ng,cap=null;
+  if(action.type==='ability'){const r=execAbilityMove(game,action.from,action.to);ng=r.newGame;cap=r.capturedPiece}
+  else{ng=new Chess(game.fen());const mv=ng.move({from:action.from,to:action.to,promotion:action.promotion||'q'});if(!mv)return null;if(mv.captured)cap={type:mv.captured};if(mv.flags?.includes('e'))cap={type:'p',_sq:action.to[0]+action.from[1]}}
   const mid=sm[action.from],nsm={...sm},npd={...pd};if(cap){const cs=cap._sq||action.to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs]}}const np=ng.get(action.to);if(np&&mid&&npd[mid]&&np.type!==npd[mid].type)npd[mid]={...npd[mid],type:np.type,level:1};delete nsm[action.from];nsm[action.to]=mid;let p=1;if(cap)p++;if(ng.in_check())p++;const newCooldowns={...cooldowns};if(newCooldowns.towerDeevolve>0)newCooldowns.towerDeevolve--;return{game:ng,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]+p},cooldowns:newCooldowns}
 }
 

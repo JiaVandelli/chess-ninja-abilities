@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>Chess RPG - Omega V5.1</title>
+    <title>Chess RPG - Omega V5.2</title>
     <style>
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -28,12 +28,14 @@
         .cell.last-from.light,.cell.last-to.light{background:#f6f669}
         .cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
         .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
-        .cell.evo-highlight{outline:3px dashed #0ea5e9;outline-offset:-3px;background:rgba(14,165,233,0.15)!important}
+        /* Fix highlight evoluzione: solo bordo azzurro, sfondo trasparente */
+        .cell.evo-highlight{outline:3px dashed #0ea5e9;outline-offset:-3px;background:transparent!important}
         .cell.summon-highlight{outline:2px dashed #ec4899;outline-offset:-2px}
         .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
         .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
         .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
-        .evo2{filter:drop-shadow(0 0 6px #a855f7) drop-shadow(0 2px 4px rgba(0,0,0,.6))!important}
+        /* Glow ridotto per lasciare spazio al bordo */
+        .evo2{filter:drop-shadow(0 0 4px #a855f7)!important}
         .panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:5px}
         .charge-row{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#94a3b8}
         .charge-track{width:100%;height:4px;background:#1e293b;border-radius:2px;overflow:hidden;margin-top:2px}
@@ -56,7 +58,7 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-// ═══════════ LEARN V5.1 (Memoria potenziata) ═══════════
+// ═══════════ LEARN V5.2 ═══════════
 const LEARN={
   load:()=>{try{return JSON.parse(localStorage.getItem('chessRPG_brain')||'{}')}catch(e){return{}}},
   save:(brain)=>{try{if(Object.keys(brain).length>5000){const sorted=Object.entries(brain).sort((a,b)=>a[1].ts-b[1].ts);for(let i=0;i<1000;i++)delete brain[sorted[i][0]]}localStorage.setItem('chessRPG_brain',JSON.stringify(brain))}catch(e){}},
@@ -69,7 +71,7 @@ const LEARN={
 function moveLeavesKingInCheck(fen,from,to,piece){const g=new Chess(fen);g.remove(from);g.put(piece,to);return g.in_check()}
 function execAbilityMove(game,from,to){const piece=game.get(from),captured=game.get(to)||null,g=new Chess(game.fen());g.remove(from);if(captured)g.remove(to);g.put(piece,to);const parts=g.fen().split(' '),wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';const ng=new Chess();ng.load(parts.join(' '));return{newGame:ng,capturedPiece:captured}}
 
-// ═══════════ EVOLUZIONI V5.1 ═══════════
+// ═══════════ EVOLUZIONI ═══════════
 const EVOLUTIONS={
   p:{levels:[{name:'Pedone',color:'#64748b',desc:'Standard'},{name:'Assaltatore',color:'#eab308',desc:'Triangolo frontale'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),dir=color==='w'?1:-1;const r=rank+dir;if(r>=1&&r<=8){const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});for(const df of[-1,1]){const f=file+df;if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false})}}}return moves.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,game.get(sq)))}},
@@ -110,7 +112,7 @@ const EVOLUTIONS={
     getAbilityMoves(sq,game,level,color){
       if(level<2)return[];
       const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
-      // Mosse da Cavallo
+      // Cavallo
       for(const[df,dr]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]){
         const nf=file+df,nr=rank+dr;
         if(nf<0||nf>7||nr<1||nr>8)continue;
@@ -118,7 +120,7 @@ const EVOLUTIONS={
         if(t&&t.color===color)continue;
         if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:!!t});
       }
-      // Mosse da Torre (ortogonali)
+      // Torre
       for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){
         let f=file+df,r=rank+dr;
         while(f>=0&&f<=7&&r>=1&&r<=8){
@@ -128,7 +130,7 @@ const EVOLUTIONS={
           f+=df;r+=dr;
         }
       }
-      // Mosse da Alfiere (diagonali)
+      // Alfiere
       for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){
         let f=file+df,r=rank+dr;
         while(f>=0&&f<=7&&r>=1&&r<=8){
@@ -160,7 +162,7 @@ function generateAllActions(game,pd,sm,pts,color,cooldowns){
   return actions;
 }
 
-// ═══════════ APPLY ACTION (con FIX ARROCCO) ═══════════
+// ═══════════ APPLY ACTION (con FIX ARROCCO + DEVOLVE +1) ═══════════
 function applyAction(game,pd,sm,pts,action,cooldowns){
   const color=game.turn();
   if(action.type==='ability'&&action.isSwap){const p1=game.get(action.from),p2=game.get(action.to),g=new Chess(game.fen());g.remove(action.from);g.remove(action.to);g.put(p1,action.to);g.put(p2,action.from);const parts=g.fen().split(' '),wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';const ng=new Chess();ng.load(parts.join(' '));const nsm={...sm},id1=nsm[action.from],id2=nsm[action.to];nsm[action.from]=id2;nsm[action.to]=id1;return{game:ng,pd:{...pd},sm:nsm,pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}}}
@@ -170,8 +172,8 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
     if(!targetData||targetData.level<=1)return null;
     const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}},
           newCooldowns={...cooldowns,towerDeevolve:3};
-    // Disevoluzione ora non dà più energia
-    return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:{...pts},cooldowns:newCooldowns};
+    // FIX: Disevoluzione torna a dare +1 energia
+    return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:{...pts,[color]:pts[color]+1},cooldowns:newCooldowns};
   }
   
   let ng, cap = null, isCastleK = false, isCastleQ = false;
@@ -225,7 +227,7 @@ function autoEvolve(state,color){
   return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:npts,cooldowns:{...cooldowns}};
 }
 
-// ═══════════ OMEGA V5.1 (PURO REINFORCEMENT LEARNING) ═══════════
+// ═══════════ OMEGA V5.2 ═══════════
 const OMEGA={
   W_RPG:0.35, W_LEARN:0.65, MAX_CANDS:50,
   async chooseAction(game,pd,sm,pts,color,cooldowns){
@@ -252,7 +254,7 @@ const OMEGA={
 async function trainAI(games=100,onProgress=()=>{}){let gameCount=0,wins={w:0,b:0};for(let i=0;i<games;i++){const g=new Chess();let state={game:g,...buildState(g),cooldowns:{}},history=[];for(let mc=0;mc<200;mc++){if(state.game.game_over())break;const color=state.game.turn();const action=await OMEGA.chooseAction(state.game,state.pd,state.sm,state.pts,color,state.cooldowns);if(!action)break;history.push({fen:state.game.fen(),move:action.type==='evolve'?action.sq+'_evolve':(action.from||'')+(action.to||''),color});let next=applyAction(state.game,state.pd,state.sm,state.pts,action,state.cooldowns);if(!next)break;state=autoEvolve(next,color);}let winner=null;if(state.game.in_checkmate())winner=state.game.turn()==='w'?'b':'w';if(winner){wins[winner]++;for(const h of history)LEARN.reward(h.fen,h.move,h.color===winner)}gameCount++;onProgress({current:gameCount,total:games,wins})}return{total:gameCount,wins}}
 
 // ═══════════ APP ═══════════
-const PERSONALITIES={human:{name:'Umano',ai:false,color:'#94a3b8'},omega:{name:'Omega V5.1',ai:true,color:'#eab308'}};
+const PERSONALITIES={human:{name:'Umano',ai:false,color:'#94a3b8'},omega:{name:'Omega V5.2',ai:true,color:'#eab308'}};
 function buildState(g){const pd={},sm={};g.board().forEach((row,r)=>row.forEach((cell,c)=>{if(cell){const sq='abcdefgh'[c]+(8-r);pd[`${cell.color}${cell.type}_${sq}`]={type:cell.type,color:cell.color,level:1};sm[sq]=`${cell.color}${cell.type}_${sq}`}}));return{pd,sm}}
 
 function App(){
@@ -327,8 +329,8 @@ function App(){
   return(<div className="app">
     <Bar color="b" cur={bAI} onChange={k=>{setBAI(k);setTimeout(reset,0)}}/>
     <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[bAI]?.color}`}}><div className="player-name">{thinking&&turn==='b'&&<div className="thinking-dot"/>}⬛ {PERSONALITIES[bAI]?.name}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span></div></div>
-    <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,evoCls=level===2?'evo2':'',isEvoHighlight=evoPhase&&evolvableSqs.includes(sq),isSummonHighlight=summonMode&&summonAdjSqs.includes(sq);return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${isEvoHighlight?'evo-highlight':''} ${isSummonHighlight?'summon-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${evoCls}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}</div>)}))}</div></div>
-    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>V5.1...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
+    <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,evoCls=level===2?'evo2':'',isEvoHighlight=evoPhase&&evolvableSqs.includes(sq),isSummonHighlight=summonMode&&summonAdjSqs.includes(sq);return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${isEvoHighlight?'evo-highlight':''} ${isSummonHighlight?'summon-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${evoCls}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}{level>=2&&<div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 10px rgba(168,85,247,0.7)',zIndex:3}}/>}</div>)}))}</div></div>
+    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>V5.2...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
     <div className="panel">
       {summonMode?(
         <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#ec4899',fontWeight:700}}>✨ Clicca una casella rosa per evocare</div>

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>Chess RPG - Omega Neural V5.8.2</title>
+    <title>Chess RPG - Omega Neural V5.8.3</title>
     <style>
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -57,33 +57,43 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-// ═══════════ HELPERS (BUG #1 FIXATO) ═══════════
+// ═══════════ HELPERS (BUG FIXES) ═══════════
 function moveLeavesKingInCheck(fen,from,to,piece){
   const g=new Chess(fen);
-  g.remove(from);
-  g.remove(to); // rimuovi eventuale pezzo in destinazione
-  g.put(piece,to);
-  return g.in_check();
+  g.remove(from); g.remove(to); g.put(piece,to);
+  const parts = g.fen().split(' ');
+  parts[1] = piece.color;
+  const testGame = new Chess();
+  if(testGame.load(parts.slice(0,4).join(' ') + ' 0 1')) return testGame.in_check();
+  return false;
 }
+
 function execAbilityMove(game,from,to){
-  const piece=game.get(from),captured=game.get(to)||null,g=new Chess(game.fen());
-  g.remove(from);if(captured)g.remove(to);g.put(piece,to);
+  const piece=game.get(from), captured=game.get(to)||null, g=new Chess(game.fen());
+  g.remove(from); if(captured) g.remove(to); g.put(piece,to);
   const parts=g.fen().split(' ');
-  if(piece.type==='k') parts[2]=parts[2].replace(/[KQkq]/g,'');
+  
+  if(piece.type==='k') parts[2]=parts[2].replace(piece.color==='w'?/[KQ]/g:/[kq]/g,'');
   if(piece.type==='r'){
     if(from==='a1') parts[2]=parts[2].replace('Q','');
     if(from==='h1') parts[2]=parts[2].replace('K','');
     if(from==='a8') parts[2]=parts[2].replace('q','');
     if(from==='h8') parts[2]=parts[2].replace('k','');
   }
+  if(captured && captured.type === 'r') {
+    if(to==='a1') parts[2]=parts[2].replace('Q','');
+    if(to==='h1') parts[2]=parts[2].replace('K','');
+    if(to==='a8') parts[2]=parts[2].replace('q','');
+    if(to==='h8') parts[2]=parts[2].replace('k','');
+  }
+  if(parts[2]==='') parts[2]='-';
   parts[3]='-';
-  const wasW=parts[1]==='w';parts[1]=wasW?'b':'w';
-  if(!wasW)parts[5]=String(parseInt(parts[5])+1);
-  const ng=new Chess();ng.load(parts.join(' '));
-  return{newGame:ng,capturedPiece:captured};
+  const wasW=parts[1]==='w'; parts[1]=wasW?'b':'w';
+  if(!wasW) parts[5]=String(parseInt(parts[5])+1);
+  const ng=new Chess(); ng.load(parts.join(' '));
+  return{newGame:ng, capturedPiece:captured};
 }
 
-// ─── EVO‑SCACCO ──────────────────────────────────────────
 function isSquareAttackedByEvo(game, pd, sm, targetSq, attackerColor) {
   const tf = targetSq.charCodeAt(0) - 97, tr = parseInt(targetSq[1]);
   for (const [sq, id] of Object.entries(sm)) {
@@ -99,12 +109,29 @@ function isSquareAttackedByEvo(game, pd, sm, targetSq, attackerColor) {
   }
   return false;
 }
+
+// FIXED isKingInDanger
 function isKingInDanger(game, pd, sm, color) {
-  if (game.in_check()) return true;
   let kingSq = null;
   const board = game.board();
-  for (let r = 0; r < 8; r++) { for (let c = 0; c < 8; c++) { const p = board[r][c]; if (p && p.type === 'k' && p.color === color) { kingSq = 'abcdefgh'[c] + (8 - r); break; } } if (kingSq) break; }
-  return kingSq ? isSquareAttackedByEvo(game, pd, sm, kingSq, color === 'w' ? 'b' : 'w') : false;
+  for (let r = 0; r < 8; r++) { 
+    for (let c = 0; c < 8; c++) { 
+      const p = board[r][c]; 
+      if (p && p.type === 'k' && p.color === color) { 
+        kingSq = 'abcdefgh'[c] + (8 - r); 
+        break; 
+      } 
+    } 
+    if (kingSq) break; 
+  }
+  if (!kingSq) return false;
+  const parts = game.fen().split(' ');
+  parts[1] = color; 
+  const tempGame = new Chess();
+  if (tempGame.load(parts.join(' '))) {
+      if (tempGame.in_check()) return true;
+  }
+  return isSquareAttackedByEvo(game, pd, sm, kingSq, color === 'w' ? 'b' : 'w');
 }
 
 // ═══════════ EVOLUZIONI ═══════════
@@ -127,81 +154,152 @@ const BASE_VALS={p:1,n:3.2,b:3.3,r:5,q:9,k:200};
 function rpgVal(type,level){const b=BASE_VALS[type]||0;if(level===2){if(type==='p')return b+0.7;if(type==='n')return b+1.5;if(type==='b')return b+1.7;if(type==='r')return b+2.5;if(type==='q')return b+5.0}return b}
 function evalRpg(game,pd,sm,pts,color){const opp=color==='w'?'b':'w';let score=0;for(const d of Object.values(pd)){if(!d)continue;score+=d.color===color?rpgVal(d.type,d.level):-rpgVal(d.type,d.level)}score+=(pts[color]-pts[opp])*0.35;return score}
 
-// ═══════════ ACTIONS (BUG #2, #3 FIXATI) ═══════════
-function generateAllActions(game,pd,sm,pts,color,cooldowns){
-  const actions=[]; for(const m of game.moves({verbose:true}))actions.push({type:'move',from:m.from,to:m.to,promotion:m.promotion||'q'});
-  for(const[sq,id]of Object.entries(sm)){const piece=game.get(sq);if(!piece||piece.color!==color)continue;const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;for(const ab of evo.getAbilityMoves(sq,game,d.level,color))actions.push({type:'ability',from:ab.from,to:ab.to,isSwap:ab.isSwap||false})}
-  // Evocazione Regina: ora controlla anche isKingInDanger
-  const queenEntry = Object.entries(sm).find(([sq,id]) => pd[id]?.type==='q' && pd[id]?.level>=2 && pd[id]?.color===color);
-  if(queenEntry && !game.in_check() && !isKingInDanger(game,pd,sm,color)){
-    const queenSq = queenEntry[0];
-    const summonedCount=Object.values(pd).filter(d=>d.type==='p'&&d.color===color&&d.summoned).length;
-    if(summonedCount<2&&pts[color]>=2)actions.push({type:'summon',queenSq,cost:2})
+// ═══════════ ACTIONS (UNIFICATE) ═══════════
+function getAIActions(game,pd,sm,pts,color) {
+  const actions=[]; 
+  for(const m of game.moves({verbose:true})) {
+      if (m.promotion && m.promotion !== 'q') continue; 
+      actions.push({type:'move',from:m.from,to:m.to,promotion:m.promotion||'q'});
   }
-  const towerData=Object.values(pd).find(d=>d.type==='r'&&d.level>=2&&d.color===color);
-  if(towerData){const towerSq=Object.keys(sm).find(sq=>sm[sq]===towerData.id);if(towerSq){for(const[sq,id]of Object.entries(sm)){const targetPiece=game.get(sq);if(!targetPiece||targetPiece.color!==color||targetPiece.type==='k')continue;const targetData=pd[id];if(targetData&&targetData.level>1){actions.push({type:'devolve',towerSq,targetSq:sq,targetId:id});}}}}
-  return actions.filter(a=>{
-    if(a.to){
-      const target=game.get(a.to);
-      if(target&&target.type==='k')return false;
-      if(a.promotion && a.type==='move'){
-        const piece=game.get(a.from);
-        if(piece && piece.type==='p'){
-          const id=sm[a.from];
-          if(id && pd[id]?.summoned) return false;
-        }
-      }
-    }
-    const next=applyAction(game,pd,sm,pts,a,cooldowns);
-    if(!next)return false;
-    return !isKingInDanger(next.game,next.pd,next.sm,color);
-  });
-}
-
-// BUG #2 FIXATO: anche la versione fast ora controlla isKingInDanger
-function generateAllActionsFast(game,pd,sm,pts,color,cooldowns){
-  const actions=[];
-  for(const m of game.moves({verbose:true}))actions.push({type:'move',from:m.from,to:m.to,promotion:m.promotion||'q'});
+  
   for(const[sq,id]of Object.entries(sm)){
-    const piece=game.get(sq);if(!piece||piece.color!==color)continue;
-    const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
-    for(const ab of evo.getAbilityMoves(sq,game,d.level,color))actions.push({type:'ability',from:ab.from,to:ab.to,isSwap:ab.isSwap||false})
+      const piece=game.get(sq);if(!piece||piece.color!==color)continue;
+      const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
+      for(const ab of evo.getAbilityMoves(sq,game,d.level,color)) actions.push({type:'ability',from:ab.from,to:ab.to,isSwap:ab.isSwap||false})
   }
+  
   const queenEntry = Object.entries(sm).find(([sq,id]) => pd[id]?.type==='q'&&pd[id]?.level>=2&&pd[id]?.color===color);
-  if(queenEntry &&!game.in_check() && !isKingInDanger(game,pd,sm,color)){
+  if(queenEntry && !game.in_check() && !isKingInDanger(game,pd,sm,color)){
     const queenSq=queenEntry[0];
     const summonedCount=Object.values(pd).filter(d=>d.type==='p'&&d.color===color&&d.summoned).length;
-    if(summonedCount<2&&pts[color]>=2)actions.push({type:'summon',queenSq,cost:2})
+    if(summonedCount<2 && pts[color]>=2){
+        const file=queenSq.charCodeAt(0)-97, rank=parseInt(queenSq[1]);
+        for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){
+            const nf=file+df,nr=rank+dr;
+            if(nf>=0&&nf<=7&&nr>=1&&nr<=8){
+                const tSq=String.fromCharCode(97+nf)+nr;
+                if(!game.get(tSq)) actions.push({type:'summon', queenSq, targetSq: tSq, cost:2});
+            }
+        }
+    }
   }
+
   const towerData=Object.values(pd).find(d=>d.type==='r'&&d.level>=2&&d.color===color);
-  if(towerData){const towerSq=Object.keys(sm).find(sq=>sm[sq]===towerData.id);if(towerSq){for(const[sq,id]of Object.entries(sm)){const targetPiece=game.get(sq);if(!targetPiece||targetPiece.color!==color||targetPiece.type==='k')continue;const targetData=pd[id];if(targetData&&targetData.level>1){actions.push({type:'devolve',towerSq,targetSq:sq,targetId:id});}}}}
-  return actions.filter(a=>{
-    if(a.to){const target=game.get(a.to);if(target&&target.type==='k')return false;
-      if(a.promotion && a.type==='move'){const piece=game.get(a.from);if(piece&&piece.type==='p'){const id=sm[a.from];if(id&&pd[id]?.summoned)return false;}}
+  if(towerData){
+      const towerSq=Object.keys(sm).find(sq=>sm[sq]===towerData.id);
+      if(towerSq){
+          for(const[sq,id]of Object.entries(sm)){
+              const targetPiece=game.get(sq);
+              if(!targetPiece || targetPiece.color === color || targetPiece.type==='k') continue;
+              const targetData=pd[id];
+              if(targetData&&targetData.level>1){
+                  actions.push({type:'devolve',towerSq,targetSq:sq,targetId:id});
+              }
+          }
+      }
+  }
+  return actions;
+}
+
+function generateAllActions(game,pd,sm,pts,color,cooldowns){
+  return getAIActions(game,pd,sm,pts,color).filter(a=>{
+    if(a.to){
+        const target=game.get(a.to); if(target&&target.type==='k') return false;
+        if(a.promotion && a.type==='move'){
+            const piece=game.get(a.from);
+            if(piece&&piece.type==='p'&&pd[sm[a.from]]?.summoned) return false;
+        }
     }
     const next=applyAction(game,pd,sm,pts,a,cooldowns);
     if(!next)return false;
     return !isKingInDanger(next.game,next.pd,next.sm,color);
   });
 }
+const generateAllActionsFast = generateAllActions;
 
+// FIXED applyAction
 function applyAction(game,pd,sm,pts,action,cooldowns){
   const color=game.turn();
-  if(action.type==='ability'&&action.isSwap){const p1=game.get(action.from),p2=game.get(action.to),g=new Chess(game.fen());g.remove(action.from);g.remove(action.to);g.put(p1,action.to);g.put(p2,action.from);const parts=g.fen().split(' '),wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';const ng=new Chess();ng.load(parts.join(' '));const nsm={...sm},id1=nsm[action.from],id2=nsm[action.to];nsm[action.from]=id2;nsm[action.to]=id1;return{game:ng,pd:{...pd},sm:nsm,pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}}}
-  // BUG #6 FIXATO: ID univoco con crypto.randomUUID()
-  if(action.type==='summon'){const queenSq=action.queenSq,targetSq=action.targetSq;if(!targetSq)return null;const newId=`${color}p_summoned_${crypto.randomUUID?crypto.randomUUID().slice(0,8):Math.floor(Math.random()*1e9).toString(36)}`,npd={...pd,[newId]:{type:'p',color,level:1,summoned:true}},nsm={...sm,[targetSq]:newId},ng=new Chess(game.fen());if(!ng.put({type:'p',color},targetSq))return null;const parts=ng.fen().split(' ');parts[1]=color==='w'?'b':'w';parts[3]='-';const finalGame=new Chess();finalGame.load(parts.join(' '));return{game:finalGame,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]-2},cooldowns:{...cooldowns}}}
-  if(action.type==='devolve'){const targetData=pd[action.targetId];if(!targetData||targetData.level<=1)return null;const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}};return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}}}
+  
+  if(action.type==='ability'&&action.isSwap){
+    const p1=game.get(action.from), p2=game.get(action.to), g=new Chess(game.fen());
+    g.remove(action.from); g.remove(action.to); g.put(p1,action.to); g.put(p2,action.from);
+    const parts=g.fen().split(' ');
+    const wasW=parts[1]==='w'; parts[1]=wasW?'b':'w';
+    if(!wasW) parts[5]=String(parseInt(parts[5])+1);
+    parts[3]='-';
+    
+    if(p1.type==='k' || p2.type==='k') parts[2] = parts[2].replace(color==='w'?/[KQ]/g:/[kq]/g, '');
+    if(p1.type==='r' || p2.type==='r') {
+       ['a1','h1','a8','h8'].forEach(sq => {
+           if(action.from===sq || action.to===sq) {
+               if(sq==='a1') parts[2]=parts[2].replace('Q','');
+               if(sq==='h1') parts[2]=parts[2].replace('K','');
+               if(sq==='a8') parts[2]=parts[2].replace('q','');
+               if(sq==='h8') parts[2]=parts[2].replace('k','');
+           }
+       });
+    }
+    if(parts[2]==='') parts[2]='-';
+    const ng=new Chess(); ng.load(parts.join(' '));
+    const nsm={...sm}, id1=nsm[action.from], id2=nsm[action.to]; nsm[action.from]=id2; nsm[action.to]=id1;
+    return{game:ng, pd:{...pd}, sm:nsm, pts:{...pts,[color]:pts[color]+1}, cooldowns:{...cooldowns}}
+  }
+  
+  if(action.type==='summon'){
+    const queenSq=action.queenSq, targetSq=action.targetSq; if(!targetSq) return null;
+    const newId=`${color}p_sum_${Date.now().toString(36)}_${Math.random().toString(36).substring(2,6)}`;
+    const npd={...pd,[newId]:{type:'p',color,level:1,summoned:true}}, nsm={...sm,[targetSq]:newId};
+    const ng=new Chess(game.fen()); if(!ng.put({type:'p',color},targetSq)) return null;
+    const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
+    const finalGame=new Chess(); finalGame.load(parts.join(' '));
+    return{game:finalGame, pd:npd, sm:nsm, pts:{...pts,[color]:pts[color]-2}, cooldowns:{...cooldowns}}
+  }
+  
+  if(action.type==='devolve'){
+    const targetData=pd[action.targetId]; if(!targetData||targetData.level<=1) return null;
+    const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}};
+    const g = new Chess(game.fen());
+    const parts = g.fen().split(' '); 
+    parts[1]=color==='w'?'b':'w';
+    if(color==='b') parts[5]=String(parseInt(parts[5])+1);
+    const ng = new Chess(); ng.load(parts.join(' '));
+    return{game:ng, pd:npd, sm:{...sm}, pts:{...pts,[color]:pts[color]+1}, cooldowns:{...cooldowns}}
+  }
+
+  if(action.promotion && action.type==='move'){
+      const piece=game.get(action.from);
+      if(piece && piece.type==='p' && pd[sm[action.from]]?.summoned) return null; 
+  }
+
   let ng,cap=null,isCastleK=false,isCastleQ=false;
-  if(action.type==='ability'){const r=execAbilityMove(game,action.from,action.to);ng=r.newGame;cap=r.capturedPiece}
-  else{ng=new Chess(game.fen());const mv=ng.move({from:action.from,to:action.to,promotion:action.promotion||'q'});if(!mv)return null;if(mv.captured)cap={type:mv.captured};if(mv.flags?.includes('e'))cap={type:'p',_sq:action.to[0]+action.from[1]};if(mv.flags?.includes('k'))isCastleK=true;if(mv.flags?.includes('q'))isCastleQ=true}
+  if(action.type==='ability'){
+    const r=execAbilityMove(game,action.from,action.to); ng=r.newGame; cap=r.capturedPiece;
+  } else {
+    ng=new Chess(game.fen()); const mv=ng.move({from:action.from,to:action.to,promotion:action.promotion||'q'});
+    if(!mv) return null;
+    if(mv.captured) cap={type:mv.captured};
+    if(mv.flags?.includes('e')) cap={type:'p',_sq:action.to[0]+action.from[1]};
+    if(mv.flags?.includes('k')) isCastleK=true; if(mv.flags?.includes('q')) isCastleQ=true;
+  }
+  
   const mid=sm[action.from],nsm={...sm},npd={...pd};
   if(isCastleK||isCastleQ){const rank=color==='w'?'1':'8';if(isCastleK){nsm['f'+rank]=nsm['h'+rank];delete nsm['h'+rank]}if(isCastleQ){nsm['d'+rank]=nsm['a'+rank];delete nsm['a'+rank]}}
   if(cap){const cs=cap._sq||action.to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs]}}
-  const np=ng.get(action.to);if(np&&mid&&npd[mid]&&np.type!==npd[mid].type)npd[mid]={...npd[mid],type:np.type,level:1};
-  delete nsm[action.from];nsm[action.to]=mid;
-  let p=1;if(cap)p++;if(ng.in_check())p++;
-  const newCooldowns={...cooldowns};if(newCooldowns.towerDeevolve>0)newCooldowns.towerDeevolve--;
-  return{game:ng,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]+p},cooldowns:newCooldowns}
+  const np=ng.get(action.to);
+  
+  if(np&&mid&&npd[mid]&&np.type!==npd[mid].type) {
+     const newPromoId = `${np.color}${np.type}_promo_${Math.random().toString(36).substring(2,8)}`;
+     npd[newPromoId] = {type:np.type, color:np.color, level:1};
+     delete npd[mid];
+     nsm[action.to] = newPromoId;
+  } else {
+     nsm[action.to]=mid;
+  }
+  delete nsm[action.from];
+  
+  let p=1; if(cap) p++; if(ng.in_check()) p++;
+  return{game:ng, pd:npd, sm:nsm, pts:{...pts,[color]:pts[color]+p}, cooldowns:{...cooldowns}}
 }
 
 // ═══════════ FASE EVOLUZIONE ═══════════
@@ -251,8 +349,7 @@ const NEURAL_BRAIN = {
       }
       if (saved) {
         const w = JSON.parse(saved);
-        // BUG #5 FIXATO: validazione completa dei pesi
-        if (w && REQUIRED_WEIGHT_KEYS.every(k => typeof w[k] === 'number')) return w;
+        if (w && REQUIRED_WEIGHT_KEYS.every(k => typeof w[k] === 'number' && !isNaN(w[k]))) return w;
       }
     } catch(e){}
     return { ...DEFAULT_WEIGHTS };
@@ -346,9 +443,9 @@ const HEADLESS_OMEGA = {
   }
 };
 
-// ═══════════ TRAINING 20.000 partite ═══════════
+// ═══════════ TRAINING 20.000 partite (FIXED) ═══════════
 let brainStats = { games: 0, wins: {w:0,b:0} };
-async function trainAI(games=20000,onProgress=()=>{}){
+async function trainAI(games=20000, onProgress=()=>{}, wakeLockRef=null){
   let gameCount=0;
   try {
     for(let i=0;i<games;i++){
@@ -378,11 +475,6 @@ async function trainAI(games=20000,onProgress=()=>{}){
       if(gameCount % 1000 === 0) {
         const w = NEURAL_BRAIN.loadWeights();
         localStorage.setItem('omega_backup', JSON.stringify(w));
-        const blob = new Blob([JSON.stringify(w)], {type:'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `omega_backup_${gameCount}.json`; a.click();
-        URL.revokeObjectURL(url);
       }
       if(gameCount % 50 === 0) {
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -390,8 +482,7 @@ async function trainAI(games=20000,onProgress=()=>{}){
       onProgress({current:gameCount,total:games,wins:brainStats.wins});
     }
   } finally {
-    // BUG #6 FIXATO: WakeLock rilasciato in finally
-    if (wakeLockRef.current) {
+    if (wakeLockRef && wakeLockRef.current) {
       try { await wakeLockRef.current.release(); wakeLockRef.current = null; } catch(e){}
     }
   }
@@ -409,7 +500,6 @@ function App(){
   const[cooldowns,setCooldowns]=useState({});
   const[postPhase,setPostPhase]=useState(false),[postPlayer,setPostPlayer]=useState(null);
   const[summonMode,setSummonMode]=useState(false),[summonQueenSq,setSummonQueenSq]=useState(null);
-  // Nuovo stato per disevoluzione selettiva
   const[devolveMode,setDevolveMode]=useState(false),[devolveTowerSq,setDevolveTowerSq]=useState(null);
   const timer=useRef(null),gen=useRef(0),lastFenRef=useRef(null),wakeLockRef=useRef(null);
 
@@ -485,7 +575,6 @@ function App(){
     setSummonMode(false);setSummonQueenSq(null);
   },[summonMode,summonQueenSq,game,pd,sm,pts,cooldowns]);
 
-  // BUG #4 FIXATO: Disevoluzione selettiva
   const doDevolve=useCallback((towerSq, targetSq)=>{
     if(!towerSq || !targetSq) return;
     const id=sm[towerSq],d=pd[id];if(!d||d.type!=='r'||d.level<2)return;
@@ -500,7 +589,6 @@ function App(){
   },[game,sm,pd,pts,cooldowns]);
 
   const click=useCallback(sq=>{
-    // Gestione disevoluzione selettiva (nuovo)
     if(devolveMode && devolveTowerSq){
       const piece = game.get(sq);
       if(!piece || piece.color !== postPlayer || piece.type==='k' || piece.type==='r'){
@@ -520,12 +608,10 @@ function App(){
       const p=game.get(sq);
       if(!p || p.color!==postPlayer){ skipPost(); return; }
       const id=sm[sq], d=pd[id];
-      // Regina Lv2 → summon
       if(d?.type==='q' && d?.level>=2 && pts[postPlayer]>=2 &&!game.in_check() && !isKingInDanger(game,pd,sm,postPlayer)){
         const summonedCount=Object.values(pd).filter(x=>x.type==='p'&&x.color===postPlayer&&x.summoned).length;
         if(summonedCount<2){ startSummon(sq); return; }
       }
-      // Torre Lv2 → entra in modalità selezione bersaglio
       if(d?.type==='r' && d?.level>=2){
         const hasTarget = Object.values(pd).some(x=>x.color===postPlayer&&x.level>1&&x.type!=='k'&&x.type!=='r');
         if(hasTarget){
@@ -560,8 +646,7 @@ function App(){
     reader.onload = (ev) => {
       try {
         const w = JSON.parse(ev.target.result);
-        // Validazione completa (BUG #5)
-        if (!w || !REQUIRED_WEIGHT_KEYS.every(k => typeof w[k] === 'number')) {
+        if (!w || !REQUIRED_WEIGHT_KEYS.every(k => typeof w[k] === 'number' && !isNaN(w[k]))) {
           alert('File non valido: pesi mancanti o errati');
           return;
         }
@@ -582,8 +667,7 @@ function App(){
         wakeLockRef.current.addEventListener('release',()=>setDebug('⚠️ Schermo sbloccato'));
       }catch(err){}
     }
-    await trainAI(20000,(p)=>setTrainProgress(`${p.current}/${p.total} | W:${p.wins.w} B:${p.wins.b}`));
-    // WakeLock rilasciato nel finally di trainAI
+    await trainAI(20000, (p)=>setTrainProgress(`${p.current}/${p.total} | W:${p.wins.w} B:${p.wins.b}`), wakeLockRef);
     setTraining(false);
     setDebug('✅ Training completato!');
     reset();
@@ -595,7 +679,6 @@ function App(){
   const isAI=PERSONALITIES[turn==='w'?wAI:bAI]?.ai;
   const evolvableSqs=postPhase&&postPlayer?getEvolvablePieces(game,pd,sm,pts,postPlayer).map(c=>c.sq):[];
   let summonAdjSqs=[];if(summonMode&&summonQueenSq){const file=summonQueenSq.charCodeAt(0)-97,rank=parseInt(summonQueenSq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){const nf=file+df,nr=rank+dr;if(nf>=0&&nf<=7&&nr>=1&&nr<=8){const s=String.fromCharCode(97+nf)+nr;if(!game.get(s))summonAdjSqs.push(s)}}}
-  // Celle evidenziate per disevoluzione
   let devolveTargetSqs=[];
   if(devolveMode&&devolveTowerSq&&postPlayer){
     devolveTargetSqs=Object.entries(sm).filter(([sq,id])=>{

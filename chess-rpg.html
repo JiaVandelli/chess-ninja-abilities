@@ -99,7 +99,14 @@ function isKingInDanger(game,pd,sm,color){
   const fen=game.fen().split(' ');fen[1]=color;fen[3]='-';
   const test=new Chess(fen.slice(0,4).join(' ')+' 0 1');if(test.in_check())return true;
   let kingSq=null;const board=game.board();
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=board[r][c];if(p&&p.type==='k'&&p.color===color){kingSq='abcdefgh'[c]+(8-r);break;}}if(kingSq)break;
+  for(let r=0;r<8;r++){
+    let found=false;
+    for(let c=0;c<8;c++){
+      const p=board[r][c];
+      if(p&&p.type==='k'&&p.color===color){kingSq='abcdefgh'[c]+(8-r);found=true;break;}
+    }
+    if(found)break;
+  }
   return kingSq?isSquareAttackedByEvo(game,pd,sm,kingSq,color==='w'?'b':'w'):false;
 }
 
@@ -221,7 +228,7 @@ function autoEvolve(state,color){
   return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:npts,cooldowns:{...cooldowns}};
 }
 
-// ═══════════ RETE NEURALE MINIMA (corretta) ═══════════
+// ═══════════ RETE NEURALE MINIMA ═══════════
 const DEFAULT_WEIGHTS={material:1.0,position:0.5,kingSafety:0.8};
 const REQUIRED_KEYS=Object.keys(DEFAULT_WEIGHTS);
 

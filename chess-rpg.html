@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG - Omega Neural V5.9.3</title>
+  <title>Chess RPG - Omega Neural V5.9.4 (bugfix)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -79,10 +79,16 @@ function moveLeavesKingInCheck(fen,from,to,piece){
 
 function execAbilityMove(game,from,to){
   try {
-    const piece=game.get(from); if(!piece) return null;
+    let piece=game.get(from); if(!piece) return null;
     const captured=game.get(to)||null;
     const g=new Chess(game.fen());
     g.remove(from); if(captured) g.remove(to);
+
+    // 🔧 Fix promozione pedone evoluto
+    if(piece.type==='p' && (to[1]==='8'||to[1]==='1')){
+      piece = {type:'q', color: piece.color};
+    }
+
     try { g.put(piece, to); } catch(e) { return null; }
     const parts=g.fen().split(' ');
     if(piece.type==='k') parts[2]=parts[2].replace(piece.color==='w'?/[KQ]/g:/[kq]/g,'');
@@ -130,12 +136,17 @@ function isKingInDanger(game,pd,sm,color){
   } catch(e) { return false; }
 }
 
-function estimateWinner(game){
+// 🔧 Stima del vincitore con valore RPG
+function estimateWinner(game, pd, sm){
   let white=0, black=0;
   const board=game.board();
   for(let r=0;r<8;r++) for(let c=0;c<8;c++){
     const p=board[r][c]; if(!p)continue;
-    const val = {p:1,n:3,b:3,r:5,q:9,k:0}[p.type]||0;
+    const sq = 'abcdefgh'[c]+(8-r);
+    const id = sm[sq];
+    const d = id ? pd[id] : null;
+    let val = BASE_VALS[p.type] || 0;
+    if(d && d.level > 1) val = rpgVal(d.type, d.level);  // include bonus evoluzione
     if(p.color==='w') white+=val; else black+=val;
   }
   if(white===black) return null;
@@ -172,16 +183,16 @@ function getAIActions(game,pd,sm,pts,color){
     const piece=game.get(sq);if(!piece||piece.color!==color)continue;
     const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
     for(const ab of evo.getAbilityMoves(sq,game,d.level,color)) {
-      // BUG #4 FIXATO: non generare abilità che catturano il re
       const target = game.get(ab.to);
       if(target && target.type==='k') continue;
       actions.push({type:'ability',from:ab.from,to:ab.to,isSwap:ab.isSwap||false});
     }
   }
-  for(const[sq,id]of Object.entries(sm)){
-    if(pd[id]?.type==='q' && pd[id]?.level>=2 && pd[id]?.color===color && !game.in_check() && !isKingInDanger(game,pd,sm,color)){
-      const summonedCount=Object.values(pd).filter(d=>d.type==='p'&&d.color===color&&d.summoned).length;
-      if(summonedCount<2 && pts[color]>=2){
+  // Evocazione (una per ogni regina, ma rispettando il limite globale)
+  const allSummoned = Object.values(pd).filter(d=>d.type==='p'&&d.color===color&&d.summoned).length;
+  if(allSummoned < 2 && pts[color]>=2 && !game.in_check() && !isKingInDanger(game,pd,sm,color)) {
+    for(const[sq,id]of Object.entries(sm)){
+      if(pd[id]?.type==='q' && pd[id]?.level>=2 && pd[id]?.color===color){
         const file=sq.charCodeAt(0)-97, rank=parseInt(sq[1]);
         for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){
           const nf=file+df,nr=rank+dr;
@@ -193,6 +204,7 @@ function getAIActions(game,pd,sm,pts,color){
       }
     }
   }
+  // Disevoluzione
   for(const[sq,id]of Object.entries(sm)){
     if(pd[id]?.type==='r' && pd[id]?.level>=2 && pd[id]?.color===color){
       for(const[tsq,tid]of Object.entries(sm)){
@@ -216,7 +228,6 @@ function generateValidActions(game,pd,sm,pts,color,cooldowns){
 
 function applyAction(game,pd,sm,pts,action,cooldowns,playerColor){
   try {
-    // playerColor permette di forzare chi esegue l'azione (BUG #3)
     const color = playerColor || game.turn();
     if(action.type==='ability'&&action.isSwap){
       const p1=game.get(action.from),p2=game.get(action.to);
@@ -250,11 +261,11 @@ function applyAction(game,pd,sm,pts,action,cooldowns,playerColor){
     if(action.type==='devolve'){
       const targetData=pd[action.targetId]; if(!targetData||targetData.level<=1) return null;
       const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}};
-      // BUG #1 FIXATO: la disevoluzione NON cambia il turno
       const g=new Chess(game.fen()), parts=g.fen().split(' ');
       parts[3]='-'; parts[4]='0';
-      // NON incrementare fullmove, non cambiare turno
       const ng=new Chess(); if(!ng.load(parts.join(' '))) return null;
+      // 🔧 Controllo aggiuntivo: il re non deve essere in pericolo dopo la disevoluzione
+      if(isKingInDanger(ng,npd,sm,color)) return null;
       return{game:ng,pd:npd,sm:{...sm},pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}};
     }
     if(action.promotion&&action.type==='move'){const piece=game.get(action.from);if(piece&&piece.type==='p'&&pd[sm[action.from]]?.summoned)return null;}
@@ -354,7 +365,7 @@ function chooseAction(game,pd,sm,pts,color,cooldowns,weights,isTraining){
   return best||all[0];
 }
 
-// ═══════════ TRAINING (BUG #6 FIXATO) ═══════════
+// ═══════════ TRAINING (con stima vincitore migliorata) ═══════════
 async function trainAI(gamesTotal,onProgress,wakeLockRef){
   let weights=loadWeights(),completed=0,wins={w:0,b:0};
   try{
@@ -370,7 +381,7 @@ async function trainAI(gamesTotal,onProgress,wakeLockRef){
       }
       let winner=null;
       if(state.game.in_checkmate()) winner=state.game.turn()==='w'?'b':'w';
-      else if(history.length===200) winner=estimateWinner(state.game); // BUG #6: se la partita non finisce, stima il vincitore
+      else if(history.length===200) winner=estimateWinner(state.game, state.pd, state.sm); // 🔧 stima corretta
       if(winner){wins[winner]++;weights=updateWeights(history,winner,weights);}
       completed++;
       if(completed%100===0){saveWeights(weights);localStorage.setItem('omega_games_count',String(parseInt(localStorage.getItem('omega_games_count')||'0')+100));}

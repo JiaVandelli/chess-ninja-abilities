@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>Chess RPG - Omega Neural V5.7</title>
+    <title>Chess RPG - Omega Neural V5.8.1</title>
     <style>
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -34,7 +34,6 @@
         .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
         .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
         .evo2{filter:drop-shadow(0 0 4px #a855f7)!important}
-        /* Bordo grigio per pedoni evocati */
         .summoned-pawn{outline:2px solid #6b7280;outline-offset:-2px;border-radius:2px}
         .panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:5px}
         .charge-row{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#94a3b8}
@@ -77,7 +76,6 @@ function execAbilityMove(game,from,to){
   return{newGame:ng,capturedPiece:captured};
 }
 
-// ─── EVO‑SCACCO ──────────────────────────────────────────
 function isSquareAttackedByEvo(game, pd, sm, targetSq, attackerColor) {
   const tf = targetSq.charCodeAt(0) - 97, tr = parseInt(targetSq[1]);
   for (const [sq, id] of Object.entries(sm)) {
@@ -133,17 +131,15 @@ function generateAllActions(game,pd,sm,pts,color,cooldowns){
   }
   const towerData=Object.values(pd).find(d=>d.type==='r'&&d.level>=2&&d.color===color);
   if(towerData){const towerSq=Object.keys(sm).find(sq=>sm[sq]===towerData.id);if(towerSq){for(const[sq,id]of Object.entries(sm)){const targetPiece=game.get(sq);if(!targetPiece||targetPiece.color!==color||targetPiece.type==='k')continue;const targetData=pd[id];if(targetData&&targetData.level>1){actions.push({type:'devolve',towerSq,targetSq:sq,targetId:id});}}}}
-  // Filtro sicurezza Re + blocco promozione pedoni evocati
   return actions.filter(a=>{
     if(a.to){
       const target=game.get(a.to);
       if(target&&target.type==='k')return false;
-      // Blocca promozione per pedoni evocati
       if(a.promotion && a.type==='move'){
         const piece=game.get(a.from);
         if(piece && piece.type==='p'){
           const id=sm[a.from];
-          if(id && pd[id]?.summoned) return false; // pedone evocato non può promuovere
+          if(id && pd[id]?.summoned) return false;
         }
       }
     }
@@ -179,7 +175,7 @@ function generateAllActionsFast(game,pd,sm,pts,color,cooldowns){
 function applyAction(game,pd,sm,pts,action,cooldowns){
   const color=game.turn();
   if(action.type==='ability'&&action.isSwap){const p1=game.get(action.from),p2=game.get(action.to),g=new Chess(game.fen());g.remove(action.from);g.remove(action.to);g.put(p1,action.to);g.put(p2,action.from);const parts=g.fen().split(' '),wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';const ng=new Chess();ng.load(parts.join(' '));const nsm={...sm},id1=nsm[action.from],id2=nsm[action.to];nsm[action.from]=id2;nsm[action.to]=id1;return{game:ng,pd:{...pd},sm:nsm,pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}}}
-  if(action.type==='summon'){const queenSq=action.queenSq,targetSq=action.targetSq;if(!targetSq)return null;const newId=`${color}p_summoned_${Date.now()}`,npd={...pd,[newId]:{type:'p',color,level:1,summoned:true}},nsm={...sm,[targetSq]:newId},ng=new Chess(game.fen());ng.put({type:'p',color},targetSq);const parts=ng.fen().split(' ');parts[1]=color==='w'?'b':'w';parts[3]='-';const finalGame=new Chess();finalGame.load(parts.join(' '));return{game:finalGame,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]-2},cooldowns:{...cooldowns}}}
+  if(action.type==='summon'){const queenSq=action.queenSq,targetSq=action.targetSq;if(!targetSq)return null;const newId=`${color}p_summoned_${Date.now()}_${Math.floor(Math.random()*1000)}`,npd={...pd,[newId]:{type:'p',color,level:1,summoned:true}},nsm={...sm,[targetSq]:newId},ng=new Chess(game.fen());ng.put({type:'p',color},targetSq);const parts=ng.fen().split(' ');parts[1]=color==='w'?'b':'w';parts[3]='-';const finalGame=new Chess();finalGame.load(parts.join(' '));return{game:finalGame,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]-2},cooldowns:{...cooldowns}}}
   if(action.type==='devolve'){const targetData=pd[action.targetId];if(!targetData||targetData.level<=1)return null;const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}};return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}}}
   let ng,cap=null,isCastleK=false,isCastleQ=false;
   if(action.type==='ability'){const r=execAbilityMove(game,action.from,action.to);ng=r.newGame;cap=r.capturedPiece}
@@ -189,7 +185,6 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
   if(cap){const cs=cap._sq||action.to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs]}}
   const np=ng.get(action.to);if(np&&mid&&npd[mid]&&np.type!==npd[mid].type)npd[mid]={...npd[mid],type:np.type,level:1};
   delete nsm[action.from];nsm[action.to]=mid;
-  // Punti: 1 base + 1 se cattura + 1 se scacco
   let p=1;if(cap)p++;if(ng.in_check())p++;
   const newCooldowns={...cooldowns};if(newCooldowns.towerDeevolve>0)newCooldowns.towerDeevolve--;
   return{game:ng,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]+p},cooldowns:newCooldowns}
@@ -206,7 +201,11 @@ function autoEvolve(state,color){
   const{game,pd,sm,pts,cooldowns}=state;
   const candidates=getEvolvablePieces(game,pd,sm,pts,color);
   if(!candidates.length)return state;
-  candidates.sort((a,b)=>rpgVal(b.type,b.newLevel)-rpgVal(b.type,b.newLevel-1)-(rpgVal(a.type,a.newLevel)-rpgVal(a.type,a.newLevel-1)));
+  candidates.sort((a, b) => {
+    const gainA = rpgVal(a.type, a.newLevel) - rpgVal(a.type, a.newLevel - 1);
+    const gainB = rpgVal(b.type, b.newLevel) - rpgVal(b.type, b.newLevel - 1);
+    return gainB - gainA;
+  });
   const best=candidates[0];
   const gain=rpgVal(best.type,best.newLevel)-rpgVal(best.type,best.newLevel-1);
   if(gain<1.5)return state;
@@ -217,15 +216,29 @@ function autoEvolve(state,color){
 
 // ═══════════ NEURAL BRAIN V2.1 (20 FEATURE) ═══════════
 const LEARNING_RATE = 0.02;
+const DEFAULT_WEIGHTS = {
+  material:1.0, rpg:1.5, energy:0.5, center:0.3, kingSafety:0.8, evolvedPieces:1.0,
+  pawnAdvanced:0.4, kingExposed:0.6, queenActive:0.3, rookOpen:0.5, mobility:0.7,
+  bishopPair:0.3, passedPawns:0.8, centerPawns:0.4, pieceActivity:0.5,
+  pawnStructure:0.3, kingAttackers:0.6, outposts:0.4, threats:0.5, development:0.4
+};
 const NEURAL_BRAIN = {
   loadWeights: () => {
-    try { const w = JSON.parse(localStorage.getItem('omega_weights_v21')); if (w && w.material !== undefined) return w; } catch(e){}
-    return {
-      material:1.0, rpg:1.5, energy:0.5, center:0.3, kingSafety:0.8, evolvedPieces:1.0,
-      pawnAdvanced:0.4, kingExposed:0.6, queenActive:0.3, rookOpen:0.5, mobility:0.7,
-      bishopPair:0.3, passedPawns:0.8, centerPawns:0.4, pieceActivity:0.5,
-      pawnStructure:0.3, kingAttackers:0.6, outposts:0.4, threats:0.5, development:0.4
-    };
+    try {
+      let saved = localStorage.getItem('omega_weights_v21');
+      if (!saved) {
+        saved = localStorage.getItem('omega_backup');
+        if (saved) {
+          console.warn("Pesi principali mancanti. Ripristino dal backup completato.");
+          localStorage.setItem('omega_weights_v21', saved);
+        }
+      }
+      if (saved) {
+        const w = JSON.parse(saved);
+        if (w && w.material !== undefined) return w;
+      }
+    } catch(e){}
+    return { ...DEFAULT_WEIGHTS };
   },
   saveWeights: (w) => localStorage.setItem('omega_weights_v21', JSON.stringify(w)),
   getFeatures: (game, pd, sm, pts, color) => {
@@ -316,7 +329,7 @@ const HEADLESS_OMEGA = {
   }
 };
 
-// ═══════════ TRAINING 20.000 partite (backup ogni 1000) ═══════════
+// ═══════════ TRAINING 20.000 partite (backup ogni 1000, loop frazionato) ═══════════
 let brainStats = { games: 0, wins: {w:0,b:0} };
 async function trainAI(games=20000,onProgress=()=>{}){
   let gameCount=0;
@@ -354,6 +367,10 @@ async function trainAI(games=20000,onProgress=()=>{}){
       a.href = url; a.download = `omega_backup_${gameCount}.json`; a.click();
       URL.revokeObjectURL(url);
     }
+    // Frazionamento per mobile: lascia respirare la UI ogni 50 partite
+    if(gameCount % 50 === 0) {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
     onProgress({current:gameCount,total:games,wins:brainStats.wins});
   }
   return{total:gameCount,wins:brainStats.wins};
@@ -387,7 +404,6 @@ function App(){
         const to = m.to;
         const targetPiece = game.get(to);
         if (targetPiece && targetPiece.type === 'k') return false;
-        // Blocca promozione per pedoni evocati
         if (!isAbil && p.type==='p' && d?.summoned && (to[1]==='8'||to[1]==='1')) return false;
         const actionObj = isAbil ? { ...m, type: 'ability', from: sq, to } : { type: 'move', from: sq, to, promotion: 'q' };
         const next = applyAction(game, pd, sm, pts, actionObj, cooldowns);
@@ -512,7 +528,7 @@ function App(){
   return(<div className="app">
     <Bar color="b" cur={bAI} onChange={k=>{setBAI(k);setTimeout(reset,0)}}/>
     <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[bAI]?.color}`}}><div className="player-name">{thinking&&turn==='b'&&<div className="thinking-dot"/>}⬛ {PERSONALITIES[bAI]?.name}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span></div></div>
-    <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,evoCls=level===2?'evo2':'',isEvoHighlight=postPhase&&evolvableSqs.includes(sq),isSummonHighlight=summonMode&&summonAdjSqs.includes(sq),isSummoned=data?.summoned;return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${isEvoHighlight?'evo-highlight':''} ${isSummonHighlight?'summon-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${evoCls} ${isSummoned?'summoned-pawn':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}{level>=2&&<div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 10px rgba(168,85,247,0.7)',zIndex:3}}/>}</div>)}))}</div></div>
+    <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,evoCls=level===2?'evo2':'',isEvoHighlight=postPhase&&evolvableSqs.includes(sq),isSummonHighlight=summonMode&&summonAdjSqs.includes(sq),isSummoned=data?.summoned;return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${isEvoHighlight?'evo-highlight':''} ${isSummonHighlight?'summon-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${evoCls} ${isSummoned?'summoned-pawn':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}{level>=2&&(<div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,0.8)',zIndex:3}}/>)}</div>)}))}</div></div>
     <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>Neural...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
     <div className="panel">
       {summonMode?(

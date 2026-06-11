@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>Chess RPG - Omega Neural V5.8.3</title>
+    <title>Chess RPG - Omega Neural V5.8.4</title>
     <style>
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -57,7 +57,7 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-// ═══════════ HELPERS (BUG FIXES) ═══════════
+// ═══════════ HELPERS (FIX BUG RE SOTTO SCACCO) ═══════════
 function moveLeavesKingInCheck(fen,from,to,piece){
   const g=new Chess(fen);
   g.remove(from); g.remove(to); g.put(piece,to);
@@ -72,7 +72,6 @@ function execAbilityMove(game,from,to){
   const piece=game.get(from), captured=game.get(to)||null, g=new Chess(game.fen());
   g.remove(from); if(captured) g.remove(to); g.put(piece,to);
   const parts=g.fen().split(' ');
-  
   if(piece.type==='k') parts[2]=parts[2].replace(piece.color==='w'?/[KQ]/g:/[kq]/g,'');
   if(piece.type==='r'){
     if(from==='a1') parts[2]=parts[2].replace('Q','');
@@ -110,28 +109,23 @@ function isSquareAttackedByEvo(game, pd, sm, targetSq, attackerColor) {
   return false;
 }
 
-// FIXED isKingInDanger
+// FIX DEFINITIVO: isKingInDanger non corrompe la FEN
 function isKingInDanger(game, pd, sm, color) {
+  // 1. Controllo scacco normale (con FEN corretta)
+  const fen = game.fen().split(' ');
+  fen[1] = color;
+  fen[3] = '-'; // togli en passant
+  const test = new Chess(fen.slice(0,4).join(' ') + ' 0 1');
+  if (test.in_check()) return true;
+
+  // 2. Controllo scacco RPG
   let kingSq = null;
   const board = game.board();
-  for (let r = 0; r < 8; r++) { 
-    for (let c = 0; c < 8; c++) { 
-      const p = board[r][c]; 
-      if (p && p.type === 'k' && p.color === color) { 
-        kingSq = 'abcdefgh'[c] + (8 - r); 
-        break; 
-      } 
-    } 
-    if (kingSq) break; 
+  for (let r=0; r<8; r++) for (let c=0; c<8; c++) {
+    const p = board[r][c];
+    if (p && p.type==='k' && p.color===color) kingSq = 'abcdefgh'[c]+(8-r);
   }
-  if (!kingSq) return false;
-  const parts = game.fen().split(' ');
-  parts[1] = color; 
-  const tempGame = new Chess();
-  if (tempGame.load(parts.join(' '))) {
-      if (tempGame.in_check()) return true;
-  }
-  return isSquareAttackedByEvo(game, pd, sm, kingSq, color === 'w' ? 'b' : 'w');
+  return kingSq ? isSquareAttackedByEvo(game,pd,sm,kingSq,color==='w'?'b':'w') : false;
 }
 
 // ═══════════ EVOLUZIONI ═══════════
@@ -154,20 +148,18 @@ const BASE_VALS={p:1,n:3.2,b:3.3,r:5,q:9,k:200};
 function rpgVal(type,level){const b=BASE_VALS[type]||0;if(level===2){if(type==='p')return b+0.7;if(type==='n')return b+1.5;if(type==='b')return b+1.7;if(type==='r')return b+2.5;if(type==='q')return b+5.0}return b}
 function evalRpg(game,pd,sm,pts,color){const opp=color==='w'?'b':'w';let score=0;for(const d of Object.values(pd)){if(!d)continue;score+=d.color===color?rpgVal(d.type,d.level):-rpgVal(d.type,d.level)}score+=(pts[color]-pts[opp])*0.35;return score}
 
-// ═══════════ ACTIONS (UNIFICATE) ═══════════
+// ═══════════ ACTIONS ═══════════
 function getAIActions(game,pd,sm,pts,color) {
   const actions=[]; 
   for(const m of game.moves({verbose:true})) {
       if (m.promotion && m.promotion !== 'q') continue; 
       actions.push({type:'move',from:m.from,to:m.to,promotion:m.promotion||'q'});
   }
-  
   for(const[sq,id]of Object.entries(sm)){
       const piece=game.get(sq);if(!piece||piece.color!==color)continue;
       const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
       for(const ab of evo.getAbilityMoves(sq,game,d.level,color)) actions.push({type:'ability',from:ab.from,to:ab.to,isSwap:ab.isSwap||false})
   }
-  
   const queenEntry = Object.entries(sm).find(([sq,id]) => pd[id]?.type==='q'&&pd[id]?.level>=2&&pd[id]?.color===color);
   if(queenEntry && !game.in_check() && !isKingInDanger(game,pd,sm,color)){
     const queenSq=queenEntry[0];
@@ -183,7 +175,6 @@ function getAIActions(game,pd,sm,pts,color) {
         }
     }
   }
-
   const towerData=Object.values(pd).find(d=>d.type==='r'&&d.level>=2&&d.color===color);
   if(towerData){
       const towerSq=Object.keys(sm).find(sq=>sm[sq]===towerData.id);
@@ -217,10 +208,8 @@ function generateAllActions(game,pd,sm,pts,color,cooldowns){
 }
 const generateAllActionsFast = generateAllActions;
 
-// FIXED applyAction
 function applyAction(game,pd,sm,pts,action,cooldowns){
   const color=game.turn();
-  
   if(action.type==='ability'&&action.isSwap){
     const p1=game.get(action.from), p2=game.get(action.to), g=new Chess(game.fen());
     g.remove(action.from); g.remove(action.to); g.put(p1,action.to); g.put(p2,action.from);
@@ -228,7 +217,6 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
     const wasW=parts[1]==='w'; parts[1]=wasW?'b':'w';
     if(!wasW) parts[5]=String(parseInt(parts[5])+1);
     parts[3]='-';
-    
     if(p1.type==='k' || p2.type==='k') parts[2] = parts[2].replace(color==='w'?/[KQ]/g:/[kq]/g, '');
     if(p1.type==='r' || p2.type==='r') {
        ['a1','h1','a8','h8'].forEach(sq => {
@@ -245,7 +233,6 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
     const nsm={...sm}, id1=nsm[action.from], id2=nsm[action.to]; nsm[action.from]=id2; nsm[action.to]=id1;
     return{game:ng, pd:{...pd}, sm:nsm, pts:{...pts,[color]:pts[color]+1}, cooldowns:{...cooldowns}}
   }
-  
   if(action.type==='summon'){
     const queenSq=action.queenSq, targetSq=action.targetSq; if(!targetSq) return null;
     const newId=`${color}p_sum_${Date.now().toString(36)}_${Math.random().toString(36).substring(2,6)}`;
@@ -255,7 +242,6 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
     const finalGame=new Chess(); finalGame.load(parts.join(' '));
     return{game:finalGame, pd:npd, sm:nsm, pts:{...pts,[color]:pts[color]-2}, cooldowns:{...cooldowns}}
   }
-  
   if(action.type==='devolve'){
     const targetData=pd[action.targetId]; if(!targetData||targetData.level<=1) return null;
     const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}};
@@ -266,12 +252,10 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
     const ng = new Chess(); ng.load(parts.join(' '));
     return{game:ng, pd:npd, sm:{...sm}, pts:{...pts,[color]:pts[color]+1}, cooldowns:{...cooldowns}}
   }
-
   if(action.promotion && action.type==='move'){
       const piece=game.get(action.from);
       if(piece && piece.type==='p' && pd[sm[action.from]]?.summoned) return null; 
   }
-
   let ng,cap=null,isCastleK=false,isCastleQ=false;
   if(action.type==='ability'){
     const r=execAbilityMove(game,action.from,action.to); ng=r.newGame; cap=r.capturedPiece;
@@ -282,12 +266,10 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
     if(mv.flags?.includes('e')) cap={type:'p',_sq:action.to[0]+action.from[1]};
     if(mv.flags?.includes('k')) isCastleK=true; if(mv.flags?.includes('q')) isCastleQ=true;
   }
-  
   const mid=sm[action.from],nsm={...sm},npd={...pd};
   if(isCastleK||isCastleQ){const rank=color==='w'?'1':'8';if(isCastleK){nsm['f'+rank]=nsm['h'+rank];delete nsm['h'+rank]}if(isCastleQ){nsm['d'+rank]=nsm['a'+rank];delete nsm['a'+rank]}}
   if(cap){const cs=cap._sq||action.to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs]}}
   const np=ng.get(action.to);
-  
   if(np&&mid&&npd[mid]&&np.type!==npd[mid].type) {
      const newPromoId = `${np.color}${np.type}_promo_${Math.random().toString(36).substring(2,8)}`;
      npd[newPromoId] = {type:np.type, color:np.color, level:1};
@@ -297,7 +279,6 @@ function applyAction(game,pd,sm,pts,action,cooldowns){
      nsm[action.to]=mid;
   }
   delete nsm[action.from];
-  
   let p=1; if(cap) p++; if(ng.in_check()) p++;
   return{game:ng, pd:npd, sm:nsm, pts:{...pts,[color]:pts[color]+p}, cooldowns:{...cooldowns}}
 }
@@ -424,11 +405,16 @@ const NEURAL_BRAIN = {
   }
 };
 
-// ═══════════ HEADLESS OMEGA ═══════════
+// ═══════════ HEADLESS OMEGA (FALLBACK SICURO) ═══════════
 const HEADLESS_OMEGA = {
   chooseActionFast: (game, pd, sm, pts, color, cooldowns, weights, isTraining=false) => {
     const all = generateAllActionsFast(game, pd, sm, pts, color, cooldowns);
-    if(!all.length) return null;
+    if(!all.length) {
+      // FALLBACK: nessuna mossa valida? usa la prima mossa legale senza filtri
+      const rawMoves = game.moves({verbose:true});
+      if(rawMoves.length) return {type:'move', from:rawMoves[0].from, to:rawMoves[0].to, promotion:'q'};
+      return null;
+    }
     const exploreRate = isTraining? 0.25 : 0.05;
     if(Math.random() < exploreRate) { return all[Math.floor(Math.random() * all.length)]; }
     let best = null, bestScore = -Infinity;
@@ -443,7 +429,7 @@ const HEADLESS_OMEGA = {
   }
 };
 
-// ═══════════ TRAINING 20.000 partite (FIXED) ═══════════
+// ═══════════ TRAINING ═══════════
 let brainStats = { games: 0, wins: {w:0,b:0} };
 async function trainAI(games=20000, onProgress=()=>{}, wakeLockRef=null){
   let gameCount=0;
@@ -602,7 +588,6 @@ function App(){
       }
       return;
     }
-
     if(summonMode){handleSummonClick(sq);return}
     if(postPhase && postPlayer){
       const p=game.get(sq);

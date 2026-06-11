@@ -1,54 +1,52 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>Chess RPG - Omega Neural V5.8.9 Light</title>
-    <style>
-        *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-        html,body{height:100%;margin:0;overflow:hidden;background:#060913}
-        #root{height:100%}
-        .app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
-        .top-bar{flex-shrink:0;height:40px;display:flex;gap:6px;align-items:center}
-        .mode-btn{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;color:#94a3b8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
-        .mode-btn.active{color:#030712!important}
-        .flip-btn{flex-shrink:0;padding:0 12px;height:100%;background:#1e293b;border:none;color:#94a3b8;border-radius:8px;font-size:13px;cursor:pointer}
-        .train-btn{flex-shrink:0;padding:0 8px;height:100%;background:#22c55e;border:none;color:#030712;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer}
-        .train-btn:disabled{opacity:0.5;cursor:not-allowed}
-        .stop-btn{flex-shrink:0;padding:0 8px;height:100%;background:#ef4444;border:none;color:white;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer}
-        .player-row{flex-shrink:0;height:48px;display:flex;gap:8px;align-items:center}
-        .player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;justify-content:center;padding:0 12px;overflow:hidden}
-        .player-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
-        .last-move-hint{font-size:10px;color:#475569;margin-top:1px}
-        .thinking-dot{flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#38bdf8;animation:blink 1s infinite}
-        @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
-        .energy-badge{flex-shrink:0;width:58px;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900}
-        .board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
-        .board{--side:min(calc(100vw - 16px),calc(100vh - 280px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
-        .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,300px)/8*.72);cursor:pointer;aspect-ratio:1/1}
-        .cell.light{background:#f0d9b5}.cell.dark{background:#b58863}
-        .cell.last-from.light,.cell.last-to.light{background:#f6f669}
-        .cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
-        .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
-        .cell.evo-highlight{outline:3px dashed #0ea5e9;outline-offset:-3px}
-        .cell.summon-highlight{outline:2px dashed #ec4899;outline-offset:-2px}
-        .cell.devolve-target-highlight{outline:2px dashed #22c55e;outline-offset:-2px}
-        .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
-        .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
-        .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
-        .evo2{filter:drop-shadow(0 0 4px #a855f7)!important}
-        .summoned-pawn{outline:2px solid #6b7280;outline-offset:-2px;border-radius:2px}
-        .panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:5px}
-        .charge-row{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#94a3b8}
-        .charge-track{width:100%;height:4px;background:#1e293b;border-radius:2px;overflow:hidden;margin-top:2px}
-        .panel-bottom{display:flex;align-items:center;gap:6px;flex:1}
-        .piece-label{flex:1;font-size:11px;min-width:0}
-        .turn-pill{flex-shrink:0;padding:3px 8px;border-radius:16px;font-size:11px;font-weight:700;background:#1e293b}
-        .debug-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(6,9,19,.95);padding:3px 10px;font-size:9px;color:#38bdf8;border-top:1px solid #1e293b;z-index:50;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-        .progress-bar{width:100%;height:6px;background:#1e293b;border-radius:3px;overflow:hidden;margin:10px 0}
-        .progress-fill{height:100%;background:linear-gradient(90deg,#22c55e,#eab308);transition:width 0.3s}
-        @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.8) rotate(10deg)}100%{transform:scale(1)}}
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <title>Chess RPG - Omega Neural V5.9 Fixed</title>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%;margin:0;overflow:hidden;background:#060913}
+    #root{height:100%}
+    .app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
+    .top-bar{flex-shrink:0;height:40px;display:flex;gap:6px;align-items:center}
+    .mode-btn{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;color:#94a3b8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+    .mode-btn.active{color:#030712!important}
+    .flip-btn{flex-shrink:0;padding:0 12px;height:100%;background:#1e293b;border:none;color:#94a3b8;border-radius:8px;font-size:13px;cursor:pointer}
+    .train-btn{flex-shrink:0;padding:0 8px;height:100%;background:#22c55e;border:none;color:#030712;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer}
+    .train-btn:disabled{opacity:0.5;cursor:not-allowed}
+    .stop-btn{flex-shrink:0;padding:0 8px;height:100%;background:#ef4444;border:none;color:white;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer}
+    .player-row{flex-shrink:0;height:48px;display:flex;gap:8px;align-items:center}
+    .player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;justify-content:center;padding:0 12px;overflow:hidden}
+    .player-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
+    .last-move-hint{font-size:10px;color:#475569;margin-top:1px}
+    .thinking-dot{flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#38bdf8;animation:blink 1s infinite}
+    @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+    .energy-badge{flex-shrink:0;width:58px;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900}
+    .board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+    .board{--side:min(calc(100vw - 16px),calc(100vh - 280px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
+    .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side,300px)/8*.72);cursor:pointer;aspect-ratio:1/1}
+    .cell.light{background:#f0d9b5}.cell.dark{background:#b58863}
+    .cell.last-from.light,.cell.last-to.light{background:#f6f669}
+    .cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
+    .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
+    .cell.evo-highlight{outline:3px dashed #0ea5e9;outline-offset:-3px}
+    .cell.summon-highlight{outline:2px dashed #ec4899;outline-offset:-2px}
+    .cell.devolve-target-highlight{outline:2px dashed #22c55e;outline-offset:-2px}
+    .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
+    .piece-w{color:#fef9f0;-webkit-text-stroke:1.8px #1a0a00;filter:drop-shadow(0 2px 4px rgba(0,0,0,.75))}
+    .piece-b{color:#0f0800;-webkit-text-stroke:.5px rgba(255,255,255,.1);filter:drop-shadow(0 2px 3px rgba(0,0,0,.45))}
+    .evo2{filter:drop-shadow(0 0 4px #a855f7)!important}
+    .summoned-pawn{outline:2px solid #6b7280;outline-offset:-2px;border-radius:2px}
+    .panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:5px}
+    .charge-row{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#94a3b8}
+    .charge-track{width:100%;height:4px;background:#1e293b;border-radius:2px;overflow:hidden;margin-top:2px}
+    .panel-bottom{display:flex;align-items:center;gap:6px;flex:1}
+    .piece-label{flex:1;font-size:11px;min-width:0}
+    .turn-pill{flex-shrink:0;padding:3px 8px;border-radius:16px;font-size:11px;font-weight:700;background:#1e293b}
+    .debug-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(6,9,19,.95);padding:3px 10px;font-size:9px;color:#38bdf8;border-top:1px solid #1e293b;z-index:50;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.8) rotate(10deg)}100%{transform:scale(1)}}
+  </style>
 </head>
 <body>
 <div id="root"></div>
@@ -61,610 +59,355 @@ const {useState,useEffect,useCallback,useRef} = React;
 const Chess = window.Chess;
 const ICONS = {w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-// ═══════════ VERSIONE LIGHT - FUNZIONI ESSENZIALI ═══════════
-function isValidSquare(sq) {
-    return /^[a-h][1-8]$/.test(sq);
+// ═══════════ HELPERS ═══════════
+function moveLeavesKingInCheck(fen,from,to,piece){
+  const g=new Chess(fen); g.remove(from); g.remove(to); g.put(piece,to);
+  const parts=g.fen().split(' '); parts[1]=piece.color;
+  const test=new Chess(); return test.load(parts.slice(0,4).join(' ')+' 0 1') && test.in_check();
+}
+function execAbilityMove(game,from,to){
+  const piece=game.get(from),captured=game.get(to)||null,g=new Chess(game.fen());
+  g.remove(from);if(captured)g.remove(to);g.put(piece,to);
+  const parts=g.fen().split(' ');
+  if(piece.type==='k')parts[2]=parts[2].replace(piece.color==='w'?/[KQ]/g:/[kq]/g,'');
+  if(piece.type==='r'){
+    if(from==='a1')parts[2]=parts[2].replace('Q','');if(from==='h1')parts[2]=parts[2].replace('K','');
+    if(from==='a8')parts[2]=parts[2].replace('q','');if(from==='h8')parts[2]=parts[2].replace('k','');
+  }
+  if(captured&&captured.type==='r'){
+    if(to==='a1')parts[2]=parts[2].replace('Q','');if(to==='h1')parts[2]=parts[2].replace('K','');
+    if(to==='a8')parts[2]=parts[2].replace('q','');if(to==='h8')parts[2]=parts[2].replace('k','');
+  }
+  if(parts[2]==='')parts[2]='-'; parts[3]='-';
+  const wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);
+  const ng=new Chess();ng.load(parts.join(' '));return{newGame:ng,capturedPiece:captured};
+}
+function isSquareAttackedByEvo(game,pd,sm,targetSq,attackerColor){
+  const tf=targetSq.charCodeAt(0)-97,tr=parseInt(targetSq[1]);
+  for(const[sq,id]of Object.entries(sm)){
+    const p=game.get(sq);if(!p||p.color!==attackerColor)continue;
+    const d=pd[id];if(!d||d.level<2)continue;
+    const f=sq.charCodeAt(0)-97,r=parseInt(sq[1]);
+    if(p.type==='p'&&tf===f){const dir=attackerColor==='w'?1:-1;if(tr===r+dir)return true;}
+    if(p.type==='n'&&((tf===f&&Math.abs(tr-r)===1)||(tr===r&&Math.abs(tf-f)===1)))return true;
+    if(p.type==='b'&&Math.abs(tf-f)===Math.abs(tr-r)){const df=Math.sign(tf-f),dr=Math.sign(tr-r);let obs=0,cf=f+df,cr=r+dr;while(!(cf===tf&&cr===tr)){if(game.get(String.fromCharCode(97+cf)+cr))obs++;cf+=df;cr+=dr;}if(obs===1)return true;}
+    if(p.type==='q'&&((Math.abs(tf-f)===2&&Math.abs(tr-r)===1)||(Math.abs(tf-f)===1&&Math.abs(tr-r)===2)))return true;
+  }
+  return false;
+}
+function isKingInDanger(game,pd,sm,color){
+  const fen=game.fen().split(' ');fen[1]=color;fen[3]='-';
+  const test=new Chess(fen.slice(0,4).join(' ')+' 0 1');if(test.in_check())return true;
+  let kingSq=null;const board=game.board();
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=board[r][c];if(p&&p.type==='k'&&p.color===color){kingSq='abcdefgh'[c]+(8-r);break;}}if(kingSq)break;
+  return kingSq?isSquareAttackedByEvo(game,pd,sm,kingSq,color==='w'?'b':'w'):false;
 }
 
-function buildState(g) {
-    const pd = {}, sm = {};
-    g.board().forEach((row, r) => row.forEach((cell, c) => {
-        if (cell) {
-            const sq = 'abcdefgh'[c] + (8 - r);
-            pd[`${cell.color}${cell.type}_${sq}`] = { type: cell.type, color: cell.color, level: 1 };
-            sm[sq] = `${cell.color}${cell.type}_${sq}`;
-        }
-    }));
-    return { pd, sm };
-}
-
-// ═══════════ RPG SEMPLIFICATO ═══════════
-const BASE_VALS = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 200 };
-
-function rpgVal(type, level) {
-    const b = BASE_VALS[type] || 0;
-    if (level === 2) return b * 1.5;
-    return b;
-}
-
-function getStandardMoves(game) {
-    const moves = game.moves({ verbose: true });
-    return moves.filter(m => {
-        const target = game.get(m.to);
-        return !target || target.type !== 'k';
-    }).map(m => ({
-        type: 'move',
-        from: m.from,
-        to: m.to,
-        promotion: m.promotion || 'q'
-    }));
-}
-
-function applyAction(game, pd, sm, pts, action, cooldowns) {
-    try {
-        const color = game.turn();
-        let ng = new Chess(game.fen());
-        let nsm = { ...sm };
-        let npd = { ...pd };
-        let cap = null;
-        
-        if (action.type === 'move') {
-            const mv = ng.move({ from: action.from, to: action.to, promotion: action.promotion || 'q' });
-            if (!mv) return null;
-            if (mv.captured) cap = { type: mv.captured, sq: action.to };
-            if (mv.flags?.includes('e')) cap = { type: 'p', sq: action.to[0] + action.from[1] };
-        } else {
-            return null; // Per la versione light, solo mosse standard
-        }
-        
-        // Gestione cattura
-        if (cap) {
-            const cs = cap.sq;
-            const cid = nsm[cs];
-            if (cid) { delete npd[cid]; delete nsm[cs]; }
-        }
-        
-        // Aggiorna posizione
-        const mid = nsm[action.from];
-        if (mid) {
-            // Gestione promozione
-            const np = ng.get(action.to);
-            if (np && npd[mid] && np.type !== npd[mid].type) {
-                const newId = `${np.color}${np.type}_${Date.now().toString(36)}`;
-                npd[newId] = { type: np.type, color: np.color, level: 1 };
-                delete npd[mid];
-                nsm[action.to] = newId;
-            } else {
-                nsm[action.to] = mid;
-            }
-        }
-        delete nsm[action.from];
-        
-        // Gestione arrocco
-        if (action.from === 'e1' && action.to === 'g1') {
-            nsm['f1'] = nsm['h1']; delete nsm['h1'];
-        }
-        if (action.from === 'e1' && action.to === 'c1') {
-            nsm['d1'] = nsm['a1']; delete nsm['a1'];
-        }
-        if (action.from === 'e8' && action.to === 'g8') {
-            nsm['f8'] = nsm['h8']; delete nsm['h8'];
-        }
-        if (action.from === 'e8' && action.to === 'c8') {
-            nsm['d8'] = nsm['a8']; delete nsm['a8'];
-        }
-        
-        let p = 1;
-        if (cap) p++;
-        if (ng.in_check()) p++;
-        
-        return {
-            game: ng,
-            pd: npd,
-            sm: nsm,
-            pts: { ...pts, [color]: (pts[color] || 0) + p },
-            cooldowns: { ...cooldowns }
-        };
-    } catch (e) {
-        return null;
-    }
-}
-
-// ═══════════ AI SEMPLIFICATA ═══════════
-function simpleEvaluate(game, color) {
-    let score = 0;
-    const board = game.board();
-    const opp = color === 'w' ? 'b' : 'w';
-    
-    // Valutazione materiale
-    for (let r = 0; r < 8; r++) {
-        for (let c = 0; c < 8; c++) {
-            const p = board[r][c];
-            if (!p) continue;
-            const val = BASE_VALS[p.type] || 0;
-            score += p.color === color ? val : -val;
-            
-            // Bonus centro
-            if ((r === 3 || r === 4) && (c === 3 || c === 4)) {
-                score += p.color === color ? 0.5 : -0.5;
-            }
-        }
-    }
-    
-    // Scacco matto
-    if (game.in_checkmate()) {
-        return game.turn() === color ? -1000 : 1000;
-    }
-    
-    // Scacco
-    if (game.in_check()) {
-        score += game.turn() === color ? -1 : 1;
-    }
-    
-    return score + Math.random() * 0.1;
-}
-
-function chooseBestMove(game, pd, sm, pts, color, cooldowns) {
-    const moves = getStandardMoves(game);
-    if (moves.length === 0) return null;
-    
-    // 20% esplorazione casuale
-    if (Math.random() < 0.2) {
-        return moves[Math.floor(Math.random() * moves.length)];
-    }
-    
-    // Valuta ogni mossa (solo 1 livello di profondità)
-    let bestMove = moves[0];
-    let bestScore = -Infinity;
-    
-    for (const move of moves) {
-        const next = applyAction(game, pd, sm, pts, move, cooldowns);
-        if (!next) continue;
-        
-        const score = simpleEvaluate(next.game, color);
-        if (score > bestScore) {
-            bestScore = score;
-            bestMove = move;
-        }
-    }
-    
-    return bestMove;
-}
-
-// ═══════════ TRAINING OTTIMIZZATO ═══════════
-let brainStats = {
-    games: parseInt(localStorage.getItem('omega_games_count') || '0'),
-    wins: { w: 0, b: 0 }
+// ═══════════ EVOLUZIONI ═══════════
+const EVOLUTIONS={
+  p:{levels:[{name:'Pedone',color:'#64748b',desc:'Standard'},{name:'Assaltatore',color:'#eab308',desc:'Triangolo frontale'}],
+    getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),dir=color==='w'?1:-1;const r=rank+dir;if(r>=1&&r<=8){const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});for(const df of[-1,1]){const f=file+df;if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false})}}}return moves.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,game.get(sq)))}},
+  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'Salto a L + croce'}],
+    getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]],CROSS=[[0,0],[0,1],[0,-1],[1,0],[-1,0]];for(const[df1,dr1]of J){const mf=file+df1,mr=rank+dr1;if(mf<0||mf>7||mr<1||mr>8)continue;const midSq=String.fromCharCode(97+mf)+mr,midPiece=game.get(midSq);if(midPiece&&midPiece.color===color)continue;if(midPiece&&midPiece.color!==color){if(!moveLeavesKingInCheck(game.fen(),sq,midSq,piece))moves.push({from:sq,to:midSq,isCapture:true});continue}for(const[df2,dr2]of CROSS){const ef=mf+df2,er=mr+dr2;if(ef<0||ef>7||er<1||er>8)continue;const end=String.fromCharCode(97+ef)+er;if(end===sq)continue;const t=game.get(end);if(t&&t.color===color)continue;if(!moveLeavesKingInCheck(game.fen(),sq,end,piece))moves.push({from:sq,to:end,isCapture:!!t})}}return moves}},
+  b:{levels:[{name:'Alfiere',color:'#64748b',desc:'Standard'},{name:'Spettro',color:'#06b6d4',desc:'Salta 1 ostacolo'}],
+    getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr,jumped=false;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(!jumped){jumped=true}else{if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}}else if(jumped){if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false})}f+=df;r+=dr}}return moves}},
+  r:{levels:[{name:'Torre',color:'#64748b',desc:'Standard'},{name:'Archivista',color:'#22c55e',desc:'Swap a distanza (max 5) | Disevolvi globale'}],
+    getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){for(let i=1;i<=5;i++){const nf=file+df*i,nr=rank+dr*i;if(nf<0||nf>7||nr<1||nr>8)break;const tSq=String.fromCharCode(97+nf)+nr,target=game.get(tSq);if(target&&target.color===color&&target.type!=='k'){moves.push({from:sq,to:tSq,isCapture:false,isSwap:true});}}}return moves}},
+  q:{levels:[{name:'Regina',color:'#64748b',desc:'Standard'},{name:'Imperatrice',color:'#ec4899',desc:'Amazzone (R+B+N) | Evoca pedone'}],
+    getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]){const nf=file+df,nr=rank+dr;if(nf<0||nf>7||nr<1||nr>8)continue;const tSq=String.fromCharCode(97+nf)+nr,t=game.get(tSq);if(t&&t.color===color)continue;if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:!!t})}for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}return moves}},
+  k:{levels:[{name:'Re',color:'#64748b',desc:'Standard'}],getAbilityMoves:()=>[]}
 };
 
-async function trainBatch(gamesInBatch = 50, onProgress = () => {}, stopSignal = () => false) {
-    let completed = 0;
-    
-    for (let i = 0; i < gamesInBatch; i++) {
-        if (stopSignal()) break;
-        
-        const g = new Chess();
-        let state = { game: g, ...buildState(g), cooldowns: {} };
-        
-        // Massimo 150 mosse per partita
-        for (let mc = 0; mc < 150; mc++) {
-            if (state.game.game_over()) break;
-            if (stopSignal()) break;
-            
-            const color = state.game.turn();
-            const action = chooseBestMove(state.game, state.pd, state.sm, state.pts, color, state.cooldowns);
-            
-            if (!action) break;
-            
-            const next = applyAction(state.game, state.pd, state.sm, state.pts, action, state.cooldowns);
-            if (!next) break;
-            
-            state = next;
-        }
-        
-        if (state.game.in_checkmate()) {
-            const winner = state.game.turn() === 'w' ? 'b' : 'w';
-            brainStats.wins[winner] = (brainStats.wins[winner] || 0) + 1;
-        }
-        
-        completed++;
-        brainStats.games++;
+// ═══════════ RPG VALUE ═══════════
+const BASE_VALS={p:1,n:3.2,b:3.3,r:5,q:9,k:200};
+function rpgVal(type,level){const b=BASE_VALS[type]||0;if(level===2){if(type==='p')return b+0.7;if(type==='n')return b+1.5;if(type==='b')return b+1.7;if(type==='r')return b+2.5;if(type==='q')return b+5.0}return b}
+function evalRpg(game,pd,sm,pts,color){const opp=color==='w'?'b':'w';let score=0;for(const d of Object.values(pd)){if(!d)continue;score+=d.color===color?rpgVal(d.type,d.level):-rpgVal(d.type,d.level)}score+=(pts[color]-pts[opp])*0.35;return score}
+
+// ═══════════ ACTIONS ═══════════
+function getAIActions(game,pd,sm,pts,color){
+  const actions=[];
+  for(const m of game.moves({verbose:true})){
+    if(m.promotion&&m.promotion!=='q')continue;
+    actions.push({type:'move',from:m.from,to:m.to,promotion:m.promotion||'q'});
+  }
+  for(const[sq,id]of Object.entries(sm)){
+    const piece=game.get(sq);if(!piece||piece.color!==color)continue;
+    const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
+    for(const ab of evo.getAbilityMoves(sq,game,d.level,color))actions.push({type:'ability',from:ab.from,to:ab.to,isSwap:ab.isSwap||false})
+  }
+  const queenEntry=Object.entries(sm).find(([sq,id])=>pd[id]?.type==='q'&&pd[id]?.level>=2&&pd[id]?.color===color);
+  if(queenEntry&&!game.in_check()&&!isKingInDanger(game,pd,sm,color)){
+    const queenSq=queenEntry[0];
+    const summonedCount=Object.values(pd).filter(d=>d.type==='p'&&d.color===color&&d.summoned).length;
+    if(summonedCount<2&&pts[color]>=2){
+      const file=queenSq.charCodeAt(0)-97,rank=parseInt(queenSq[1]);
+      for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){
+        const nf=file+df,nr=rank+dr;
+        if(nf>=0&&nf<=7&&nr>=1&&nr<=8){const tSq=String.fromCharCode(97+nf)+nr;if(!game.get(tSq))actions.push({type:'summon',queenSq,targetSq:tSq,cost:2});}
+      }
     }
-    
-    // Salva ogni batch
-    localStorage.setItem('omega_games_count', brainStats.games.toString());
-    onProgress({ completed, total: brainStats.games });
-    
-    return completed;
+  }
+  const towerData=Object.values(pd).find(d=>d.type==='r'&&d.level>=2&&d.color===color);
+  if(towerData){
+    const towerSq=Object.keys(sm).find(sq=>sm[sq]===towerData.id);
+    if(towerSq){for(const[sq,id]of Object.entries(sm)){const tp=game.get(sq);if(!tp||tp.color!==color||tp.type==='k'||tp.type==='r')continue;const td=pd[id];if(td&&td.level>1)actions.push({type:'devolve',towerSq,targetSq:sq,targetId:id});}}
+  }
+  return actions;
+}
+function generateValidActions(game,pd,sm,pts,color,cooldowns){
+  return getAIActions(game,pd,sm,pts,color).filter(a=>{
+    if(a.to){const t=game.get(a.to);if(t&&t.type==='k')return false;if(a.promotion&&a.type==='move'){const p=game.get(a.from);if(p&&p.type==='p'&&pd[sm[a.from]]?.summoned)return false;}}
+    const next=applyAction(game,pd,sm,pts,a,cooldowns);if(!next)return false;
+    return !isKingInDanger(next.game,next.pd,next.sm,color);
+  });
+}
+function applyAction(game,pd,sm,pts,action,cooldowns){
+  const color=game.turn();
+  if(action.type==='ability'&&action.isSwap){
+    const p1=game.get(action.from),p2=game.get(action.to),g=new Chess(game.fen());
+    g.remove(action.from);g.remove(action.to);g.put(p1,action.to);g.put(p2,action.from);
+    const parts=g.fen().split(' '),wasW=parts[1]==='w';parts[1]=wasW?'b':'w';if(!wasW)parts[5]=String(parseInt(parts[5])+1);parts[3]='-';
+    if(p1.type==='k'||p2.type==='k')parts[2]=parts[2].replace(color==='w'?/[KQ]/g:/[kq]/g,'');
+    if(p1.type==='r'||p2.type==='r'){['a1','h1','a8','h8'].forEach(sq=>{if(action.from===sq||action.to===sq){if(sq==='a1')parts[2]=parts[2].replace('Q','');if(sq==='h1')parts[2]=parts[2].replace('K','');if(sq==='a8')parts[2]=parts[2].replace('q','');if(sq==='h8')parts[2]=parts[2].replace('k','');}});}
+    if(parts[2]==='')parts[2]='-';
+    const ng=new Chess();ng.load(parts.join(' '));
+    const nsm={...sm},id1=nsm[action.from],id2=nsm[action.to];nsm[action.from]=id2;nsm[action.to]=id1;
+    return{game:ng,pd:{...pd},sm:nsm,pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}};
+  }
+  if(action.type==='summon'){
+    const queenSq=action.queenSq,targetSq=action.targetSq;if(!targetSq)return null;
+    const newId=`${color}p_sum_${Date.now().toString(36)}_${Math.random().toString(36).substring(2,6)}`;
+    const npd={...pd,[newId]:{type:'p',color,level:1,summoned:true}},nsm={...sm,[targetSq]:newId};
+    const ng=new Chess(game.fen());if(!ng.put({type:'p',color},targetSq))return null;
+    const parts=ng.fen().split(' ');parts[1]=color==='w'?'b':'w';parts[3]='-';parts[4]='0';
+    const finalGame=new Chess();finalGame.load(parts.join(' '));
+    return{game:finalGame,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]-2},cooldowns:{...cooldowns}};
+  }
+  if(action.type==='devolve'){
+    const targetData=pd[action.targetId];if(!targetData||targetData.level<=1)return null;
+    const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}};
+    const g=new Chess(game.fen()),parts=g.fen().split(' ');parts[1]=color==='w'?'b':'w';if(color==='b')parts[5]=String(parseInt(parts[5])+1);
+    const ng=new Chess();ng.load(parts.join(' '));
+    return{game:ng,pd:npd,sm:{...sm},pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}};
+  }
+  if(action.promotion&&action.type==='move'){const piece=game.get(action.from);if(piece&&piece.type==='p'&&pd[sm[action.from]]?.summoned)return null;}
+  let ng,cap=null,isCastleK=false,isCastleQ=false;
+  if(action.type==='ability'){const r=execAbilityMove(game,action.from,action.to);ng=r.newGame;cap=r.capturedPiece;}
+  else{ng=new Chess(game.fen());const mv=ng.move({from:action.from,to:action.to,promotion:action.promotion||'q'});if(!mv)return null;if(mv.captured)cap={type:mv.captured};if(mv.flags?.includes('e'))cap={type:'p',_sq:action.to[0]+action.from[1]};if(mv.flags?.includes('k'))isCastleK=true;if(mv.flags?.includes('q'))isCastleQ=true;}
+  const mid=sm[action.from],nsm={...sm},npd={...pd};
+  if(isCastleK||isCastleQ){const rank=color==='w'?'1':'8';if(isCastleK){nsm['f'+rank]=nsm['h'+rank];delete nsm['h'+rank];}if(isCastleQ){nsm['d'+rank]=nsm['a'+rank];delete nsm['a'+rank];}}
+  if(cap){const cs=cap._sq||action.to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs];}}
+  const np=ng.get(action.to);
+  if(np&&mid&&npd[mid]&&np.type!==npd[mid].type){const newPromoId=`${np.color}${np.type}_promo_${Math.random().toString(36).substring(2,8)}`;npd[newPromoId]={type:np.type,color:np.color,level:1};delete npd[mid];nsm[action.to]=newPromoId;}else{nsm[action.to]=mid;}
+  delete nsm[action.from];
+  let p=1;if(cap)p++;if(ng.in_check())p++;
+  return{game:ng,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]+p},cooldowns:{...cooldowns}};
 }
 
-async function startTraining(totalGames = 2000, onProgress = () => {}, onComplete = () => {}, stopSignal = () => false) {
-    const BATCH_SIZE = 25; // Batch più piccoli per non bloccare
-    let trained = 0;
-    
-    while (trained < totalGames && !stopSignal()) {
-        const result = await trainBatch(BATCH_SIZE, (p) => {
-            onProgress({ 
-                current: trained + p.completed, 
-                total: totalGames,
-                wins: brainStats.wins 
-            });
-        }, stopSignal);
-        
-        trained += result;
-        
-        // Lascia respirare il browser tra i batch
-        await new Promise(resolve => setTimeout(resolve, 50));
+// ═══════════ FASE EVOLUZIONE ═══════════
+function getEvolvablePieces(game,pd,sm,pts,color){
+  const evoCosts={p:2,n:2,b:2,r:3,q:5},result=[];
+  if(pts[color]<2)return result;
+  for(const[sq,id]of Object.entries(sm)){const piece=game.get(sq);if(!piece||piece.color!==color)continue;const d=pd[id];if(!d)continue;const maxLvl=EVOLUTIONS[d.type]?.levels?.length||1;if(d.level>=maxLvl)continue;const cost=evoCosts[d.type]||2;if(pts[color]>=cost)result.push({sq,id,type:d.type,cost,newLevel:d.level+1});}
+  return result;
+}
+function autoEvolve(state,color){
+  const{game,pd,sm,pts,cooldowns}=state,candidates=getEvolvablePieces(game,pd,sm,pts,color);
+  if(!candidates.length)return state;
+  candidates.sort((a,b)=>(rpgVal(b.type,b.newLevel)-rpgVal(b.type,b.newLevel-1))-(rpgVal(a.type,a.newLevel)-rpgVal(a.type,a.newLevel-1)));
+  const best=candidates[0],gain=rpgVal(best.type,best.newLevel)-rpgVal(best.type,best.newLevel-1);
+  if(gain<1.5)return state;
+  const npd={...pd,[best.id]:{...pd[best.id],level:best.newLevel}},npts={...pts,[color]:pts[color]-best.cost};
+  return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:npts,cooldowns:{...cooldowns}};
+}
+
+// ═══════════ RETE NEURALE MINIMA (corretta) ═══════════
+const DEFAULT_WEIGHTS={material:1.0,position:0.5,kingSafety:0.8};
+const REQUIRED_KEYS=Object.keys(DEFAULT_WEIGHTS);
+
+function getFeatures(game,pd,sm,pts,color){
+  const opp=color==='w'?'b':'w';
+  let f={material:0,position:0,kingSafety:0};
+  f.kingSafety=game.in_check()?game.turn()===color?-1:1:0;
+  const board=game.board();
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const p=board[r][c];if(!p)continue;
+    const sq='abcdefgh'[c]+(8-r),id=sm[sq],d=id?pd[id]:null,sign=p.color===color?1:-1,val=BASE_VALS[p.type]||0;
+    f.material+=val*sign;
+    if(d&&d.level>1)f.material+=sign*(rpgVal(d.type,d.level)-val);
+    if((r===3||r===4)&&(c===3||c===4))f.position+=0.5*sign;
+  }
+  f.material/=40;f.position/=4;
+  return f;
+}
+function evaluate(features,weights){
+  let s=0;for(let k in features)s+=(features[k]||0)*(weights[k]||0);
+  return s+Math.random()*0.05;
+}
+function updateWeights(history,winner,weights){
+  const lr=0.02;
+  history.forEach((state,i)=>{
+    const progress=(i+1)/history.length,reward=(state.color===winner?1:-1)*(progress*progress);
+    for(let k in state.features)weights[k]=Math.min(10,Math.max(-10,weights[k]+lr*reward*state.features[k]));
+  });
+  return weights;
+}
+
+// ═══════════ OMEGA AI ═══════════
+function chooseAction(game,pd,sm,pts,color,cooldowns,weights,isTraining){
+  const all=generateValidActions(game,pd,sm,pts,color,cooldowns);
+  if(!all.length){const rm=game.moves({verbose:true});if(rm.length)return{type:'move',from:rm[0].from,to:rm[0].to,promotion:'q'};return null;}
+  if(Math.random()<(isTraining?0.25:0.05))return all[Math.floor(Math.random()*all.length)];
+  let best=null,bestScore=-Infinity;
+  for(const a of all){const next=applyAction(game,pd,sm,pts,a,cooldowns);if(!next)continue;const features=getFeatures(next.game,next.pd,next.sm,next.pts,color);const score=evaluate(features,weights);if(score>bestScore){bestScore=score;best=a;}}
+  return best||all[0];
+}
+
+// ═══════════ TRAINING ═══════════
+async function trainAI(gamesTotal,onProgress,wakeLockRef){
+  let weights=loadWeights(),completed=0,wins={w:0,b:0};
+  try{
+    for(let i=0;i<gamesTotal;i++){
+      const g=new Chess();let state={game:g,...buildState(g),cooldowns:{}};const history=[];
+      for(let mc=0;mc<200;mc++){
+        if(state.game.game_over())break;
+        const color=state.game.turn(),features=getFeatures(state.game,state.pd,state.sm,state.pts,color);
+        const action=chooseAction(state.game,state.pd,state.sm,state.pts,color,state.cooldowns,weights,true);
+        if(!action)break;
+        let next=applyAction(state.game,state.pd,state.sm,state.pts,action,state.cooldowns);if(!next)break;
+        history.push({features,color});next=autoEvolve(next,color);state=next;
+      }
+      let winner=null;if(state.game.in_checkmate())winner=state.game.turn()==='w'?'b':'w';
+      if(winner){wins[winner]++;weights=updateWeights(history,winner,weights);}
+      completed++;
+      if(completed%100===0){saveWeights(weights);localStorage.setItem('omega_games_count',parseInt(localStorage.getItem('omega_games_count')||'0')+100);}
+      await new Promise(r=>setTimeout(r,0));
+      if(completed%50===0)onProgress({current:completed,total:gamesTotal,wins:{...wins}});
     }
-    
-    onComplete({ total: trained, wins: brainStats.wins });
-    return trained;
+  }finally{
+    saveWeights(weights);
+    if(wakeLockRef?.current){try{await wakeLockRef.current.release();wakeLockRef.current=null;}catch(e){}}
+  }
+  return{total:completed,wins};
 }
 
-// ═══════════ APP PRINCIPALE ═══════════
-const PERSONALITIES = {
-    human: { name: 'Umano', ai: false, color: '#94a3b8' },
-    omega: { name: 'Omega Light', ai: true, color: '#eab308' }
-};
+// ═══════════ PERSISTENZA ═══════════
+function loadWeights(){try{let s=localStorage.getItem('omega_weights_v29');if(s){const w=JSON.parse(s);if(REQUIRED_KEYS.every(k=>typeof w[k]==='number'&&!isNaN(w[k])))return w;}}catch(e){}return{...DEFAULT_WEIGHTS};}
+function saveWeights(w){localStorage.setItem('omega_weights_v29',JSON.stringify(w));}
+function buildState(g){const pd={},sm={};g.board().forEach((row,r)=>row.forEach((cell,c)=>{if(cell){const sq='abcdefgh'[c]+(8-r);pd[`${cell.color}${cell.type}_${sq}`]={type:cell.type,color:cell.color,level:1};sm[sq]=`${cell.color}${cell.type}_${sq}`;}}));return{pd,sm};}
 
-function App() {
-    const [game, setGame] = useState(() => new Chess());
-    const [pd, setPd] = useState({});
-    const [sm, setSm] = useState({});
-    const [sel, setSel] = useState(null);
-    const [legalMoves, setLegalMoves] = useState([]);
-    const [pts, setPts] = useState({ w: 0, b: 0 });
-    const [wAI, setWAI] = useState('human');
-    const [bAI, setBAI] = useState('omega');
-    const [thinking, setThink] = useState(false);
-    const [last, setLast] = useState(null);
-    const [flipped, setFlip] = useState(false);
-    const [debug, setDebug] = useState('');
-    const [training, setTraining] = useState(false);
-    const [trainProgress, setTrainProgress] = useState({ current: 0, total: 2000 });
-    const [cooldowns, setCooldowns] = useState({});
-    
-    const timer = useRef(null);
-    const gen = useRef(0);
-    const stopTraining = useRef(false);
+// ═══════════ APP ═══════════
+const PERSONALITIES={human:{name:'Umano',ai:false,color:'#94a3b8'},omega:{name:'Omega Neural',ai:true,color:'#eab308'}};
 
-    useEffect(() => {
-        const s = buildState(game);
-        setPd(s.pd);
-        setSm(s.sm);
-    }, []);
+function App(){
+  const[game,setGame]=useState(()=>new Chess()),[pd,setPd]=useState({}),[sm,setSm]=useState({}),[sel,setSel]=useState(null),[stdM,setStd]=useState([]),[abilM,setAbl]=useState([]);
+  const[lvlUp,setLvlUp]=useState(null),[pts,setPts]=useState({w:0,b:0}),[wAI,setWAI]=useState('human'),[bAI,setBAI]=useState('omega'),[thinking,setThink]=useState(false),[last,setLast]=useState(null);
+  const[flipped,setFlip]=useState(false),[debug,setDebug]=useState(''),[training,setTraining]=useState(false),[trainProgress,setTrainProgress]=useState('');
+  const[cooldowns,setCooldowns]=useState({}),[postPhase,setPostPhase]=useState(false),[postPlayer,setPostPlayer]=useState(null);
+  const[summonMode,setSummonMode]=useState(false),[summonQueenSq,setSummonQueenSq]=useState(null);
+  const[devolveMode,setDevolveMode]=useState(false),[devolveTowerSq,setDevolveTowerSq]=useState(null);
+  const timer=useRef(null),gen=useRef(0),wakeLockRef=useRef(null);
+  const brainStats=useRef({games:parseInt(localStorage.getItem('omega_games_count')||'0'),wins:{w:0,b:0}}).current;
+  const weightsRef=useRef(loadWeights());
 
-    useEffect(() => {
-        setFlip(!PERSONALITIES[bAI]?.ai && PERSONALITIES[wAI]?.ai);
-    }, [wAI, bAI]);
+  useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm);},[]);
+  useEffect(()=>{setFlip(!PERSONALITIES[bAI]?.ai&&PERSONALITIES[wAI]?.ai);},[wAI,bAI]);
+  useEffect(()=>()=>{if(wakeLockRef.current)wakeLockRef.current.release().catch(()=>{});},[]);
 
-    const click = useCallback((sq) => {
-        if (!isValidSquare(sq) || thinking || training) return;
-        
-        const turn = game.turn();
-        const isHuman = turn === 'w' ? !PERSONALITIES[wAI]?.ai : !PERSONALITIES[bAI]?.ai;
-        if (!isHuman) return;
-        
-        if (sel) {
-            const move = legalMoves.find(m => m.to === sq);
-            if (move) {
-                const next = applyAction(game, pd, sm, pts, move, cooldowns);
-                if (!next) return;
-                
-                setPts(next.pts);
-                setGame(next.game);
-                setPd(next.pd);
-                setSm(next.sm);
-                setCooldowns(next.cooldowns || {});
-                setSel(null);
-                setLegalMoves([]);
-                setLast({ from: move.from, to: move.to });
-                
-                if (next.game.game_over()) {
-                    brainStats.games++;
-                    localStorage.setItem('omega_games_count', brainStats.games.toString());
-                }
-                return;
-            }
-            
-            const p = game.get(sq);
-            if (p && p.color === turn) {
-                setSel(sq);
-                setLegalMoves(getStandardMoves(game).filter(m => m.from === sq));
-                return;
-            }
-            
-            setSel(null);
-            setLegalMoves([]);
-            return;
-        }
-        
-        const p = game.get(sq);
-        if (p && p.color === turn) {
-            setSel(sq);
-            setLegalMoves(getStandardMoves(game).filter(m => m.from === sq));
-        } else {
-            setSel(null);
-            setLegalMoves([]);
-        }
-    }, [game, sel, legalMoves, pts, pd, sm, cooldowns, wAI, bAI, thinking, training]);
+  const getMoves=useCallback(sq=>{
+    const p=game.get(sq);if(!p)return{std:[],abil:[]};
+    const rawStd=game.moves({square:sq,verbose:true}),id=sm[sq],d=pd[id],evo=EVOLUTIONS[p.type],rawAbil=evo&&d?evo.getAbilityMoves(sq,game,d.level,p.color):[];
+    const filterMoves=(moves,isAbil)=>moves.filter(m=>{
+      const to=m.to,targetPiece=game.get(to);
+      if(targetPiece&&targetPiece.type==='k')return false;
+      if(!isAbil&&p.type==='p'&&d?.summoned&&(to[1]==='8'||to[1]==='1'))return false;
+      const actionObj=isAbil?{...m,type:'ability',from:sq,to}:{type:'move',from:sq,to,promotion:'q'};
+      const next=applyAction(game,pd,sm,pts,actionObj,cooldowns);if(!next)return false;
+      return !isKingInDanger(next.game,next.pd,next.sm,p.color);
+    });
+    return{std:filterMoves(rawStd,false),abil:filterMoves(rawAbil,true)};
+  },[game,sm,pd,pts,cooldowns]);
 
-    useEffect(() => {
-        const turn = game.turn();
-        const ai = turn === 'w' ? wAI : bAI;
-        
-        if (training || !PERSONALITIES[ai]?.ai || game.game_over()) return;
-        
-        gen.current++;
-        const myGen = gen.current;
-        clearTimeout(timer.current);
-        
-        timer.current = setTimeout(() => {
-            setThink(true);
-            setDebug('🧠 Thinking...');
-            
-            const action = chooseBestMove(game, pd, sm, pts, turn, cooldowns);
-            
-            if (gen.current !== myGen) {
-                setThink(false);
-                return;
-            }
-            
-            if (!action) {
-                setThink(false);
-                setDebug('❌ No moves');
-                return;
-            }
-            
-            const next = applyAction(game, pd, sm, pts, action, cooldowns);
-            if (!next) {
-                setThink(false);
-                setDebug('❌ Move failed');
-                return;
-            }
-            
-            setPts(next.pts);
-            setGame(next.game);
-            setPd(next.pd);
-            setSm(next.sm);
-            setCooldowns(next.cooldowns || {});
-            setLast({ from: action.from, to: action.to });
-            setDebug('✅ Ready');
-            setThink(false);
-        }, 300);
-        
-        return () => clearTimeout(timer.current);
-    }, [game, pd, sm, pts, wAI, bAI, cooldowns, training]);
+  const move=useCallback((actionObj)=>{
+    const turn=game.turn(),next=applyAction(game,pd,sm,pts,actionObj,cooldowns);if(!next)return;
+    setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});
+    setSel(null);setStd([]);setAbl([]);setLast({from:actionObj.from,to:actionObj.to});
+    if(next.game.game_over()){brainStats.games++;localStorage.setItem('omega_games_count',brainStats.games);}
+    const isHuman=turn==='w'?!PERSONALITIES[wAI]?.ai:!PERSONALITIES[bAI]?.ai;
+    if(isHuman&&!next.game.game_over()){setPostPlayer(turn);setPostPhase(true);}else{setPostPlayer(null);setPostPhase(false);}
+    return next;
+  },[game,sm,pd,pts,cooldowns,wAI,bAI]);
 
-    const handleTraining = async () => {
-        if (training) {
-            // Stop training
-            stopTraining.current = true;
-            setTraining(false);
-            setDebug('⏹️ Training fermato');
-            return;
-        }
-        
-        // Start training
-        stopTraining.current = false;
-        setTraining(true);
-        setThink(false);
-        clearTimeout(timer.current);
-        
-        setDebug('🎮 Training 2000 partite...');
-        
-        await startTraining(2000, 
-            (p) => {
-                setTrainProgress(p);
-                setDebug(`🎮 Training: ${p.current}/${p.total} | W:${p.wins.w || 0} B:${p.wins.b || 0}`);
-            },
-            (result) => {
-                setDebug(`✅ Completato! ${result.total} partite | W:${result.wins.w || 0} B:${result.wins.b || 0}`);
-                setTraining(false);
-                reset();
-            },
-            () => stopTraining.current
-        );
-    };
+  const handleEvoClick=useCallback(sq=>{
+    if(!postPhase||!postPlayer)return;const piece=game.get(sq);if(!piece||piece.color!==postPlayer)return;
+    const id=sm[sq],d=pd[id];if(!d)return;
+    const evoCosts={p:2,n:2,b:2,r:3,q:5},cost=evoCosts[d.type]||2,maxLvl=EVOLUTIONS[d.type]?.levels?.length||1;
+    if(d.level>=maxLvl||pts[postPlayer]<cost)return;
+    const npd={...pd,[id]:{...d,level:d.level+1}},npts={...pts,[postPlayer]:pts[postPlayer]-cost};
+    setPd(npd);setPts(npts);setLvlUp(sq);setTimeout(()=>setLvlUp(null),900);
+  },[postPhase,postPlayer,game,sm,pd,pts]);
 
-    const reset = () => {
-        const g = new Chess();
-        const s = buildState(g);
-        setGame(g);
-        setPd(s.pd);
-        setSm(s.sm);
-        setPts({ w: 0, b: 0 });
-        setSel(null);
-        setLegalMoves([]);
-        setThink(false);
-        setLast(null);
-        setDebug('');
-        setCooldowns({});
-        gen.current++;
-    };
+  const skipPost=useCallback(()=>{setPostPhase(false);setPostPlayer(null);setSummonMode(false);setDevolveMode(false);},[]);
+  const startSummon=useCallback((qSqO)=>{
+    const qSq=qSqO||sel;if(!qSq)return;const id=sm[qSq],d=pd[id];if(!d||d.type!=='q'||d.level<2)return;
+    const sc=Object.values(pd).filter(d=>d.type==='p'&&d.color===postPlayer&&d.summoned).length;
+    if(sc>=2||pts[postPlayer]<2||game.in_check()||isKingInDanger(game,pd,sm,postPlayer))return;
+    setSummonMode(true);setSummonQueenSq(qSq);setSel(null);setStd([]);setAbl([]);
+  },[sel,sm,pd,pts,game,postPlayer]);
+  const handleSummonClick=useCallback(sq=>{
+    if(!summonMode||!summonQueenSq)return;
+    const queenSq=summonQueenSq,file=queenSq.charCodeAt(0)-97,rank=parseInt(queenSq[1]),adj=[];
+    for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){const nf=file+df,nr=rank+dr;if(nf>=0&&nf<=7&&nr>=1&&nr<=8){const s=String.fromCharCode(97+nf)+nr;if(!game.get(s))adj.push(s);}}
+    if(!adj.includes(sq)){setSummonMode(false);setSummonQueenSq(null);return;}
+    const next=applyAction(game,pd,sm,pts,{type:'summon',queenSq,targetSq:sq,cost:2},cooldowns);if(!next){setSummonMode(false);setSummonQueenSq(null);return;}
+    setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});setLast({from:queenSq,to:'summon'});setSummonMode(false);setSummonQueenSq(null);
+  },[summonMode,summonQueenSq,game,pd,sm,pts,cooldowns]);
+  const doDevolve=useCallback((tSq,tgSq)=>{
+    if(!tSq||!tgSq)return;const id=sm[tSq],d=pd[id];if(!d||d.type!=='r'||d.level<2)return;
+    const targetId=sm[tgSq],targetData=pd[targetId];if(!targetData||targetData.level<=1)return;
+    const next=applyAction(game,pd,sm,pts,{type:'devolve',towerSq:tSq,targetSq:tgSq,targetId},cooldowns);if(!next)return;
+    setPd(next.pd);setPts(next.pts);setCooldowns(next.cooldowns||{});setLast({from:tSq,to:tgSq+' devolve'});setDevolveMode(false);setDevolveTowerSq(null);
+  },[game,sm,pd,pts,cooldowns]);
 
-    const raw = game.board();
-    const bd = flipped ? [...raw].reverse().map(r => [...r].reverse()) : raw;
-    const turn = game.turn();
-    const moveTargets = legalMoves.map(m => m.to);
-    
-    const progressPct = training ? (trainProgress.current / trainProgress.total * 100) : 0;
+  const click=useCallback(sq=>{
+    if(devolveMode&&devolveTowerSq){const piece=game.get(sq);if(!piece||piece.color!==postPlayer||piece.type==='k'||piece.type==='r'){setDevolveMode(false);setDevolveTowerSq(null);return;}const id=sm[sq];if(id&&pd[id]?.level>1){doDevolve(devolveTowerSq,sq);}else{setDevolveMode(false);setDevolveTowerSq(null);}return;}
+    if(summonMode){handleSummonClick(sq);return;}
+    if(postPhase&&postPlayer){const p=game.get(sq);if(!p||p.color!==postPlayer){skipPost();return;}const id=sm[sq],d=pd[id];if(d?.type==='q'&&d?.level>=2&&pts[postPlayer]>=2&&!game.in_check()&&!isKingInDanger(game,pd,sm,postPlayer)){const sc=Object.values(pd).filter(x=>x.type==='p'&&x.color===postPlayer&&x.summoned).length;if(sc<2){startSummon(sq);return;}}if(d?.type==='r'&&d?.level>=2){const has=Object.values(pd).some(x=>x.color===postPlayer&&x.level>1&&x.type!=='k'&&x.type!=='r');if(has){setDevolveMode(true);setDevolveTowerSq(sq);return;}}handleEvoClick(sq);return;}
+    const turn=game.turn(),isHuman=turn==='w'?!PERSONALITIES[wAI]?.ai:!PERSONALITIES[bAI]?.ai;if(!isHuman||thinking||training)return;
+    const p=game.get(sq);
+    if(sel){const stdHit=stdM.find(m=>m.to===sq);if(stdHit){move({type:'move',from:sel,to:sq,promotion:'q'});return;}const abilHit=abilM.find(m=>m.to===sq);if(abilHit){move({...abilHit,type:'ability',from:sel,to:sq});return;}if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);return;}setSel(null);setStd([]);setAbl([]);return;}
+    if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);}else{setSel(null);setStd([]);setAbl([]);}
+  },[game,sel,stdM,abilM,getMoves,move,wAI,bAI,thinking,training,postPhase,postPlayer,summonMode,devolveMode,devolveTowerSq,handleEvoClick,handleSummonClick,skipPost,startSummon,doDevolve,sm,pd,pts]);
 
-    return (
-        <div className="app">
-            {training && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: '#060913', zIndex: 200,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    justifyContent: 'center', gap: 20, padding: 20
-                }}>
-                    <div style={{ fontSize: 48 }}>🧠</div>
-                    <div style={{ fontSize: 24, fontWeight: 900, color: '#eab308' }}>
-                        TRAINING IN CORSO
-                    </div>
-                    <div style={{ fontSize: 18, color: '#38bdf8', textAlign: 'center' }}>
-                        {debug}
-                    </div>
-                    <div className="progress-bar" style={{ width: '80%', maxWidth: 300 }}>
-                        <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-                    </div>
-                    <div style={{ fontSize: 14, color: '#64748b' }}>
-                        Partite totali: {brainStats.games}
-                    </div>
-                    <button onClick={handleTraining} style={{
-                        padding: '12px 30px', background: '#ef4444', border: 'none',
-                        borderRadius: 9, fontWeight: 800, fontSize: 15, cursor: 'pointer',
-                        color: 'white', marginTop: 10
-                    }}>
-                        ⏹️ FERMA TRAINING
-                    </button>
-                </div>
-            )}
-            
-            <div className="top-bar">
-                {Object.entries(PERSONALITIES).map(([k, v]) => (
-                    <button
-                        key={k}
-                        className={`mode-btn ${bAI === k ? 'active' : ''}`}
-                        style={bAI === k ? { background: v.color, borderColor: v.color } : {}}
-                        onClick={() => { setBAI(k); setTimeout(reset, 0); }}
-                    >
-                        ⬛ {v.name}
-                    </button>
-                ))}
-            </div>
-            
-            <div className="player-row">
-                <div className="player-label" style={{ borderLeft: `3px solid ${PERSONALITIES[bAI]?.color}` }}>
-                    <div className="player-name">
-                        {thinking && turn === 'b' && <div className="thinking-dot" />}
-                        ⬛ {PERSONALITIES[bAI]?.name}
-                    </div>
-                    {last && <div className="last-move-hint">{last.from} → {last.to}</div>}
-                </div>
-                <div className="energy-badge" style={{ borderLeft: '3px solid #f43f5e' }}>
-                    <span style={{ fontSize: 16 }}>⚡</span>
-                    <span style={{ fontSize: 11 }}>{pts.b || 0}</span>
-                </div>
-            </div>
-            
-            <div className="board-wrap">
-                <div className="board">
-                    {bd.map((row, r) => row.map((cell, c) => {
-                        const fi = flipped ? 7 - c : c;
-                        const ri = flipped ? r : 7 - r;
-                        const sq = 'abcdefgh'[fi] + (ri + 1);
-                        const light = (fi + ri) % 2 !== 0;
-                        const isSel = sel === sq;
-                        const isTarget = moveTargets.includes(sq);
-                        
-                        return (
-                            <div
-                                key={sq}
-                                onClick={() => click(sq)}
-                                className={`cell ${light ? 'light' : 'dark'} ${
-                                    isSel ? 'sel' : ''
-                                } ${last?.from === sq ? 'last-from' : ''} ${
-                                    last?.to === sq ? 'last-to' : ''}`}
-                            >
-                                {isTarget && !cell && (
-                                    <div style={{
-                                        position: 'absolute', width: '30%', height: '30%',
-                                        borderRadius: '50%', background: '#22c55e',
-                                        boxShadow: '0 0 10px #22c55e', zIndex: 1
-                                    }} />
-                                )}
-                                {isTarget && cell && (
-                                    <div style={{
-                                        position: 'absolute', inset: 0, border: '3px solid #f43f5e',
-                                        borderRadius: '3px', zIndex: 1
-                                    }} />
-                                )}
-                                {cell && (
-                                    <span className={`piece piece-${cell.color}`}>
-                                        {ICONS[cell.color][cell.type]}
-                                    </span>
-                                )}
-                            </div>
-                        );
-                    }))}
-                </div>
-            </div>
-            
-            <div className="player-row">
-                <div className="player-label" style={{ borderLeft: `3px solid ${PERSONALITIES[wAI]?.color}` }}>
-                    <div className="player-name">
-                        {thinking && turn === 'w' && <div className="thinking-dot" />}
-                        ⬜ {PERSONALITIES[wAI]?.name}
-                    </div>
-                </div>
-                <div className="energy-badge" style={{ borderLeft: '3px solid #38bdf8' }}>
-                    <span style={{ fontSize: 16 }}>⚡</span>
-                    <span style={{ fontSize: 11 }}>{pts.w || 0}</span>
-                </div>
-            </div>
-            
-            <div className="panel">
-                <div className="panel-bottom">
-                    <div className="piece-label">
-                        {game.in_check() ? '⚠️ SCACCO!' : game.game_over() ? '🏁 Partita finita' : 'Seleziona un pezzo'}
-                    </div>
-                    <div className="turn-pill" style={{ color: turn === 'w' ? '#38bdf8' : '#f43f5e' }}>
-                        {turn === 'w' ? '⬜ Bianco' : '⬛ Nero'}
-                    </div>
-                </div>
-            </div>
-            
-            <div className="top-bar">
-                {Object.entries(PERSONALITIES).map(([k, v]) => (
-                    <button
-                        key={k}
-                        className={`mode-btn ${wAI === k ? 'active' : ''}`}
-                        style={wAI === k ? { background: v.color, borderColor: v.color } : {}}
-                        onClick={() => { setWAI(k); setTimeout(reset, 0); }}
-                    >
-                        ⬜ {v.name}
-                    </button>
-                ))}
-                <button className="flip-btn" onClick={() => setFlip(f => !f)}>🔄</button>
-                <button 
-                    className={training ? 'stop-btn' : 'train-btn'} 
-                    onClick={handleTraining}
-                >
-                    {training ? '⏹️ Stop' : '🧠 Allena 2k'}
-                </button>
-            </div>
-            
-            {game.game_over() && (
-                <div style={{
-                    position: 'fixed', inset: 0, background: 'rgba(0,0,0,.9)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    justifyContent: 'center', zIndex: 99, gap: 14,
-                    backdropFilter: 'blur(8px)'
-                }}>
-                    <div style={{ fontSize: 26, fontWeight: 900, color: '#f1f5f9' }}>
-                        {game.in_checkmate()
-                            ? (turn === 'w' ? '⬛ Nero vince!' : '⬜ Bianco vince!')
-                            : '🤝 Pareggio'}
-                    </div>
-                    <button onClick={reset} style={{
-                        padding: '12px 40px', background: '#38bdf8', border: 'none',
-                        borderRadius: 9, fontWeight: 800, fontSize: 15, cursor: 'pointer',
-                        marginTop: 6
-                    }}>
-                        RIVINCITA
-                    </button>
-                </div>
-            )}
-            
-            <div className="debug-bar">
-                🧠 Omega Light | {brainStats.games} partite | {debug || 'pronto'}
-            </div>
-        </div>
-    );
+  useEffect(()=>{const turn=game.turn(),ai=turn==='w'?wAI:bAI;if(training||!PERSONALITIES[ai]?.ai||game.game_over()||postPhase||summonMode||devolveMode)return;gen.current++;const myGen=gen.current;clearTimeout(timer.current);timer.current=setTimeout(async()=>{setThink(true);setDebug('🧠 Neural thinking...');const t0=Date.now(),weights=weightsRef.current;const action=chooseAction(game,pd,sm,pts,turn,cooldowns,weights,false);if(gen.current!==myGen){setThink(false);return;}if(!action){setThink(false);return;}let next=applyAction(game,pd,sm,pts,action,cooldowns);if(!next){setThink(false);return;}next=autoEvolve(next,turn);setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});setLast({from:action.from,to:action.to});setDebug(`✅ Neural | ${((Date.now()-t0)/1000).toFixed(1)}s`);setThink(false);},0);return()=>clearTimeout(timer.current);},[game,pd,sm,pts,wAI,bAI,cooldowns,training,postPhase,summonMode,devolveMode]);
+
+  const exportBrain=()=>{const w=localStorage.getItem('omega_weights_v29');if(!w){alert('Nessun cervello da esportare');return;}const blob=new Blob([w],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`omega_brain_${Date.now()}.json`;a.click();URL.revokeObjectURL(url);};
+  const importBrain=(e)=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=(ev)=>{try{const w=JSON.parse(ev.target.result);if(!REQUIRED_KEYS.every(k=>typeof w[k]==='number'&&!isNaN(w[k]))){alert('File non valido');return;}localStorage.setItem('omega_weights_v29',JSON.stringify(w));weightsRef.current=w;alert('Cervello importato!');reset();}catch(err){alert('File non valido');}};reader.readAsText(file);};
+  const startTraining=async()=>{setTraining(true);setThink(false);const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});clearTimeout(timer.current);setDebug('🎮 Auto-training 20.000 partite...');if('wakeLock' in navigator){try{wakeLockRef.current=await navigator.wakeLock.request('screen');wakeLockRef.current.addEventListener('release',()=>setDebug('⚠️ Schermo sbloccato'));}catch(e){}}const result=await trainAI(20000,(p)=>setTrainProgress(`${p.current}/${p.total} | W:${p.wins.w} B:${p.wins.b}`),wakeLockRef);weightsRef.current=loadWeights();setTraining(false);setDebug(`✅ Training completato! ${result.total} partite`);reset();};
+  const reset=()=>{const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);setDebug('');setTrainProgress('');setCooldowns({});setPostPhase(false);setPostPlayer(null);setSummonMode(false);setDevolveMode(false);gen.current++;};
+
+  const raw=game.board(),bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw,turn=game.turn(),sid=sel?sm[sel]:null,sd=sid?pd[sid]:null,sp=sel?game.get(sel):null,evo=sp?EVOLUTIONS[sp.type]:null,li=evo&&sd?evo.levels[sd.level-1]:null,cp=pts[turn];
+  const evoCosts={p:2,n:2,b:2,r:3,q:5},nextCost=sd?(evoCosts[sd.type]||2):2,cpct=Math.min(cp/nextCost*100,100);
+  const isAI=PERSONALITIES[turn==='w'?wAI:bAI]?.ai;
+  const evolvableSqs=postPhase&&postPlayer?getEvolvablePieces(game,pd,sm,pts,postPlayer).map(c=>c.sq):[];
+  let summonAdjSqs=[];if(summonMode&&summonQueenSq){const file=summonQueenSq.charCodeAt(0)-97,rank=parseInt(summonQueenSq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){const nf=file+df,nr=rank+dr;if(nf>=0&&nf<=7&&nr>=1&&nr<=8){const s=String.fromCharCode(97+nf)+nr;if(!game.get(s))summonAdjSqs.push(s);}}}
+  let devolveTargetSqs=[];if(devolveMode&&devolveTowerSq&&postPlayer){devolveTargetSqs=Object.entries(sm).filter(([sq,id])=>{const tp=game.get(sq);return tp&&tp.color===postPlayer&&tp.type!=='k'&&tp.type!=='r'&&pd[id]?.level>1;}).map(e=>e[0]);}
+
+  const Bar=({color,cur,onChange})=>(<div className="top-bar">{Object.entries(PERSONALITIES).map(([k,v])=>(<button key={k} className={`mode-btn ${cur===k?'active':''}`} style={cur===k?{background:v.color,borderColor:v.color}:{}} onClick={()=>onChange(k)}>{color==='w'?'⬜':'⬛'} {v.name}</button>))}{color==='w'&&<button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄</button>}{color==='b'&&<button className="train-btn" onClick={startTraining} disabled={training}>{training?'🏋️':'🧠'} Allena 20k</button>}</div>);
+
+  return(<div className="app">
+    {training&&<div style={{position:'fixed',inset:0,background:'#060913',zIndex:200,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20}}><div style={{fontSize:48}}>🧠</div><div style={{fontSize:24,fontWeight:900,color:'#eab308'}}>TRAINING IN CORSO</div><div style={{fontSize:18,color:'#38bdf8'}}>{trainProgress||'Avvio...'}</div><div style={{fontSize:14,color:'#64748b',marginTop:20}}>Non chiudere questa pagina</div><div style={{fontSize:12,color:'#475569'}}>Partite: {brainStats.games}</div></div>}
+    <Bar color="b" cur={bAI} onChange={k=>{setBAI(k);setTimeout(reset,0);}}/>
+    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[bAI]?.color}`}}><div className="player-name">{thinking&&turn==='b'&&<div className="thinking-dot"/>}⬛ {PERSONALITIES[bAI]?.name}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span></div></div>
+    <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,evoCls=level===2?'evo2':'',isEvoHighlight=postPhase&&evolvableSqs.includes(sq),isSummonHighlight=summonMode&&summonAdjSqs.includes(sq),isDevolveTarget=devolveMode&&devolveTargetSqs.includes(sq),isSummoned=data?.summoned;return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${isEvoHighlight?'evo-highlight':''} ${isSummonHighlight?'summon-highlight':''} ${isDevolveTarget?'devolve-target-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${evoCls} ${isSummoned?'summoned-pawn':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}{level>=2&&<div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,0.8)',zIndex:3}}/>}</div>)}))}</div></div>
+    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>Neural...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
+    <div className="panel">{summonMode?<div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#ec4899',fontWeight:700}}>✨ Clicca una casella rosa per evocare</div>:devolveMode?<div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#22c55e',fontWeight:700}}>♻️ Scegli il pezzo da disevolvere (clicca o fuori)</div>:postPhase?<div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}><span style={{fontSize:12,fontWeight:700,color:'#0ea5e9'}}>⚡ Post-mossa: clicca un pezzo o fuori</span></div>:<><div><div className="charge-row"><span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · analisi...':''}{training?' · TRAINING...':''}</span><span style={{color:cp>=nextCost?'#22c55e':'#38bdf8'}}>{cp}/{nextCost}{cp>=nextCost?' • PRONTO':''}</span></div><div className="charge-track"><div style={{width:`${cpct}%`,height:'100%',background:cp>=nextCost?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'2px'}}/></div></div><div className="panel-bottom"><div className="piece-label">{sd&&evo?<span style={{fontWeight:700,color:li?.color||'#94a3b8'}}>{sp&&ICONS[sp.color][sp.type]} {li?.name} Lv.{sd.level}<span style={{fontSize:9,color:'#64748b',marginLeft:4}}>{li?.desc}</span></span>:<span style={{color:'#475569'}}>Seleziona un pezzo</span>}</div><div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{isKingInDanger(game,pd,sm,turn)?'SCACCO!':turn==='w'?'⬜':'⬛'}</div></div></>}</div>
+    <Bar color="w" cur={wAI} onChange={k=>{setWAI(k);setTimeout(reset,0);}}/>
+    {game.game_over()&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}><div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{game.in_checkmate()?(turn==='w'?'⬛ Nero vince!':'⬜ Bianco vince!'):'🤝 Pareggio'}</div><div style={{fontSize:12,color:'#64748b'}}>{game.in_checkmate()?'Scacco matto':'Patta'}</div><button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>RIVINCITA</button></div>}
+    <div className="debug-bar"><button onClick={exportBrain} style={{background:'none',border:'none',color:'#22c55e',fontSize:'9px',cursor:'pointer'}}>💾</button><label style={{color:'#38bdf8',fontSize:'9px',cursor:'pointer',marginLeft:'6px'}}>📤<input type="file" accept=".json" onChange={importBrain} style={{display:'none'}}/></label>🧠 Rete neurale | {brainStats.games} partite | {debug||'pronto'} {trainProgress}</div>
+  </div>);
 }
-
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
 </html>

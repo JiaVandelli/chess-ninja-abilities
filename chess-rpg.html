@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>Chess RPG - Omega Neural V5.8.6</title>
+    <title>Chess RPG - Omega Neural V5.8.7</title>
     <style>
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -438,8 +438,12 @@ const HEADLESS_OMEGA = {
   }
 };
 
-// ═══════════ TRAINING ═══════════
-let brainStats = { games: 0, wins: {w:0,b:0} };
+// ═══════════ TRAINING + CONTATORE PERSISTENTE ═══════════
+let brainStats = { 
+  games: parseInt(localStorage.getItem('omega_games_count') || '0'), 
+  wins: {w:0,b:0} 
+};
+
 async function trainAI(games=20000, onProgress=()=>{}, wakeLockRef=null){
   let gameCount=0;
   try {
@@ -467,6 +471,7 @@ async function trainAI(games=20000, onProgress=()=>{}, wakeLockRef=null){
       }
       gameCount++;
       brainStats.games++;
+      localStorage.setItem('omega_games_count', brainStats.games);
       if(gameCount % 1000 === 0) {
         const w = NEURAL_BRAIN.loadWeights();
         localStorage.setItem('omega_backup', JSON.stringify(w));
@@ -528,7 +533,12 @@ function App(){
     lastFenRef.current=game.fen();
     setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});
     setSel(null);setStd([]);setAbl([]);setLast({from:actionObj.from,to:actionObj.to});
-    if(next.game.game_over()){const winner=next.game.in_checkmate()?(turn==='w'?'b':'w'):null;if(winner){}}
+    if(next.game.game_over()){
+      const winner=next.game.in_checkmate()?(turn==='w'?'b':'w'):null;
+      brainStats.games++;
+      localStorage.setItem('omega_games_count', brainStats.games);
+      if(winner){}
+    }
     const isHuman=turn==='w'?!PERSONALITIES[wAI]?.ai:!PERSONALITIES[bAI]?.ai;
     if(isHuman&&!next.game.game_over()){setPostPlayer(turn);setPostPhase(true)}else{setPostPlayer(null);setPostPhase(false)}
     return next;
@@ -624,7 +634,6 @@ function App(){
   },[game,sel,stdM,abilM,getMoves,move,wAI,bAI,thinking,training,postPhase,postPlayer,summonMode,devolveMode,devolveTowerSq,handleEvoClick,handleSummonClick,skipPost,startSummon,doDevolve,sm,pd,pts]);
 
   useEffect(()=>{const turn=game.turn(),ai=turn==='w'?wAI:bAI;
-    // FIX: training controllato per primo
     if(training||!PERSONALITIES[ai]?.ai||game.game_over()||postPhase||summonMode||devolveMode)return;
     gen.current++;const myGen=gen.current;clearTimeout(timer.current);timer.current=setTimeout(async()=>{setThink(true);setDebug('🧠 Neural thinking...');const t0=Date.now();const weights=NEURAL_BRAIN.loadWeights();const action=HEADLESS_OMEGA.chooseActionFast(game,pd,sm,pts,turn,cooldowns,weights,false);if(gen.current!==myGen){setThink(false);return}if(!action){setThink(false);return}let next=applyAction(game,pd,sm,pts,action,cooldowns);if(!next){setThink(false);return}next=autoEvolve(next,turn);setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});setLast({from:action.from,to:action.to});const elapsed=((Date.now()-t0)/1000).toFixed(1)+'s';setDebug(`✅ Neural | ${elapsed}`);setThink(false);},0);return()=>clearTimeout(timer.current)},[game,pd,sm,pts,wAI,bAI,cooldowns,training,postPhase,summonMode,devolveMode]);
 

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-    <title>Chess RPG - Omega Neural V5.8.4</title>
+    <title>Chess RPG - Omega Neural V5.8.5</title>
     <style>
         *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
         html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -57,7 +57,7 @@ const {useState,useEffect,useCallback,useRef}=React;
 const Chess=window.Chess;
 const ICONS={w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
-// ═══════════ HELPERS (FIX BUG RE SOTTO SCACCO) ═══════════
+// ═══════════ HELPERS ═══════════
 function moveLeavesKingInCheck(fen,from,to,piece){
   const g=new Chess(fen);
   g.remove(from); g.remove(to); g.put(piece,to);
@@ -109,16 +109,12 @@ function isSquareAttackedByEvo(game, pd, sm, targetSq, attackerColor) {
   return false;
 }
 
-// FIX DEFINITIVO: isKingInDanger non corrompe la FEN
 function isKingInDanger(game, pd, sm, color) {
-  // 1. Controllo scacco normale (con FEN corretta)
   const fen = game.fen().split(' ');
   fen[1] = color;
-  fen[3] = '-'; // togli en passant
+  fen[3] = '-';
   const test = new Chess(fen.slice(0,4).join(' ') + ' 0 1');
   if (test.in_check()) return true;
-
-  // 2. Controllo scacco RPG
   let kingSq = null;
   const board = game.board();
   for (let r=0; r<8; r++) for (let c=0; c<8; c++) {
@@ -179,9 +175,10 @@ function getAIActions(game,pd,sm,pts,color) {
   if(towerData){
       const towerSq=Object.keys(sm).find(sq=>sm[sq]===towerData.id);
       if(towerSq){
+          // FIX: Disevolvi i TUOI pezzi (non i nemici), escludendo Re e altre Torri
           for(const[sq,id]of Object.entries(sm)){
               const targetPiece=game.get(sq);
-              if(!targetPiece || targetPiece.color === color || targetPiece.type==='k') continue;
+              if(!targetPiece || targetPiece.color !== color || targetPiece.type==='k' || targetPiece.type==='r') continue;
               const targetData=pd[id];
               if(targetData&&targetData.level>1){
                   actions.push({type:'devolve',towerSq,targetSq:sq,targetId:id});
@@ -206,7 +203,20 @@ function generateAllActions(game,pd,sm,pts,color,cooldowns){
     return !isKingInDanger(next.game,next.pd,next.sm,color);
   });
 }
-const generateAllActionsFast = generateAllActions;
+
+// Versione FAST per training: salta applyAction e isKingInDanger
+function generateAllActionsFast(game,pd,sm,pts,color,cooldowns){
+  return getAIActions(game,pd,sm,pts,color).filter(a=>{
+    if(a.to){
+        const target=game.get(a.to); if(target&&target.type==='k') return false;
+        if(a.promotion && a.type==='move'){
+            const piece=game.get(a.from);
+            if(piece&&piece.type==='p'&&pd[sm[a.from]]?.summoned) return false;
+        }
+    }
+    return true; // NO applyAction, NO isKingInDanger
+  });
+}
 
 function applyAction(game,pd,sm,pts,action,cooldowns){
   const color=game.turn();
@@ -307,7 +317,7 @@ function autoEvolve(state,color){
   return{game:new Chess(game.fen()),pd:npd,sm:{...sm},pts:npts,cooldowns:{...cooldowns}};
 }
 
-// ═══════════ NEURAL BRAIN V2.1 (20 FEATURE) ═══════════
+// ═══════════ NEURAL BRAIN V2.1 ═══════════
 const LEARNING_RATE = 0.02;
 const DEFAULT_WEIGHTS = {
   material:1.0, rpg:1.5, energy:0.5, center:0.3, kingSafety:0.8, evolvedPieces:1.0,
@@ -405,12 +415,13 @@ const NEURAL_BRAIN = {
   }
 };
 
-// ═══════════ HEADLESS OMEGA (FALLBACK SICURO) ═══════════
+// ═══════════ HEADLESS OMEGA (sceglie generatore in base a isTraining) ═══════════
 const HEADLESS_OMEGA = {
   chooseActionFast: (game, pd, sm, pts, color, cooldowns, weights, isTraining=false) => {
-    const all = generateAllActionsFast(game, pd, sm, pts, color, cooldowns);
+    const all = isTraining
+      ? generateAllActionsFast(game, pd, sm, pts, color, cooldowns)
+      : generateAllActions(game, pd, sm, pts, color, cooldowns);
     if(!all.length) {
-      // FALLBACK: nessuna mossa valida? usa la prima mossa legale senza filtri
       const rawMoves = game.moves({verbose:true});
       if(rawMoves.length) return {type:'move', from:rawMoves[0].from, to:rawMoves[0].to, promotion:'q'};
       return null;

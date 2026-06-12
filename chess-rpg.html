@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG - Omega V8.2 (Destriero fix)</title>
+  <title>Chess RPG - Omega V8.2 (Destriero L+X)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -153,32 +153,32 @@ function estimateWinner(game, pd, sm){
 const EVOLUTIONS={
   p:{levels:[{name:'Pedone',color:'#64748b',desc:'Standard'},{name:'Assaltatore',color:'#eab308',desc:'Triangolo frontale'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),dir=color==='w'?1:-1;const r=rank+dir;if(r>=1&&r<=8){const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});for(const df of[-1,1]){const f=file+df;if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false})}}}return moves.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,game.get(sq)))}},
-  // ✅ DESTRIERO FIX
-  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'L + scivola 1'}],
+  // ✅ DESTRIERO: L + 1 diagonale (movimento unico, ignora la casa L)
+  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'L + X (diagonali)'}],
     getAbilityMoves(sq,game,level,color){
       if(level<2)return[];
       const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
       const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+      const DIAG=[[1,1],[1,-1],[-1,1],[-1,-1]];
       for(const[df,dr]of J){
         const mf=file+df,mr=rank+dr;
         if(mf<0||mf>7||mr<1||mr>8)continue;
+        // 1. La casa della L è sempre raggiungibile (se non c'è un alleato)
         const midSq=String.fromCharCode(97+mf)+mr,midP=game.get(midSq);
-        if(midP&&midP.color===color)continue;
-        // 1. Salto L normale
-        if(!moveLeavesKingInCheck(game.fen(),sq,midSq,piece))
-          moves.push({from:sq,to:midSq,isCapture:!!midP});
-        // 2. Se vuoto, scivola di 1 in qualsiasi direzione (8 caselle)
-        if(!midP){
-          for(const[sd,sr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){
-            const ef=mf+sd,er=mr+sr;
-            if(ef<0||ef>7||er<1||er>8)continue;
-            const end=String.fromCharCode(97+ef)+er;
-            if(end===sq)continue;
-            const t=game.get(end);
-            if(t&&t.color===color)continue;
-            if(!moveLeavesKingInCheck(game.fen(),sq,end,piece))
-              moves.push({from:sq,to:end,isCapture:!!t});
-          }
+        if(!midP||midP.color!==color){
+          if(!moveLeavesKingInCheck(game.fen(),sq,midSq,piece))
+            moves.push({from:sq,to:midSq,isCapture:!!midP});
+        }
+        // 2. Le 4 case diagonali adiacenti alla L (indipendentemente da cosa c'è sulla L)
+        for(const[dd,dr]of DIAG){
+          const ef=mf+dd,er=mr+dr;
+          if(ef<0||ef>7||er<1||er>8)continue;
+          const end=String.fromCharCode(97+ef)+er;
+          if(end===sq)continue;
+          const t=game.get(end);
+          if(t&&t.color===color)continue;
+          if(!moveLeavesKingInCheck(game.fen(),sq,end,piece))
+            moves.push({from:sq,to:end,isCapture:!!t});
         }
       }
       return moves;
@@ -246,7 +246,15 @@ function getAIActions(game,pd,sm,pts,color){
 function getEvolvablePieces(game,pd,sm,pts,color){
   const evoCosts={p:2,n:2,b:2,r:3,q:5},result=[];
   if(pts[color]<2)return result;
-  for(const[sq,id]of Object.entries(sm)){const piece=game.get(sq);if(!piece||piece.color!==color)continue;const d=pd[id];if(!d)continue;const maxLvl=EVOLUTIONS[d.type]?.levels?.length||1;if(d.level>=maxLvl)continue;const cost=evoCosts[d.type]||2;if(pts[color]>=cost)result.push({sq,id,type:d.type,cost,newLevel:d.level+1});}
+  for(const[sq,id]of Object.entries(sm)){
+    const piece=game.get(sq);if(!piece||piece.color!==color)continue;
+    const d=pd[id];if(!d)continue;
+    if(d.summoned) continue; // pedoni evocati non si evolvono
+    const maxLvl=EVOLUTIONS[d.type]?.levels?.length||1;
+    if(d.level>=maxLvl)continue;
+    const cost=evoCosts[d.type]||2;
+    if(pts[color]>=cost)result.push({sq,id,type:d.type,cost,newLevel:d.level+1});
+  }
   return result;
 }
 

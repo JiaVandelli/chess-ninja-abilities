@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG - Omega V8.2 (Disevolvi Infinito)</title>
+  <title>Chess RPG - Omega V8.2 (fix reward + AI loop)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -183,7 +183,7 @@ const EVOLUTIONS={
   },
   b:{levels:[{name:'Alfiere',color:'#64748b',desc:'Standard'},{name:'Spettro',color:'#06b6d4',desc:'Salta 1 ostacolo'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr,jumped=false;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(!jumped){jumped=true}else{if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}}else if(jumped){if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false})}f+=df;r+=dr}}return moves}},
-  r:{levels:[{name:'Torre',color:'#64748b',desc:'Standard'},{name:'Archivista',color:'#22c55e',desc:'Swap a distanza (max 5) | Disevolvi globale (infinito)'}],
+  r:{levels:[{name:'Torre',color:'#64748b',desc:'Standard'},{name:'Archivista',color:'#22c55e',desc:'Swap a distanza (max 5) | Disevolvi globale (∞)'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){for(let i=1;i<=5;i++){const nf=file+df*i,nr=rank+dr*i;if(nf<0||nf>7||nr<1||nr>8)break;const tSq=String.fromCharCode(97+nf)+nr,target=game.get(tSq);if(target&&target.color===color&&target.type!=='k'){moves.push({from:sq,to:tSq,isCapture:false,isSwap:true});}}}return moves}},
   q:{levels:[{name:'Regina',color:'#64748b',desc:'Standard'},{name:'Imperatrice',color:'#ec4899',desc:'Amazzone (R+B+N) | Evoca pedone'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]){const nf=file+df,nr=rank+dr;if(nf<0||nf>7||nr<1||nr>8)continue;const tSq=String.fromCharCode(97+nf)+nr,t=game.get(tSq);if(t&&t.color===color)continue;if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:!!t})}for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}return moves}},
@@ -483,7 +483,7 @@ function searchBestAction(game,pd,sm,pts,color,cooldowns) {
   return bestAction;
 }
 
-// ═══════════ TRAINING CON REPLAY BUFFER ═══════════
+// ═══════════ TRAINING CON REPLAY BUFFER (FIX REWARD + WINS) ═══════════
 const replay = [];
 async function trainNetwork(totalGames, onProgress, wakeLockRef) {
   let completed = 0, wins = {w:0,b:0};
@@ -499,6 +499,16 @@ async function trainNetwork(totalGames, onProgress, wakeLockRef) {
       if (!action) break;
       let next = applyAction(state.game, state.pd, state.sm, state.pts, action, state.cooldowns, color);
       if (!next) break;
+      // Se l'azione non cambia il turno, forziamo il cambio turno per evitare loop
+      if (next.game.turn() === color) {
+        const parts = next.game.fen().split(' ');
+        parts[1] = color==='w'?'b':'w';
+        if (color==='b') parts[5] = String(parseInt(parts[5]||'1')+1);
+        const finalGame = new Chess();
+        if (finalGame.load(parts.join(' '))) {
+          next = {...next, game:finalGame};
+        }
+      }
       const nextVec = encodeState(next.game, next.pd, next.sm, next.pts, color==='w'?'b':'w');
       history.push({s:stateVec, ns:nextVec, color});
       state = next;
@@ -506,9 +516,10 @@ async function trainNetwork(totalGames, onProgress, wakeLockRef) {
     let winner = null;
     if (state.game.in_checkmate()) winner = state.game.turn()==='w'?'b':'w';
     else winner = estimateWinner(state.game, state.pd, state.sm);
+    if (winner) wins[winner]++; // FIX: aggiorna contatore vittorie
     const finalReward = winner ? (winner==='w'?1:-1) : 0;
     for (const step of history) {
-      const reward = step.color===winner ? finalReward : -finalReward;
+      const reward = step.color===winner ? 1 : -1; // FIX: reward corretto
       replay.push({s:step.s, ns:step.ns, r:reward});
       if (replay.length > 20000) replay.shift();
     }
@@ -611,11 +622,9 @@ function App(){
     const next=applyAction(game,pd,sm,pts,{type:'summon',queenSq,targetSq:sq,cost:2},cooldowns,postPlayer);if(!next){setSummonMode(false);setSummonQueenSq(null);return;}
     setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});setLast({from:queenSq,to:'summon'});setSummonMode(false);setSummonQueenSq(null);
   },[summonMode,summonQueenSq,game,pd,sm,pts,cooldowns,postPlayer]);
-
   const doDevolve=useCallback((tSq,tgSq)=>{
     if(!tSq||!tgSq)return;const id=sm[tSq],d=pd[id];if(!d||d.type!=='r'||d.level<2)return;
     const targetId=sm[tgSq],targetData=pd[targetId];if(!targetData||targetData.level<=1)return;
-    // Nessun limite: puoi disevolvere quanto vuoi
     const next=applyAction(game,pd,sm,pts,{type:'devolve',towerSq:tSq,targetSq:tgSq,targetId},cooldowns,postPlayer);if(!next)return;
     setPd(next.pd);setPts(next.pts);setCooldowns(next.cooldowns||{});setLast({from:tSq,to:tgSq+' devolve'});setDevolveMode(false);setDevolveTowerSq(null);
   },[game,sm,pd,pts,cooldowns,postPlayer]);
@@ -630,10 +639,15 @@ function App(){
     if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);}else{setSel(null);setStd([]);setAbl([]);}
   },[game,sel,stdM,abilM,getMoves,move,wAI,bAI,thinking,training,postPhase,postPlayer,summonMode,summonQueenSq,devolveMode,devolveTowerSq,handleEvoClick,handleSummonClick,skipPost,startSummon,doDevolve,sm,pd,pts]);
 
-  useEffect(()=>{const turn=game.turn(),ai=turn==='w'?wAI:bAI;if(training||!PERSONALITIES[ai]?.ai||game.game_over()||postPhase||summonMode||devolveMode)return;gen.current++;const myGen=gen.current;clearTimeout(timer.current);timer.current=setTimeout(async()=>{setThink(true);setDebug('🧠 Neural thinking...');const t0=Date.now();const action=searchBestAction(game,pd,sm,pts,turn,cooldowns);if(gen.current!==myGen){setThink(false);return;}if(!action){setThink(false);return;}let next=applyAction(game,pd,sm,pts,action,cooldowns,turn);if(!next){setThink(false);return;}setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});setLast({from:action.from,to:action.to});setDebug(`✅ Neural | ${((Date.now()-t0)/1000).toFixed(1)}s`);setThink(false);},0);return()=>clearTimeout(timer.current);},[game,pd,sm,pts,wAI,bAI,cooldowns,training,postPhase,summonMode,devolveMode]);
+  useEffect(()=>{const turn=game.turn(),ai=turn==='w'?wAI:bAI;if(training||!PERSONALITIES[ai]?.ai||game.game_over()||postPhase||summonMode||devolveMode)return;gen.current++;const myGen=gen.current;clearTimeout(timer.current);timer.current=setTimeout(async()=>{setThink(true);setDebug('🧠 Neural thinking...');const t0=Date.now();const action=searchBestAction(game,pd,sm,pts,turn,cooldowns);if(gen.current!==myGen){setThink(false);return;}if(!action){setThink(false);return;}let next=applyAction(game,pd,sm,pts,action,cooldowns,turn);if(!next){setThink(false);return;}// Se l'azione non ha cambiato il turno, lo forziamo per evitare loop
+    if(next.game.turn()===turn){
+      const parts=next.game.fen().split(' '); parts[1]=turn==='w'?'b':'w'; if(turn==='b') parts[5]=String(parseInt(parts[5]||'1')+1);
+      const finalGame=new Chess(); if(finalGame.load(parts.join(' '))) next={...next,game:finalGame};
+    }
+    setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});setLast({from:action.from,to:action.to});setDebug(`✅ Neural | ${((Date.now()-t0)/1000).toFixed(1)}s`);setThink(false);},0);return()=>clearTimeout(timer.current);},[game,pd,sm,pts,wAI,bAI,cooldowns,training,postPhase,summonMode,devolveMode]);
 
   const exportBrain=()=>{const w=VNET.save();if(!w){alert('Nessun cervello');return;}const blob=new Blob([w],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`omega_brain_${Date.now()}.json`;a.click();URL.revokeObjectURL(url);};
-  const importBrain=(e)=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=(ev)=>{try{VNET.load(ev.target.result);localStorage.setItem('omega_v82_net',VNET.save());alert('Cervello importato!');reset();}catch(err){alert('File non valido');}};reader.readAsText(file);};
+  const importBrain=(e)=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=(ev)=>{try{const ok=VNET.load(ev.target.result);if(!ok){alert('File non valido');return;}localStorage.setItem('omega_v82_net',VNET.save());alert('Cervello importato!');reset();}catch(err){alert('File non valido');}};reader.readAsText(file);};
   const startTraining=async()=>{setTraining(true);setThink(false);const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});clearTimeout(timer.current);setDebug('🎮 Auto-training 20.000 partite...');if('wakeLock' in navigator){try{wakeLockRef.current=await navigator.wakeLock.request('screen');wakeLockRef.current.addEventListener('release',()=>setDebug('⚠️ Schermo sbloccato'));}catch(e){}}const result=await trainNetwork(20000,(p)=>setTrainProgress(`${p.current}/${p.total} | W:${p.wins.w} B:${p.wins.b}`),wakeLockRef);setTraining(false);setDebug(`✅ Training completato! ${result.total} partite`);reset();};
   const reset=()=>{const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);setDebug('');setTrainProgress('');setCooldowns({});setPostPhase(false);setPostPlayer(null);setSummonMode(false);setDevolveMode(false);if(lvlUpTimer.current)clearTimeout(lvlUpTimer.current);gen.current++;globalIdCounter=0;};
 

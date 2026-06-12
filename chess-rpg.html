@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG - Omega V8.2 (Human Learning)</title>
+  <title>Chess RPG - Omega V8.2 (Destriero fix)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -33,7 +33,6 @@
     .cell.summon-highlight{outline:2px dashed #ec4899;outline-offset:-2px}
     .cell.devolve-target-highlight{outline:2px dashed #22c55e;outline-offset:-2px}
     .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
-    /* Nuovi stili con text-shadow per massima compatibilità */
     .piece-w{color:#fff;text-shadow:0 0 0 #000,0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.7))}
     .piece-b{color:#000;text-shadow:0 0 0 #fff,0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,0 -1px 0 #fff;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))}
     .evo2{filter:drop-shadow(0 0 4px #a855f7)!important}
@@ -57,7 +56,6 @@
 <script type="text/babel">
 const {useState,useEffect,useCallback,useRef} = React;
 const Chess = window.Chess;
-// ✅ Icone invertite – entrambi i colori usano ♚♛♜♝♞♟
 const ICONS = {w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 
 let globalIdCounter = 0;
@@ -155,8 +153,37 @@ function estimateWinner(game, pd, sm){
 const EVOLUTIONS={
   p:{levels:[{name:'Pedone',color:'#64748b',desc:'Standard'},{name:'Assaltatore',color:'#eab308',desc:'Triangolo frontale'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),dir=color==='w'?1:-1;const r=rank+dir;if(r>=1&&r<=8){const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});for(const df of[-1,1]){const f=file+df;if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false})}}}return moves.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,game.get(sq)))}},
-  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'Salto a L + croce'}],
-    getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]],CROSS=[[0,0],[0,1],[0,-1],[1,0],[-1,0]];for(const[df1,dr1]of J){const mf=file+df1,mr=rank+dr1;if(mf<0||mf>7||mr<1||mr>8)continue;const midSq=String.fromCharCode(97+mf)+mr,midPiece=game.get(midSq);if(midPiece&&midPiece.color===color)continue;if(midPiece&&midPiece.color!==color){if(!moveLeavesKingInCheck(game.fen(),sq,midSq,piece))moves.push({from:sq,to:midSq,isCapture:true});continue}for(const[df2,dr2]of CROSS){const ef=mf+df2,er=mr+dr2;if(ef<0||ef>7||er<1||er>8)continue;const end=String.fromCharCode(97+ef)+er;if(end===sq)continue;const t=game.get(end);if(t&&t.color===color)continue;if(!moveLeavesKingInCheck(game.fen(),sq,end,piece))moves.push({from:sq,to:end,isCapture:!!t})}}return moves}},
+  // ✅ DESTRIERO FIX
+  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'L + scivola 1'}],
+    getAbilityMoves(sq,game,level,color){
+      if(level<2)return[];
+      const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
+      const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+      for(const[df,dr]of J){
+        const mf=file+df,mr=rank+dr;
+        if(mf<0||mf>7||mr<1||mr>8)continue;
+        const midSq=String.fromCharCode(97+mf)+mr,midP=game.get(midSq);
+        if(midP&&midP.color===color)continue;
+        // 1. Salto L normale
+        if(!moveLeavesKingInCheck(game.fen(),sq,midSq,piece))
+          moves.push({from:sq,to:midSq,isCapture:!!midP});
+        // 2. Se vuoto, scivola di 1 in qualsiasi direzione (8 caselle)
+        if(!midP){
+          for(const[sd,sr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){
+            const ef=mf+sd,er=mr+sr;
+            if(ef<0||ef>7||er<1||er>8)continue;
+            const end=String.fromCharCode(97+ef)+er;
+            if(end===sq)continue;
+            const t=game.get(end);
+            if(t&&t.color===color)continue;
+            if(!moveLeavesKingInCheck(game.fen(),sq,end,piece))
+              moves.push({from:sq,to:end,isCapture:!!t});
+          }
+        }
+      }
+      return moves;
+    }
+  },
   b:{levels:[{name:'Alfiere',color:'#64748b',desc:'Standard'},{name:'Spettro',color:'#06b6d4',desc:'Salta 1 ostacolo'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr,jumped=false;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(!jumped){jumped=true}else{if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}}else if(jumped){if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false})}f+=df;r+=dr}}return moves}},
   r:{levels:[{name:'Torre',color:'#64748b',desc:'Standard'},{name:'Archivista',color:'#22c55e',desc:'Swap a distanza (max 5) | Disevolvi globale'}],
@@ -539,7 +566,6 @@ function App(){
     const turn=game.turn(),next=applyAction(game,pd,sm,pts,actionObj,cooldowns,turn);if(!next)return;
     setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});
     setSel(null);setStd([]);setAbl([]);setLast({from:actionObj.from,to:actionObj.to});
-    // ✅ Fix: impara dalla sconfitta quando l'umano batte Omega
     if(next.game.game_over()){
       brainStats.games++;
       localStorage.setItem('omega_games_count',String(brainStats.games));

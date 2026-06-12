@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG - Omega V8.5 (fix history + RPG mate)</title>
+  <title>Chess RPG - Omega V8.6 (fix rook + AI turn)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -179,7 +179,7 @@ const EVOLUTIONS={
   b:{levels:[{name:'Alfiere',color:'#64748b',desc:'Standard'},{name:'Spettro',color:'#06b6d4',desc:'Salta 1 ostacolo'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr,jumped=false;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(!jumped){jumped=true}else{if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}}else if(jumped){if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false})}f+=df;r+=dr}}return moves}},
   r:{levels:[{name:'Torre',color:'#64748b',desc:'Standard'},{name:'Archivista',color:'#22c55e',desc:'Swap a distanza (max 5) | Disevolvi globale (∞)'}],
-    getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){for(let i=1;i<=5;i++){const nf=file+df*i,nr=rank+dr*i;if(nf<0||nf>7||nr<1||nr>8)break;const tSq=String.fromCharCode(97+nf)+nr,target=game.get(tSq);if(target&&target.color===color&&target.type!=='k'){moves.push({from:sq,to:tSq,isCapture:false,isSwap:true});}}}return moves}},
+    getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){for(let i=1;i<=5;i++){const nf=file+df*i,nr=rank+dr*i;if(nf<0||nf>7||nr<1||nr>8)break;const tSq=String.fromCharCode(97+nf)+nr,target=game.get(tSq);if(target&&target.color===color&&target.type!=='k'){moves.push({from:sq,to:tSq,isCapture:false,isSwap:true});break;}}}return moves}},
   q:{levels:[{name:'Regina',color:'#64748b',desc:'Standard'},{name:'Imperatrice',color:'#ec4899',desc:'Amazzone (R+B+N) | Evoca pedone'}],
     getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]){const nf=file+df,nr=rank+dr;if(nf<0||nf>7||nr<1||nr>8)continue;const tSq=String.fromCharCode(97+nf)+nr,t=game.get(tSq);if(t&&t.color===color)continue;if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:!!t})}for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}return moves}},
   k:{levels:[{name:'Re',color:'#64748b',desc:'Standard'}],getAbilityMoves:()=>[]}
@@ -593,11 +593,8 @@ function App(){
     return{std:filterMoves(rawStd,false),abil:filterMoves(rawAbil,true)};
   },[game,sm,pd,pts,cooldowns]);
 
-  const executeMove = useCallback((actionObj, color) => {
-    gameHistory.current.push({
-      state: encodeState(game, pd, sm, pts, color),
-      color: color
-    });
+  // Wrapper che applica un'azione e aggiorna lo stato (usato solo da mosse umane)
+  const applyAndSetState = useCallback((actionObj, color) => {
     const next = applyAction(game, pd, sm, pts, actionObj, cooldowns, color);
     if (!next) return null;
     setPts(next.pts);
@@ -609,29 +606,40 @@ function App(){
     setSel(null);
     setStd([]);
     setAbl([]);
-    if (next.game.game_over()) {
-      brainStats.games++;
-      localStorage.setItem('omega_games_count', String(brainStats.games));
-      let winner = null;
-      if (next.game.in_checkmate()) {
-        winner = next.game.turn() === 'w' ? 'b' : 'w';
-      }
-      if (winner) {
-        for (const step of gameHistory.current) {
-          const reward = step.color === winner ? 1 : -1;
-          VNET.train(step.state, reward, 0.01);
-        }
-        localStorage.setItem('omega_v83_net', VNET.save());
-      }
-      gameHistory.current = [];
-    }
     return next;
   }, [game, pd, sm, pts, cooldowns]);
 
+  // Registra lo stato attuale nella history
+  const recordHistory = useCallback((color) => {
+    gameHistory.current.push({
+      state: encodeState(game, pd, sm, pts, color),
+      color: color
+    });
+  }, [game, pd, sm, pts]);
+
+  // Allena la rete su tutta la partita e pulisce la history
+  const trainOnGameEnd = useCallback((winner) => {
+    if (winner) {
+      for (const step of gameHistory.current) {
+        const reward = step.color === winner ? 1 : -1;
+        VNET.train(step.state, reward, 0.01);
+      }
+      localStorage.setItem('omega_v83_net', VNET.save());
+    }
+    brainStats.games++;
+    localStorage.setItem('omega_games_count', String(brainStats.games));
+    gameHistory.current = [];
+  }, []);
+
   const move = useCallback((actionObj) => {
     const turn = game.turn();
-    const next = executeMove(actionObj, turn);
+    recordHistory(turn);
+    const next = applyAndSetState(actionObj, turn);
     if (!next) return;
+    if (next.game.game_over()) {
+      const winner = next.game.in_checkmate() ? (next.game.turn() === 'w' ? 'b' : 'w') : null;
+      trainOnGameEnd(winner);
+    }
     const isHuman = turn === 'w' ? !PERSONALITIES[wAI]?.ai : !PERSONALITIES[bAI]?.ai;
     if (isHuman && !next.game.game_over()) {
       setPostPlayer(turn);
@@ -640,7 +648,7 @@ function App(){
       setPostPlayer(null);
       setPostPhase(false);
     }
-  }, [game, wAI, bAI, executeMove]);
+  }, [game, wAI, bAI, recordHistory, applyAndSetState, trainOnGameEnd]);
 
   const handleEvoClick=useCallback(sq=>{
     if(!postPhase||!postPlayer)return;const piece=game.get(sq);if(!piece||piece.color!==postPlayer)return;
@@ -701,19 +709,34 @@ function App(){
         setRpgGameOver({ winner: turn === 'w' ? 'b' : 'w' });
         return;
       }
-      let next = executeMove(action, turn);
-      if(!next){setThink(false);return;}
+      // Applica l'azione e la post‑fase SENZA toccare lo stato React fino alla fine
+      let next = applyAction(game, pd, sm, pts, action, cooldowns, turn);
+      if (!next) { setThink(false); return; }
       next = aiPostPhase(next, turn);
+
+      // Salva nella history e aggiorna lo stato in un colpo solo
+      recordHistory(turn);
       setPts(next.pts);
       setGame(next.game);
       setPd(next.pd);
       setSm(next.sm);
       setCooldowns(next.cooldowns || {});
+      setLast({ from: action.from, to: action.to });
+      setSel(null);
+      setStd([]);
+      setAbl([]);
+
+      // Gestione fine partita
+      if (next.game.game_over()) {
+        const winner = next.game.in_checkmate() ? (next.game.turn() === 'w' ? 'b' : 'w') : null;
+        trainOnGameEnd(winner);
+      }
+
       setThink(false);
       setDebug(`✅ Neural | ${((Date.now()-t0)/1000).toFixed(1)}s`);
     },0);
     return()=>clearTimeout(timer.current);
-  },[game,pd,sm,pts,wAI,bAI,cooldowns,training,postPhase,summonMode,devolveMode,rpgGameOver,executeMove]);
+  },[game,pd,sm,pts,wAI,bAI,cooldowns,training,postPhase,summonMode,devolveMode,rpgGameOver,recordHistory,trainOnGameEnd]);
 
   const exportBrain=()=>{const w=VNET.save();if(!w){alert('Nessun cervello');return;}const blob=new Blob([w],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`omega_brain_${Date.now()}.json`;a.click();URL.revokeObjectURL(url);};
   const importBrain=(e)=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=(ev)=>{try{const ok=VNET.load(ev.target.result);if(!ok){alert('File non valido');return;}localStorage.setItem('omega_v83_net',VNET.save());alert('Cervello importato!');reset();}catch(err){alert('File non valido');}};reader.readAsText(file);};

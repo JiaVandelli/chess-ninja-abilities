@@ -541,9 +541,18 @@ function App() {
     setSel(null); setMoves([]);
     setFrenzyMode(false); setSpectralMode(false);
 
-    if (ng.game_over()) {
-      setGameOver({winner: ng.in_checkmate()?(ng.turn()==='w'?'b':'w'):null, reason: ng.in_checkmate()?'Scacco Matto':'Patta'});
+    // --- RILEVAMENTO FINE PARTITA CORRETTO ---
+    const evalFen = ng.fen().split(' ');
+    evalFen[1] = opp; // Simuliamo che tocchi all'avversario
+    const evalGame = new Chess(evalFen.join(' '));
+
+    if (evalGame.in_checkmate() || evalGame.in_draw() || evalGame.in_stalemate()) {
+      setGameOver({
+        winner: evalGame.in_checkmate() ? color : null,
+        reason: evalGame.in_checkmate() ? 'Scacco Matto' : 'Patta'
+      });
     }
+    
     return true;
   }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained,getActualCost,actualTurn]);
 

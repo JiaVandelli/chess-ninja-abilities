@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.2</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.3</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -25,15 +25,15 @@
     .cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
     .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
     .cell.evo-highlight{outline:3px dashed #0ea5e9;outline-offset:-3px}
+    .cell.devo-highlight{outline:3px dashed #ef4444;outline-offset:-3px}
     .cell.aura-cell{box-shadow:inset 0 0 12px rgba(239,68,68,0.7)}
     .cell.stunned{box-shadow:inset 0 0 12px rgba(99,102,241,0.8)}
     .cell.immune-highlight{outline:2px solid #fbbf24;outline-offset:-2px}
-    .cell.command-highlight{outline:2px solid #ec4899;outline-offset:-2px}
     .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
     .piece-w{color:#fff;text-shadow:0 0 0 #000,0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.7))}
     .piece-b{color:#000;text-shadow:0 0 0 #fff,0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,0 -1px 0 #fff;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))}
     .evo2{filter:drop-shadow(0 0 4px #a855f7)!important}
-    .panel{flex-shrink:0;height:90px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:4px}
+    .panel{flex-shrink:0;height:95px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:4px}
     .charge-row{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#94a3b8}
     .charge-track{width:100%;height:4px;background:#1e293b;border-radius:2px;overflow:hidden;margin-top:2px}
     .panel-bottom{display:flex;align-items:center;gap:6px;flex:1}
@@ -41,7 +41,6 @@
     .turn-pill{flex-shrink:0;padding:3px 8px;border-radius:16px;font-size:11px;font-weight:700;background:#1e293b}
     .btn-row{display:flex;gap:4px;flex-wrap:wrap}
     .ability-btn{flex:1;min-width:70px;padding:4px 6px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid #334155;background:#0f172a;color:#cbd5e1;text-align:center}
-    .ability-btn:disabled{opacity:0.4;cursor:not-allowed}
     @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.8) rotate(10deg)}100%{transform:scale(1)}}
   </style>
 </head>
@@ -59,644 +58,552 @@ const ICONS = {w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:
 let globalIdCounter = 0;
 function nextId() { return ++globalIdCounter; }
 
-// ═══════════ CONTROLLO SCACCO ESTESO ═══════════
-function isSquareAttackedByEvo(game,pd,sm,targetSq,attackerColor,stunned){
-  try {
-    const tf=targetSq.charCodeAt(0)-97,tr=parseInt(targetSq[1]);
-    for(const[sq,id]of Object.entries(sm)){
-      const p=game.get(sq);if(!p||p.color!==attackerColor)continue;
-      if(stunned && stunned.has(id)) continue;
-      const d=pd[id];if(!d||d.level<2)continue;
-      const f=sq.charCodeAt(0)-97,r=parseInt(sq[1]);
-      // Pedone Assaltatore
-      if(p.type==='p' && d.level===2){
-        const dir=attackerColor==='w'?1:-1;
-        if(tr===r+dir && (tf===f || tf===f-1 || tf===f+1)) return true;
+function getKnightJumps(sq) {
+  const file = sq.charCodeAt(0)-97, rank = parseInt(sq[1]);
+  const J = [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+  return J.map(([df,dr]) => {
+    const nf = file+df, nr = rank+dr;
+    return (nf>=0 && nf<=7 && nr>=1 && nr<=8) ? String.fromCharCode(97+nf)+nr : null;
+  }).filter(Boolean);
+}
+
+function isKingInCheck(game, color, pd, currentSm, stunned) {
+  const fen = game.fen().split(' ');
+  fen[1] = color; fen[3] = '-';
+  if (new Chess(fen.slice(0,4).join(' ')+' 0 1').in_check()) return true;
+
+  const opp = color==='w'?'b':'w';
+  let kingSq = null;
+  game.board().forEach((row,r) => row.forEach((p,c) => {
+    if (p && p.type==='k' && p.color===color) kingSq = 'abcdefgh'[c]+(8-r);
+  }));
+  if (!kingSq) return false;
+
+  const tf = kingSq.charCodeAt(0)-97, tr = parseInt(kingSq[1]);
+  for (const [sq, id] of Object.entries(currentSm)) {
+    const p = game.get(sq);
+    if (!p || p.color !== opp) continue;
+    if (stunned?.has(id)) continue;
+    const d = pd[id];
+    if (!d || d.level < 2) continue;
+    const f = sq.charCodeAt(0)-97, r = parseInt(sq[1]);
+
+    if (p.type==='p') {
+      const dir = opp==='w'?1:-1;
+      if (tr === r+dir && Math.abs(tf-f) <= 1) return true;
+    }
+    if (p.type==='q') {
+      if ((Math.abs(tf-f)===2 && Math.abs(tr-r)===1) || (Math.abs(tf-f)===1 && Math.abs(tr-r)===2)) return true;
+      if (tf===f || tr===r) {
+        let blocked = false, cf = f+(tf>f?1:tf<f?-1:0), cr = r+(tr>r?1:tr<r?-1:0);
+        while (cf!==tf || cr!==tr) {
+          if (game.get(String.fromCharCode(97+cf)+cr)) { blocked=true; break; }
+          cf += tf>cf?1:tf<cf?-1:0; cr += tr>cr?1:tr<cr?-1:0;
+        }
+        if (!blocked) return true;
       }
-      // Regina Imperatrice (ha movimento Cavallo)
-      if(p.type==='q' && d.level===2){
-        if((Math.abs(tf-f)===2&&Math.abs(tr-r)===1)||(Math.abs(tf-f)===1&&Math.abs(tr-r)===2)) return true;
-        // Movimento Torre
-        if(tf===f || tr===r){
-          let blocked=false;
-          const dc=tf===f?0:(tf>f?1:-1), dr2=tr===r?0:(tr>r?1:-1);
-          let cf=f+dc, cr2=r+dr2;
-          while(!(cf===tf&&cr2===tr)){
-            if(game.get(String.fromCharCode(97+cf)+cr2)){blocked=true;break;}
-            cf+=dc; cr2+=dr2;
-          }
-          if(!blocked) return true;
+      if (Math.abs(tf-f)===Math.abs(tr-r)) {
+        let blocked = false, cf = f+(tf>f?1:-1), cr = r+(tr>r?1:-1);
+        while (cf!==tf) {
+          if (game.get(String.fromCharCode(97+cf)+cr)) { blocked=true; break; }
+          cf += tf>cf?1:-1; cr += tr>cr?1:-1;
         }
-        // Movimento Alfiere
-        if(Math.abs(tf-f)===Math.abs(tr-r)){
-          let blocked=false;
-          const dc=tf>f?1:-1, dr2=tr>r?1:-1;
-          let cf=f+dc, cr2=r+dr2;
-          while(!(cf===tf&&cr2===tr)){
-            if(game.get(String.fromCharCode(97+cf)+cr2)){blocked=true;break;}
-            cf+=dc; cr2+=dr2;
-          }
-          if(!blocked) return true;
-        }
+        if (!blocked) return true;
       }
     }
-    return false;
-  } catch(e) { return false; }
+  }
+  return false;
 }
 
-function isKingInDanger(game,pd,sm,color,stunned){
-  try {
-    const fen=game.fen().split(' '); fen[1]=color; fen[3]='-';
-    const test=new Chess(fen.slice(0,4).join(' ')+' 0 1'); if(test.in_check()) return true;
-    let kingSq=null; const board=game.board();
-    for(let r=0;r<8;r++){ let found=false; for(let c=0;c<8;c++){ const p=board[r][c]; if(p&&p.type==='k'&&p.color===color){ kingSq='abcdefgh'[c]+(8-r); found=true; break; } } if(found) break; }
-    return kingSq ? isSquareAttackedByEvo(game,pd,sm,kingSq,color==='w'?'b':'w',stunned) : false;
-  } catch(e) { return false; }
-}
-
-// ═══════════ FUNZIONI DI SUPPORTO ═══════════
-function getPieceAt(game,sq){ return game.get(sq); }
-
-// ═══════════ APPLY ACTION GENERALE ═══════════
-function applyStandardMove(game, from, to, promotion){
+function applyStandardMove(game, from, to, promotion) {
   const g = new Chess(game.fen());
   const mv = g.move({from, to, promotion: promotion||'q'});
-  if(!mv) return null;
+  if (!mv) return null;
   let cap = null;
-  if(mv.captured) cap = {type: mv.captured};
-  if(mv.flags?.includes('e')) cap = {type:'p', _sq: to[0]+from[1]};
+  if (mv.captured) cap = {type: mv.captured};
+  if (mv.flags?.includes('e')) cap = {type:'p', _sq: to[0]+from[1]};
   return {game: g, captured: cap, castleK: mv.flags?.includes('k'), castleQ: mv.flags?.includes('q')};
 }
 
-function buildState(g){
-  const pd={},sm={};
-  g.board().forEach((row,r)=>row.forEach((cell,c)=>{
-    if(cell){
-      const sq='abcdefgh'[c]+(8-r);
-      const id = `${cell.color}${cell.type}_${sq}`;
-      pd[id]={type:cell.type,color:cell.color,level:1};
-      sm[sq]=id;
+function buildState(g) {
+  const pd={}, sm={};
+  g.board().forEach((row,r) => row.forEach((cell,c) => {
+    if (cell) {
+      const sq = 'abcdefgh'[c]+(8-r);
+      const id = `${cell.color}${cell.type}_${sq}_${nextId()}`;
+      pd[id] = {type:cell.type, color:cell.color, level:1};
+      sm[sq] = id;
     }
   }));
-  return {pd,sm};
+  return {pd, sm};
 }
 
-// ═══════════ APP PRINCIPALE ═══════════
-function App(){
-  const[game,setGame]=useState(()=>new Chess());
-  const[pd,setPd]=useState({});
-  const[sm,setSm]=useState({});
-  const[sel,setSel]=useState(null);
-  const[moves,setMoves]=useState([]); // {sq, type:'std'|'ability'|'swap', ...}
-  const[lvlUp,setLvlUp]=useState(null);
-  const[pts,setPts]=useState({w:0,b:0});
-  const[last,setLast]=useState(null);
-  const[flipped,setFlip]=useState(false);
-  const[postPhase,setPostPhase]=useState(false);
-  const[postPlayer,setPostPlayer]=useState(null);
-  const[stunned,setStunned] = useState(new Set()); // id dei pezzi storditi
-  const[immune,setImmune] = useState(null); // {sq, id} pezzo immune
-  const[commandMode,setCommandMode] = useState(false); // modalità comando Regina
-  const[commandQueenSq,setCommandQueenSq] = useState(null);
-  const[gameOver,setGameOver] = useState(null);
-  const lvlUpTimer=useRef(null);
+const EVO_COST = {p:2, n:2, b:2, r:3, q:5};
+const PRESTIGE_VAL = {p:1, n:2, b:2, r:3, q:4};
 
-  useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm);},[]);
-  useEffect(()=>()=>{if(lvlUpTimer.current)clearTimeout(lvlUpTimer.current);},[]);
+function App() {
+  const [game, setGame] = useState(() => new Chess());
+  const [pd, setPd] = useState({});
+  const [sm, setSm] = useState({});
+  const [sel, setSel] = useState(null);
+  const [moves, setMoves] = useState([]);
+  const [lvlUp, setLvlUp] = useState(null);
+  const [pts, setPts] = useState({w:0, b:0});
+  const [last, setLast] = useState(null);
+  const [flipped, setFlip] = useState(false);
+  const [postPhase, setPostPhase] = useState(false);
+  const [postPlayer, setPostPlayer] = useState(null);
+  const [stunned, setStunned] = useState(new Set());
+  const [immune, setImmune] = useState(null);
+  const [ghostMarch, setGhostMarch] = useState(null);
+  const [gameOver, setGameOver] = useState(null);
 
-  // Reset stordimenti a fine turno
-  const clearStunned = useCallback((color) => {
-    setStunned(prev => {
-      const next = new Set(prev);
-      for(const id of next){
-        if(pd[id]?.color === color) next.delete(id);
-      }
-      return next;
-    });
-  }, [pd]);
+  const [commandMode, setCommandMode] = useState(false);
+  const [commandQueenSq, setCommandQueenSq] = useState(null);
+  const [commandCost, setCommandCost] = useState(4);
 
-  // Calcola Punti Prestigio
+  const [elixirMode, setElixirMode] = useState(false);
+  const [elixirCost, setElixirCost] = useState(3);
+  const [elixirRookSq, setElixirRookSq] = useState(null);
+
+  const lvlUpTimer = useRef(null);
+
+  useEffect(() => { const s = buildState(game); setPd(s.pd); setSm(s.sm); }, []);
+  useEffect(() => () => { if (lvlUpTimer.current) clearTimeout(lvlUpTimer.current); }, []);
+
+  const currentTurn = game.turn();
+  const activeColor = postPhase ? postPlayer : currentTurn;
+
   const calcPrestige = useCallback((color) => {
-    const vals = {p:1, n:2, b:2, r:3, q:4};
     let total = 0;
-    for(const[sq,id] of Object.entries(sm)){
+    for (const [sq, id] of Object.entries(sm)) {
       const p = game.get(sq);
-      if(p && p.color===color && pd[id]?.level===2){
-        total += vals[p.type] || 0;
-      }
+      if (p && p.color===color && pd[id]?.level===2) total += PRESTIGE_VAL[p.type] || 0;
     }
     return total;
   }, [game, sm, pd]);
 
-  // Calcola case dell'Aura di Terrore del Cavallo
-  const getAuraCells = useCallback((sq) => {
-    const file = sq.charCodeAt(0)-97, rank = parseInt(sq[1]);
-    const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
-    const cells = [];
-    for(const[df,dr] of J){
-      const nf=file+df, nr=rank+dr;
-      if(nf>=0&&nf<=7&&nr>=1&&nr<=8) cells.push(String.fromCharCode(97+nf)+nr);
-    }
-    return cells;
-  }, []);
+  const prestige = calcPrestige(activeColor);
+  const prestigeDiscount = prestige >= 15 ? 1 : 0;
+  const prestigeBonus = prestige >= 10;
+  const canDevolve = prestige >= 5;
 
-  // Verifica se un pezzo è sotto l'Aura di Terrore nemica
+  const endTurn = useCallback(() => {
+    const nextPlayer = game.turn();
+    setStunned(prev => {
+      const next = new Set(prev);
+      for (const id of next) if (pd[id]?.color === activeColor) next.delete(id);
+      return next;
+    });
+    setImmune(null);
+    setGhostMarch(null);
+    if (prestigeBonus && calcPrestige(nextPlayer) >= 10) {
+      setPts(prev => ({...prev, [nextPlayer]: prev[nextPlayer] + 1}));
+    }
+    setPostPhase(false);
+    setPostPlayer(null);
+    setSel(null);
+    setMoves([]);
+    setCommandMode(false);
+    setCommandQueenSq(null);
+    setElixirMode(false);
+  }, [game, activeColor, pd, calcPrestige, prestigeBonus]);
+
+  const getAuraCells = useCallback((sq) => getKnightJumps(sq), []);
+
   const isInEnemyAura = useCallback((sq, color) => {
     const opp = color==='w'?'b':'w';
-    for(const[osq, oid] of Object.entries(sm)){
+    for (const [osq, oid] of Object.entries(sm)) {
       const op = game.get(osq);
-      if(op && op.color===opp && op.type==='n' && pd[oid]?.level===2){
-        const aura = getAuraCells(osq);
-        if(aura.includes(sq)) return true;
+      if (op && op.color===opp && op.type==='n' && pd[oid]?.level===2) {
+        if (getAuraCells(osq).includes(sq)) return true;
       }
     }
     return false;
   }, [game, sm, pd, getAuraCells]);
 
-  // Ottiene mosse legali e abilità per il pezzo selezionato
+  const isImmuneToCapture = useCallback((sq, attackerColor) => {
+    if (!immune) return false;
+    if (immune.sq !== sq) return false;
+    const targetPiece = game.get(sq);
+    if (!targetPiece) return false;
+    const rookSq = Object.entries(sm).find(([s, id]) => id === immune.rookId)?.[0];
+    if (!rookSq) return false;
+    const rFile = rookSq.charCodeAt(0)-97, rRank = parseInt(rookSq[1]);
+    const tFile = sq.charCodeAt(0)-97, tRank = parseInt(sq[1]);
+    return (rFile === tFile || rRank === tRank);
+  }, [immune, game, sm]);
+
   const getMoves = useCallback((sq) => {
     const p = game.get(sq);
-    if(!p) return [];
+    if (!p) return [];
     const color = p.color;
     const id = sm[sq];
     const d = pd[id];
-    const stunnedSet = stunned.has(id);
-    if(stunnedSet) return []; // Stordito non può muovere
+    if (stunned.has(id)) return [];
 
+    const inAura = isInEnemyAura(sq, color);
+    const isEvo2 = d && d.level===2 && !inAura;
     const result = [];
-    // Mosse standard
-    const raw = game.moves({square:sq, verbose:true});
-    for(const m of raw){
-      // Impedisci promozione pedone se non è regina (semplificato)
-      if(m.promotion && m.promotion!=='q') continue;
-      // Controllo scacco dopo mossa
+    const energy = pts[color];
+
+    for (const m of game.moves({square:sq, verbose:true})) {
+      if (m.promotion && m.promotion!=='q') continue;
       const ng = new Chess(game.fen());
-      const mv = ng.move({from:m.from, to:m.to, promotion:m.promotion||'q'});
-      if(mv && !isKingInDanger(ng, pd, sm, color, stunned)){
-        result.push({type:'std', from:sq, to:m.to, promotion:m.promotion});
+      if (ng.move({from:m.from, to:m.to, promotion:m.promotion||'q'})) {
+        const nsm = {...sm};
+        nsm[m.to] = nsm[m.from]; delete nsm[m.from];
+        if (m.captured) {
+          const cSq = m.flags?.includes('e') ? m.to[0]+sq[1] : m.to;
+          if (isImmuneToCapture(cSq, color)) continue;
+          delete nsm[cSq];
+        }
+        if (!isKingInCheck(ng, color, pd, nsm, stunned)) {
+          result.push({type:'std', from:sq, to:m.to, promotion:m.promotion});
+        }
       }
     }
-    // Abilità specifiche per pezzo evoluto
-    if(d && d.level===2){
-      const evo = EVOLUTIONS[p.type];
-      if(evo){
-        const abilities = evo.getAbilities(sq, game, pd, sm, pts[color], color, stunned, immune, commandMode);
-        for(const ab of abilities){
-          result.push(ab);
+
+    if (isEvo2) {
+      const actCost = Math.max(1, 3 - prestigeDiscount);
+      const cmdCost = Math.max(1, 4 - prestigeDiscount);
+
+      if (p.type === 'p') {
+        const dir = color==='w'?1:-1, file = sq.charCodeAt(0)-97, rank = parseInt(sq[1]);
+        for (const df of [-1, 0, 1]) {
+          const nf = file+df, nr = rank+dir;
+          if (nf>=0 && nf<=7 && nr>=1 && nr<=8) {
+            const tsq = String.fromCharCode(97+nf)+nr;
+            if (result.some(m=>m.to===tsq)) continue;
+            const tp = game.get(tsq);
+            if (!tp || tp.color !== color) {
+              const ng = new Chess(game.fen()); ng.remove(sq); if(tp) ng.remove(tsq);
+              ng.put({type:'p', color}, tsq);
+              const nsm = {...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq] = id;
+              if (!isKingInCheck(ng, color, pd, nsm, stunned)) result.push({type:'std', from:sq, to:tsq});
+            }
+          }
+        }
+        if (energy >= actCost && !ghostMarch) {
+          for (const df of [-1, 0, 1]) {
+            const nr = rank + (dir * 2);
+            const nf = file + df;
+            if (nf>=0 && nf<=7 && nr>=1 && nr<=8) {
+              const tsq = String.fromCharCode(97+nf)+nr;
+              const tp = game.get(tsq);
+              const ng = new Chess(game.fen()); ng.remove(sq); if(tp) ng.remove(tsq);
+              ng.put({type:'p', color}, tsq);
+              const nsm = {...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq] = id;
+              if (!isKingInCheck(ng, color, pd, nsm, stunned)) {
+                result.push({type:'ability_move', ability:'ghostMarch', from:sq, to:tsq, cost:actCost});
+              }
+            }
+          }
+        }
+      }
+
+      if (p.type === 'n') {
+        if (energy >= actCost) {
+          const visited = new Set();
+          for (const firstSq of getKnightJumps(sq)) {
+            const intermediate = game.get(firstSq);
+            for (const secondSq of getKnightJumps(firstSq)) {
+              if (secondSq === sq || visited.has(secondSq)) continue;
+              visited.add(secondSq);
+              const tp = game.get(secondSq);
+              if (tp && tp.color === color) continue;
+              const ng = new Chess(game.fen()); ng.remove(sq);
+              if (tp) ng.remove(secondSq);
+              ng.put({type:'n', color}, secondSq);
+              const nsm = {...sm}; delete nsm[sq];
+              if (tp) delete nsm[secondSq]; nsm[secondSq] = id;
+              if (!isKingInCheck(ng, color, pd, nsm, stunned)) {
+                result.push({type:'ability_move', ability:'frenzyCharge', from:sq, to:secondSq, firstSq, cost:actCost});
+              }
+            }
+          }
+        }
+        let forkCount = 0;
+        for (const tsq of getKnightJumps(sq)) {
+          const tp = game.get(tsq);
+          if (tp && tp.color !== color) forkCount++;
+        }
+        if (forkCount >= 2 && result.some(m => m.type==='std' && getKnightJumps(sq).includes(m.to))) {
+          result.push({type:'passive_bonus', ability:'warriorSpirit', desc:'Slancio del Guerriero (+1⚡)', cost:0});
+        }
+      }
+
+      if (p.type === 'b' && energy >= actCost) {
+        const ff = sq.charCodeAt(0)-97, fr = parseInt(sq[1]);
+        for (const [df,dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
+          let f = ff+df, r = fr+dr;
+          while (f>=0 && f<=7 && r>=1 && r<=8) {
+            const tsq = String.fromCharCode(97+f)+r;
+            const tp = game.get(tsq);
+            if (!tp) {
+              const ng = new Chess(game.fen()); ng.remove(sq); ng.put({type:'b', color}, tsq);
+              const nsm = {...sm}; delete nsm[sq]; nsm[tsq] = id;
+              if (!isKingInCheck(ng, color, pd, nsm, stunned)) {
+                result.push({type:'ability_move', ability:'spectralStep', from:sq, to:tsq, cost:actCost});
+              }
+            }
+            f+=df; r+=dr;
+          }
+        }
+      }
+
+      if (p.type === 'q') {
+        for (const tsq of getKnightJumps(sq)) {
+          if (result.some(m=>m.to===tsq)) continue;
+          const tp = game.get(tsq);
+          if (!tp || tp.color !== color) {
+            const ng = new Chess(game.fen()); ng.remove(sq); if(tp) ng.remove(tsq);
+            ng.put({type:'q', color}, tsq);
+            const nsm = {...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq] = id;
+            if (!isKingInCheck(ng, color, pd, nsm, stunned)) result.push({type:'std', from:sq, to:tsq});
+          }
+        }
+        if (energy >= cmdCost) {
+          const hasAlly = Object.entries(sm).some(([osq, oid]) => osq !== sq && game.get(osq)?.color === color);
+          if (hasAlly) {
+            result.push({type:'panel_ability', ability:'royalCommand', from:sq, cost:cmdCost, desc:'Comando Reale'});
+          }
+        }
+      }
+
+      if (p.type === 'r') {
+        const file = sq.charCodeAt(0)-97, rank = parseInt(sq[1]);
+        for (const [osq, oid] of Object.entries(sm)) {
+          if (osq === sq) continue;
+          const op = game.get(osq);
+          if (op && op.color===color && op.type!=='k') {
+            const of = osq.charCodeAt(0)-97, or = parseInt(osq[1]);
+            if (file===of || rank===or) {
+              let clear = true;
+              if (file===of) {
+                for (let r=Math.min(rank,or)+1; r<Math.max(rank,or); r++) {
+                  if (game.get(String.fromCharCode(97+file)+r)) { clear=false; break; }
+                }
+              } else {
+                for (let f=Math.min(file,of)+1; f<Math.max(file,of); f++) {
+                  if (game.get(String.fromCharCode(97+f)+rank)) { clear=false; break; }
+                }
+              }
+              if (clear) result.push({type:'swap', from:sq, to:osq});
+            }
+          }
+        }
+        if (energy >= actCost) {
+          const hasTarget = Object.entries(sm).some(([osq, oid]) => {
+            const op = game.get(osq);
+            if (!op || op.color !== color || osq === sq) return false;
+            const of = osq.charCodeAt(0)-97, or = parseInt(osq[1]);
+            return (file === of || rank === or);
+          });
+          if (hasTarget) {
+            result.push({type:'panel_ability', ability:'elixir', from:sq, cost:actCost, desc:'Elisir di Protezione'});
+          }
         }
       }
     }
     return result;
-  }, [game, sm, pd, pts, stunned, immune, commandMode]);
+  }, [game, sm, pd, pts, stunned, isInEnemyAura, prestigeDiscount, ghostMarch, isImmuneToCapture]);
 
-  // ═══════════ EVOLUZIONI ═══════════
-  const EVOLUTIONS = {
-    p: {
-      cost: 2, prestige: 1,
-      name: 'Assaltatore',
-      getAbilities: (sq, game, pd, sm, energy, color) => {
-        const res = [];
-        if(energy >= 3){
-          // Marcia Fantasma: non è una mossa, è un effetto globale
-          res.push({type:'ability', ability:'ghostMarch', from:sq, cost:3, desc:'Marcia Fantasma (3⚡)'});
-        }
-        return res;
-      }
-    },
-    n: {
-      cost: 2, prestige: 2,
-      name: 'Destriero',
-      getAbilities: (sq, game, pd, sm, energy, color) => {
-        const res = [];
-        if(energy >= 3){
-          // Carica Forsennata
-          const jumps = getKnightJumps(sq, game, color, pd, sm, stunned);
-          if(jumps.length > 0){
-            res.push({type:'ability', ability:'frenzyCharge', from:sq, cost:3, desc:'Carica Forsennata (3⚡)', jumps});
-          }
-        }
-        return res;
-      }
-    },
-    b: {
-      cost: 2, prestige: 2,
-      name: 'Spettro',
-      getAbilities: (sq, game, pd, sm, energy, color) => {
-        const res = [];
-        if(energy >= 3){
-          // Passo Spettrale
-          res.push({type:'ability', ability:'spectralStep', from:sq, cost:3, desc:'Passo Spettrale (3⚡)'});
-        }
-        return res;
-      }
-    },
-    r: {
-      cost: 3, prestige: 3,
-      name: 'Alchimista',
-      getAbilities: (sq, game, pd, sm, energy, color) => {
-        const res = [];
-        // Swap (passivo, ma lo mostriamo come mossa speciale)
-        // Lo swap è già incluso come mossa normale nella UI
-        if(energy >= 3){
-          res.push({type:'ability', ability:'elixir', from:sq, cost:3, desc:'Elisir di Protezione (3⚡)'});
-        }
-        return res;
-      }
-    },
-    q: {
-      cost: 5, prestige: 4,
-      name: 'Imperatrice',
-      getAbilities: (sq, game, pd, sm, energy, color) => {
-        const res = [];
-        if(energy >= 4){
-          res.push({type:'ability', ability:'royalCommand', from:sq, cost:4, desc:'Comando Reale (4⚡)'});
-        }
-        return res;
-      }
-    },
-    k: { cost: 0, prestige: 0, name: 'Re', getAbilities: ()=>[] }
-  };
-
-  // Funzione per mosse di Cavallo standard
-  function getKnightJumps(sq, game, color, pd, sm, stunned){
-    const file = sq.charCodeAt(0)-97, rank = parseInt(sq[1]);
-    const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
-    const jumps = [];
-    for(const[df,dr] of J){
-      const nf=file+df, nr=rank+dr;
-      if(nf>=0&&nf<=7&&nr>=1&&nr<=8){
-        const tsq = String.fromCharCode(97+nf)+nr;
-        const tp = game.get(tsq);
-        if(!tp || tp.color!==color){
-          const ng = new Chess(game.fen());
-          const mv = ng.move({from:sq, to:tsq});
-          if(mv && !isKingInDanger(ng, pd, sm, color, stunned)){
-            jumps.push(tsq);
-          }
-        }
-      }
-    }
-    return jumps;
-  }
-
-  // Applica un'azione e ritorna il nuovo stato o null
-  const applyAction = useCallback((action, color) => {
-    const curGame = game;
-    const curPd = {...pd};
-    const curSm = {...sm};
-    const curPts = {...pts};
-    const curStunned = new Set(stunned);
-    let nextImmune = immune;
-
-    if(action.type === 'std'){
-      const res = applyStandardMove(curGame, action.from, action.to, action.promotion);
-      if(!res) return null;
-      const ng = res.game;
-      let energyGain = 1;
-      if(res.captured) energyGain += 1;
-      if(ng.in_check()) energyGain += 1;
-      // Pedone Assaltatore cattura extra
-      const mid = curSm[action.from];
-      const pieceData = curPd[mid];
-      if(pieceData?.type==='p' && pieceData?.level===2 && res.captured) energyGain += 1;
-      // Aggiorna sm e pd
-      const nsm = {...curSm}, npd = {...curPd};
-      if(res.castleK || res.castleQ){
-        const rank = color==='w'?'1':'8';
-        if(res.castleK){ nsm['f'+rank]=nsm['h'+rank]; delete nsm['h'+rank]; }
-        if(res.castleQ){ nsm['d'+rank]=nsm['a'+rank]; delete nsm['a'+rank]; }
-      }
-      if(res.captured){
-        const cs = res.captured._sq || action.to;
-        const cid = nsm[cs];
-        if(cid){ delete npd[cid]; delete nsm[cs]; }
-      }
-      nsm[action.to] = mid;
-      delete nsm[action.from];
-      return {game: ng, pd: npd, sm: nsm, pts: {...curPts, [color]: curPts[color]+energyGain}, stunned: curStunned, immune: nextImmune};
-    }
-
-    if(action.ability === 'ghostMarch'){
-      if(curPts[color] < 3) return null;
-      // Effetto puramente passivo, non modifica la posizione
-      return {game: new Chess(curGame.fen()), pd: curPd, sm: curSm, pts: {...curPts, [color]: curPts[color]-3}, ghostMarch: color, stunned: curStunned, immune: nextImmune};
-    }
-
-    if(action.ability === 'frenzyCharge'){
-      if(curPts[color] < 3) return null;
-      // Primo salto già scelto dall'utente (action.firstJumpTo)
-      const firstRes = applyStandardMove(curGame, action.from, action.firstJumpTo);
-      if(!firstRes) return null;
-      let ng = firstRes.game;
-      let nsm = {...curSm}, npd = {...curPd};
-      // Aggiorna per il primo salto
-      const mid = nsm[action.from];
-      if(firstRes.captured){
-        const cs = firstRes.captured._sq || action.firstJumpTo;
-        delete npd[nsm[cs]]; delete nsm[cs];
-      }
-      nsm[action.firstJumpTo] = mid;
-      delete nsm[action.from];
-      // Secondo salto
-      const secondRes = applyStandardMove(ng, action.firstJumpTo, action.secondJumpTo);
-      if(!secondRes) return null;
-      ng = secondRes.game;
-      if(secondRes.captured){
-        const cs = secondRes.captured._sq || action.secondJumpTo;
-        delete npd[nsm[cs]]; delete nsm[cs];
-      }
-      nsm[action.secondJumpTo] = mid;
-      delete nsm[action.firstJumpTo];
-      let energyGain = 1;
-      if(firstRes.captured || secondRes.captured) energyGain += (firstRes.captured?1:0)+(secondRes.captured?1:0);
-      if(ng.in_check()) energyGain += 1;
-      if(mid && npd[mid]?.type==='p' && npd[mid]?.level===2){
-        if(firstRes.captured) energyGain += 1;
-        if(secondRes.captured) energyGain += 1;
-      }
-      return {game: ng, pd: npd, sm: nsm, pts: {...curPts, [color]: curPts[color]+energyGain-3}, stunned: curStunned, immune: nextImmune};
-    }
-
-    if(action.ability === 'spectralStep'){
-      if(curPts[color] < 3) return null;
-      const targetSq = action.targetSq;
-      const fromSq = action.from;
-      // Verifica che target sia sulla stessa diagonale
-      const ff=fromSq.charCodeAt(0)-97, fr=parseInt(fromSq[1]);
-      const tf2=targetSq.charCodeAt(0)-97, tr2=parseInt(targetSq[1]);
-      if(Math.abs(tf2-ff) !== Math.abs(tr2-fr)) return null;
-      if(targetSq === fromSq) return null;
-      // Il target deve essere libero o occupato da nemico? La descrizione dice "casa libera"
-      if(game.get(targetSq)) return null; // solo casa libera per semplicità
-      // Stordisci nemici e guadagna energia per alleati oltrepassati
-      let energyBonus = 0;
-      const dc = tf2>ff?1:-1, dr2 = tr2>fr?1:-1;
-      let cf = ff+dc, cr = fr+dr2;
-      while(!(cf===tf2 && cr===tr2)){
-        const midSq = String.fromCharCode(97+cf)+cr;
-        const mp = game.get(midSq);
-        if(mp){
-          if(mp.color !== color){
-            curStunned.add(sm[midSq]);
-          } else {
-            energyBonus += 1;
-          }
-        }
-        cf+=dc; cr+=dr2;
-      }
-      // Teletrasporta
-      const ng = new Chess(game.fen());
-      ng.remove(fromSq);
-      const piece = game.get(fromSq);
-      ng.put({type:piece.type, color:piece.color}, targetSq);
-      const nsm = {...curSm, [targetSq]: sm[fromSq]};
-      delete nsm[fromSq];
-      return {game: ng, pd: curPd, sm: nsm, pts: {...curPts, [color]: curPts[color]-3+energyBonus}, stunned: curStunned, immune: nextImmune};
-    }
-
-    if(action.ability === 'elixir'){
-      if(curPts[color] < 3) return null;
-      const targetSq = action.targetSq;
-      const targetId = sm[targetSq];
-      if(!targetId) return null;
-      nextImmune = {sq: targetSq, id: targetId};
-      return {game: new Chess(curGame.fen()), pd: curPd, sm: curSm, pts: {...curPts, [color]: curPts[color]-3}, stunned: curStunned, immune: nextImmune};
-    }
-
-    if(action.ability === 'royalCommand'){
-      if(curPts[color] < 4) return null;
-      // Attiva modalità comando
-      setCommandMode(true);
-      setCommandQueenSq(action.from);
-      return null; // non esegue subito, imposta lo stato
-    }
-
-    if(action.type === 'swap'){
-      // Trasmutazione Spaziale (Torre)
-      const fromSq = action.from, toSq = action.to;
-      const p1 = game.get(fromSq), p2 = game.get(toSq);
-      if(!p1 || !p2 || p2.color!==color) return null;
-      // Verifica stessa riga o colonna e nessun ostacolo
-      const ff=fromSq.charCodeAt(0)-97, fr=parseInt(fromSq[1]);
-      const tf2=toSq.charCodeAt(0)-97, tr2=parseInt(toSq[1]);
-      if(ff!==tf2 && fr!==tr2) return null;
-      // Controlla linea libera
-      if(ff===tf2){
-        const minR=Math.min(fr,tr2), maxR=Math.max(fr,tr2);
-        for(let r=minR+1; r<maxR; r++){
-          if(game.get(String.fromCharCode(97+ff)+r)) return null;
-        }
-      } else {
-        const minF=Math.min(ff,tf2), maxF=Math.max(ff,tf2);
-        for(let f=minF+1; f<maxF; f++){
-          if(game.get(String.fromCharCode(97+f)+fr)) return null;
-        }
-      }
-      const ng = new Chess(game.fen());
-      ng.remove(fromSq); ng.remove(toSq);
-      ng.put(p1, toSq); ng.put(p2, fromSq);
-      const nsm = {...curSm, [fromSq]: sm[toSq], [toSq]: sm[fromSq]};
-      return {game: ng, pd: curPd, sm: nsm, pts: {...curPts, [color]: curPts[color]+1}, stunned: curStunned, immune: nextImmune};
-    }
-
-    return null;
-  }, [game, pd, sm, pts, stunned, immune]);
-
-  // Esegue un'azione e aggiorna lo stato
   const executeAction = useCallback((action, color) => {
-    const res = applyAction(action, color);
-    if(!res) return false;
-    setGame(res.game);
-    setPd(res.pd);
-    setSm(res.sm);
-    setPts(res.pts);
-    setStunned(res.stunned);
-    setImmune(res.immune);
-    setLast({from: action.from, to: action.to || action.targetSq || '??'});
-    setSel(null);
-    setMoves([]);
-    if(res.ghostMarch){
-      // Imposta marcia fantasma
+    const curPd = {...pd}, curSm = {...sm}, curPts = {...pts};
+    let ng, energyGain = 0, newStunned = new Set(stunned), newImmune = immune, newGhost = ghostMarch;
+
+    if (action.type === 'std') {
+      const res = applyStandardMove(game, action.from, action.to, action.promotion);
+      if (!res) return false;
+      ng = res.game; energyGain = 1;
+      if (res.captured) energyGain += 1;
+      if (ng.in_check()) energyGain += 1;
+      const mid = curSm[action.from];
+      if (curPd[mid]?.type==='p' && curPd[mid]?.level===2 && res.captured) energyGain += 1;
+
+      const nsm = {...curSm}, npd = {...curPd};
+      if (res.castleK) { const rk=color==='w'?'1':'8'; nsm['f'+rk]=nsm['h'+rk]; delete nsm['h'+rk]; }
+      if (res.castleQ) { const rk=color==='w'?'1':'8'; nsm['d'+rk]=nsm['a'+rk]; delete nsm['a'+rk]; }
+      if (res.captured) { const cs = res.captured._sq || action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
+      nsm[action.to] = mid; delete nsm[action.from];
+
+      if (curPd[mid]?.type==='q' && curPd[mid]?.level===2 && res.captured) energyGain += 1;
+      const queenSq = Object.entries(nsm).find(([s,id]) => pd[id]?.type==='q' && pd[id]?.level===2 && pd[id]?.color===color)?.[0];
+      if (queenSq && res.captured) energyGain += 1;
+
+      setGame(ng); setPd(npd); setSm(nsm);
     }
-    return true;
-  }, [applyAction]);
+    else if (action.type === 'swap') {
+      const p1 = game.get(action.from), p2 = game.get(action.to);
+      ng = new Chess(game.fen()); ng.remove(action.from); ng.remove(action.to);
+      ng.put(p1, action.to); ng.put(p2, action.from);
+      const parts = ng.fen().split(' '); parts[1] = color==='w'?'b':'w'; parts[3] = '-'; parts[4] = '0';
+      ng = new Chess(parts.join(' '));
+      const nsm = {...curSm, [action.from]: curSm[action.to], [action.to]: curSm[action.from]};
+      setGame(ng); setPd(curPd); setSm(nsm); energyGain = 1;
+    }
+    else if (action.type === 'ability_move') {
+      if (curPts[color] < action.cost) return false;
+      ng = new Chess(game.fen());
+      let nsm = {...curSm}, npd = {...curPd};
+      const mid = curSm[action.from];
+      let bonusGain = 0;
 
-  // Gestione click su casa
-  const click = useCallback((sq) => {
-    const turn = game.turn();
-    const p = game.get(sq);
-    const color = turn;
-
-    // Se in modalità Comando Reale
-    if(commandMode){
-      if(p && p.color===turn && sq !== commandQueenSq){
-        // Esegui Comando: turno extra per questo pezzo
-        // Per semplicità, esci dalla modalità e lascia che il giocatore muova normalmente
-        setCommandMode(false);
-        setCommandQueenSq(null);
-        // Imposta lo stato per far muovere il pezzo selezionato
-        setSel(sq);
-        const m = getMoves(sq);
-        setMoves(m);
-        setPostPhase(false);
-        return;
-      } else {
-        setCommandMode(false);
-        setCommandQueenSq(null);
-        return;
+      if (action.ability === 'ghostMarch') {
+        ng.remove(action.from); const tp = game.get(action.to);
+        if (tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; bonusGain++; }
+        ng.put({type:'p', color}, action.to); nsm[action.to] = mid; delete nsm[action.from];
+        newGhost = color;
       }
+      else if (action.ability === 'frenzyCharge') {
+        ng.remove(action.from);
+        const tp = game.get(action.to);
+        if (tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; bonusGain++; }
+        ng.put({type:'n', color}, action.to); nsm[action.to] = mid; delete nsm[action.from];
+      }
+      else if (action.ability === 'spectralStep') {
+        const ff=action.from.charCodeAt(0)-97, fr=parseInt(action.from[1]);
+        const tf=action.to.charCodeAt(0)-97, tr=parseInt(action.to[1]);
+        const dc=tf>ff?1:-1, dr=tr>fr?1:-1; let cf=ff+dc, cr=fr+dr;
+        while (cf!==tf || cr!==tr) {
+          const msq = String.fromCharCode(97+cf)+cr, mp = game.get(msq);
+          if (mp) {
+            if (mp.color !== color) newStunned.add(curSm[msq]);
+            else bonusGain++;
+          }
+          cf+=dc; cr+=dr;
+        }
+        ng.remove(action.from); ng.put({type:'b', color}, action.to); nsm[action.to] = mid; delete nsm[action.from];
+      }
+
+      energyGain = bonusGain - action.cost + 1;
+      if (ng.in_check()) energyGain += 1;
+      setGame(ng); setPd(npd); setSm(nsm);
     }
 
-    // Se in post-fase, cliccare su un pezzo proprio permette evoluzione
-    if(postPhase && postPlayer === color){
-      if(p && p.color === color){
-        const id = sm[sq];
-        const d = pd[id];
-        if(d && d.level < 2){
-          const evoCost = EVOLUTIONS[p.type]?.cost || 999;
-          if(pts[color] >= evoCost){
-            // Evolvi
-            const npd = {...pd, [id]: {...d, level:2}};
-            const npts = {...pts, [color]: pts[color]-evoCost};
-            setPd(npd); setPts(npts);
-            setLvlUp(sq);
-            if(lvlUpTimer.current) clearTimeout(lvlUpTimer.current);
-            lvlUpTimer.current = setTimeout(()=>setLvlUp(null), 900);
-          }
+    if (ng) {
+      setPts({...curPts, [color]: Math.max(0, curPts[color] + energyGain)});
+      setStunned(newStunned); setImmune(newImmune); setGhostMarch(newGhost);
+      setLast({from: action.from, to: action.to || '??'});
+      setSel(null); setMoves([]);
+      if (ng.game_over()) {
+        setGameOver({winner: ng.in_checkmate() ? (ng.turn()==='w'?'b':'w') : null, reason: ng.in_checkmate()?'Scacco matto':'Patta'});
+      } else {
+        setPostPlayer(color); setPostPhase(true);
+      }
+      return true;
+    }
+    return false;
+  }, [game, pd, sm, pts, stunned, immune, ghostMarch]);
+
+  const click = useCallback((sq) => {
+    if (gameOver) return;
+    const turn = game.turn();
+    const color = postPhase ? postPlayer : turn;
+
+    if (commandMode) {
+      if (sq && sq !== commandQueenSq) {
+        const p = game.get(sq);
+        if (p && p.color===color) {
+          setCommandMode(false); setCommandQueenSq(null);
+          setPts(prev => ({...prev, [color]: prev[color] + commandCost}));
+          setSel(sq); setMoves(getMoves(sq)); setPostPhase(false);
         }
-      } else if(!p){
-        // Clic su vuoto termina post-fase
-        setPostPhase(false);
-        setPostPlayer(null);
-        clearStunned(color);
-        setImmune(null);
+      } else {
+        setCommandMode(false); setCommandQueenSq(null);
+        setPts(prev => ({...prev, [color]: prev[color] + commandCost}));
       }
       return;
     }
 
-    // Gioco normale
-    if(!sel){
-      if(p && p.color === color && !stunned.has(sm[sq])){
-        setSel(sq);
-        const m = getMoves(sq);
-        setMoves(m);
+    if (elixirMode) {
+      if (sq) {
+        const p = game.get(sq);
+        const rookFile = elixirRookSq?.charCodeAt(0)-97, rookRank = elixirRookSq ? parseInt(elixirRookSq[1]) : null;
+        const sqFile = sq.charCodeAt(0)-97, sqRank = parseInt(sq[1]);
+        if (p && p.color === color && (rookFile === sqFile || rookRank === sqRank)) {
+          const rookId = sm[elixirRookSq];
+          setImmune({sq, id: sm[sq], rookId});
+          setPts(prev => ({...prev, [color]: Math.max(0, prev[color] - elixirCost)}));
+          setElixirMode(false); setElixirRookSq(null);
+          setPostPlayer(color); setPostPhase(true); setSel(null); setMoves([]);
+        }
+      } else {
+        setElixirMode(false); setElixirRookSq(null);
+      }
+      return;
+    }
+
+    if (postPhase) {
+      if (sq) {
+        const p = game.get(sq);
+        if (p && p.color===color) {
+          const id = sm[sq], d = pd[id];
+          if (d && d.level === 1) {
+            const cost = EVO_COST[p.type] || 99;
+            if (pts[color] >= cost) {
+              setPd({...pd, [id]: {...d, level: 2}});
+              setPts({...pts, [color]: pts[color] - cost});
+              setLvlUp(sq);
+              if (lvlUpTimer.current) clearTimeout(lvlUpTimer.current);
+              lvlUpTimer.current = setTimeout(() => setLvlUp(null), 900);
+            }
+          } else if (d && d.level === 2 && canDevolve) {
+            const refund = EVO_COST[p.type] || 0;
+            setPd({...pd, [id]: {...d, level: 1}});
+            setPts({...pts, [color]: pts[color] + refund});
+          }
+        }
+      } else { endTurn(); }
+      return;
+    }
+
+    if (!sel) {
+      if (sq) {
+        const p = game.get(sq);
+        if (p && p.color===color && !stunned.has(sm[sq])) { setSel(sq); setMoves(getMoves(sq)); }
       }
     } else {
-      // Controlla se clicca su una mossa valida
-      const moveTarget = moves.find(m => (m.type==='std'||m.type==='swap') && m.to===sq);
-      if(moveTarget){
-        if(moveTarget.type === 'swap'){
-          executeAction({type:'swap', from:sel, to:sq}, color);
-        } else {
-          executeAction({type:'std', from:sel, to:sq, promotion:moveTarget.promotion}, color);
-        }
-        if(!game.game_over()){
-          setPostPlayer(color);
-          setPostPhase(true);
+      const move = moves.find(m => (m.type==='std'||m.type==='swap'||m.type==='ability_move') && m.to===sq);
+      if (move) {
+        executeAction(move, color);
+        if (move.type==='std' && moves.some(m=>m.type==='passive_bonus')) {
+          setPts(prev => ({...prev, [color]: prev[color] + 1}));
         }
         return;
       }
-      // Abilità Marcia Fantasma
-      const ghostMarch = moves.find(m => m.ability==='ghostMarch');
-      if(ghostMarch){
-        executeAction({type:'ability', ability:'ghostMarch', from:sel, cost:3}, color);
-        setPostPlayer(color);
-        setPostPhase(true);
-        return;
-      }
-      // Abilità Elisir
-      const elixir = moves.find(m => m.ability==='elixir');
-      if(elixir && p && p.color===color && sq!==sel){
-        executeAction({type:'ability', ability:'elixir', from:sel, targetSq:sq, cost:3}, color);
-        setPostPlayer(color);
-        setPostPhase(true);
-        return;
-      }
-      // Abilità Passo Spettrale
-      const spectral = moves.find(m => m.ability==='spectralStep');
-      if(spectral && !p){
-        executeAction({type:'ability', ability:'spectralStep', from:sel, targetSq:sq, cost:3}, color);
-        setPostPlayer(color);
-        setPostPhase(true);
-        return;
-      }
-      // Abilità Comando Reale
-      const royal = moves.find(m => m.ability==='royalCommand');
-      if(royal){
-        executeAction({type:'ability', ability:'royalCommand', from:sel, cost:4}, color);
-        return;
-      }
-      // Se clicca su un altro pezzo proprio, cambia selezione
-      if(p && p.color === color && !stunned.has(sm[sq])){
-        setSel(sq);
-        const m = getMoves(sq);
-        setMoves(m);
-      } else {
-        setSel(null);
-        setMoves([]);
-      }
-    }
-  }, [sel, moves, game, sm, pd, pts, stunned, immune, postPhase, postPlayer, commandMode, commandQueenSq, getMoves, executeAction, clearStunned]);
 
-  // Reset partita
+      if (sq) {
+        const p = game.get(sq);
+        if (p && p.color===color && !stunned.has(sm[sq])) { setSel(sq); setMoves(getMoves(sq)); }
+        else { setSel(null); setMoves([]); }
+      } else { setSel(null); setMoves([]); }
+    }
+  }, [sel, moves, game, sm, pd, pts, stunned, postPhase, postPlayer, commandMode, commandQueenSq, commandCost, elixirMode, elixirCost, elixirRookSq, canDevolve, gameOver, getMoves, executeAction, endTurn]);
+
   const reset = () => {
-    const g = new Chess();
-    const s = buildState(g);
+    const g = new Chess(); const s = buildState(g);
     setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
-    setSel(null); setMoves([]); setLast(null);
-    setPostPhase(false); setPostPlayer(null);
-    setStunned(new Set()); setImmune(null);
-    setCommandMode(false); setCommandQueenSq(null);
-    setGameOver(null);
-    globalIdCounter = 0;
+    setSel(null); setMoves([]); setLast(null); setPostPhase(false); setPostPlayer(null);
+    setStunned(new Set()); setImmune(null); setGhostMarch(null);
+    setCommandMode(false); setCommandQueenSq(null); setElixirMode(false); setElixirRookSq(null);
+    setGameOver(null); globalIdCounter = 0;
   };
 
-  // Fine partita
-  useEffect(()=>{
-    if(game.game_over() && !gameOver){
-      if(game.in_checkmate()){
-        const winner = game.turn()==='w'?'b':'w';
-        setGameOver({winner, reason:'Scacco matto'});
-      } else {
-        setGameOver({winner:null, reason:'Patta'});
-      }
-    }
-  }, [game, gameOver]);
-
-  // Rendering
-  const raw=game.board(), bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw, turn=game.turn();
-  const currentPrestige = calcPrestige(turn);
-  const sid=sel?sm[sel]:null, sd=sid?pd[sid]:null, sp=sel?game.get(sel):null;
-  const showGhostMarch = moves.some(m=>m.ability==='ghostMarch');
-  const showElixir = moves.some(m=>m.ability==='elixir');
-  const showSpectral = moves.some(m=>m.ability==='spectralStep');
-  const showRoyal = moves.some(m=>m.ability==='royalCommand');
-  const showFrenzy = moves.some(m=>m.ability==='frenzyCharge');
-
-  // Raccogli tutte le case possibili per le mosse
-  const moveTargets = new Set(moves.filter(m=>m.type==='std'||m.type==='swap').map(m=>m.to));
-  const spectralTargets = showSpectral ? getSpectralTargets(sel, game) : [];
-
-  function getSpectralTargets(sq, game){
-    if(!sq) return [];
-    const ff=sq.charCodeAt(0)-97, fr=parseInt(sq[1]);
-    const targets = [];
-    for(const[df,dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]){
-      let f=ff+df, r=fr+dr;
-      while(f>=0&&f<=7&&r>=1&&r<=8){
-        const tsq=String.fromCharCode(97+f)+r;
-        if(!game.get(tsq)) targets.push(tsq);
-        f+=df; r+=dr;
-      }
-    }
-    return targets;
-  }
+  const raw = game.board();
+  const bd = flipped ? [...raw].reverse().map(r => [...r].reverse()) : raw;
+  const moveTargets = new Set(moves.filter(m => m.type==='std'||m.type==='swap').map(m => m.to));
+  const abilityTargets = new Set(moves.filter(m => m.type==='ability_move').map(m => m.to));
+  const showAbilities = moves.filter(m => m.type==='panel_ability');
+  const selPiece = sel ? game.get(sel) : null;
+  const selData = sel ? pd[sm[sel]] : null;
 
   return (
     <div className="app">
       <div className="top-bar">
-        <div className="prestige-badge">⭐ {currentPrestige}</div>
-        <button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄 Ruota</button>
+        <div className="prestige-badge">⭐ {prestige} {prestigeBonus && "✨"}</div>
+        <button className="flip-btn" onClick={() => setFlip(f => !f)}>🔄 Ruota</button>
       </div>
       <div className="player-row">
         <div className="player-label" style={{borderLeft:'3px solid #f43f5e'}}>
@@ -704,31 +611,35 @@ function App(){
           {last && <div className="last-move-hint">{last.from} → {last.to}</div>}
         </div>
         <div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span>
+          <span>⚡</span><span>{pts.b}</span>
         </div>
       </div>
       <div className="board-wrap">
         <div className="board">
-          {bd.map((row,r)=>row.map((cell,c)=>{
-            const fi=flipped?7-c:c, ri=flipped?r:7-r, sq='abcdefgh'[fi]+(ri+1);
-            const light=(fi+ri)%2!==0;
-            const isSel=sel===sq;
-            const isMoveTarget=moveTargets.has(sq);
-            const isSpectralTarget=spectralTargets.includes(sq);
-            const id=sm[sq], data=id?pd[id]:null;
-            const level=data?.level??1;
-            const isEvo2=level===2;
-            const isStunned=stunned.has(id);
-            const isImmune=immune && immune.sq===sq;
-            const auraEnemy = turn ? isInEnemyAura(sq, turn) : false;
+          {bd.map((row, r) => row.map((cell, c) => {
+            const fi = flipped ? 7-c : c, ri = flipped ? r : 7-r;
+            const sq = 'abcdefgh'[fi]+(ri+1);
+            const light = (fi+ri)%2 !== 0;
+            const isSel = sel === sq;
+            const isMove = moveTargets.has(sq);
+            const isAbMove = abilityTargets.has(sq);
+            const id = sm[sq], data = id ? pd[id] : null, level = data?.level ?? 1;
+            const isStunned = stunned.has(id), isImmune = immune?.sq === sq, inAura = isInEnemyAura(sq, activeColor);
+
+            let phaseHighlight = "";
+            if (postPhase && data && game.get(sq)?.color===postPlayer) {
+              phaseHighlight = level===1 ? "evo-highlight" : ((canDevolve && level===2) ? "devo-highlight" : "");
+            }
+
             return (
-              <div key={sq} onClick={()=>click(sq)}
-                className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${auraEnemy?'aura-cell':''} ${isStunned?'stunned':''} ${isImmune?'immune-highlight':''} ${postPhase&&data&&data.level<2&&game.get(sq)?.color===postPlayer?'evo-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>
-                {isMoveTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}
-                {isSpectralTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#a78bfa',boxShadow:'0 0 10px #a78bfa',zIndex:1}}/>}
-                {isMoveTarget&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}
-                {cell&&<span className={`piece piece-${cell.color} ${isEvo2?'evo2':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}
-                {isEvo2&&<div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,0.8)',zIndex:3}}/>}
+              <div key={sq} onClick={() => click(sq)}
+                className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${inAura?'aura-cell':''} ${isStunned?'stunned':''} ${isImmune?'immune-highlight':''} ${phaseHighlight} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>
+                {isMove && !cell && <div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}
+                {isAbMove && !cell && <div style={{position:'absolute',width:'32%',height:'32%',borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 12px #a855f7',zIndex:1}}/>}
+                {isMove && cell && <div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}
+                {isAbMove && cell && <div style={{position:'absolute',inset:0,border:'3px solid #a855f7',borderRadius:'3px',zIndex:1}}/>}
+                {cell && <span className={`piece piece-${cell.color} ${level===2?'evo2':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}
+                {level===2 && <div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,0.8)',zIndex:3}}/>}
               </div>
             );
           }))}
@@ -740,58 +651,55 @@ function App(){
           {last && <div className="last-move-hint">{last.from} → {last.to}</div>}
         </div>
         <div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span>
+          <span>⚡</span><span>{pts.w}</span>
         </div>
       </div>
       <div className="panel">
         {commandMode ? (
           <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#ec4899',fontWeight:700}}>👑 Scegli un alleato per il turno extra</div>
+        ) : elixirMode ? (
+          <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#fbbf24',fontWeight:700}}>🧪 Seleziona un pezzo alleato sulla stessa riga/colonna</div>
         ) : postPhase ? (
-          <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-            <span style={{fontSize:12,fontWeight:700,color:'#0ea5e9'}}>⚡ Potenziamento: clicca un pezzo per evolvere, vuoto per passare</span>
+          <div style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:2,cursor:'pointer'}} onClick={() => click(null)}>
+            <span style={{fontSize:11,fontWeight:700,color:'#0ea5e9'}}>🔵 Clicca pezzo Base per Evoluzione | {canDevolve ? <span style={{color:'#ef4444'}}>🔴 Rosso per De-Evolvere (Refund)</span> : "No Refund"}</span>
+            <span style={{fontSize:10,color:'#475569'}}>Clicca QUI o sul vuoto per passare il turno</span>
           </div>
         ) : (
           <>
             <div>
               <div className="charge-row">
-                <span>🔋 {turn==='w'?'BIANCO':'NERO'} | Prestigio {currentPrestige}</span>
-                <span>{pts[turn]}⚡</span>
+                <span>🔋 {activeColor==='w'?'BIANCO':'NERO'}{prestigeBonus && " (+1⚡ Passivo)"}{ghostMarch === activeColor ? " 👻" : ""}</span>
+                <span>{pts[activeColor]}⚡</span>
               </div>
-              <div className="charge-track"><div style={{width:`${Math.min(pts[turn]/10*100,100)}%`,height:'100%',background:'#38bdf8',transition:'width .3s',borderRadius:'2px'}}/></div>
+              <div className="charge-track"><div style={{width:`${Math.min(pts[activeColor]/10*100,100)}%`,height:'100%',background:'#38bdf8',transition:'width .3s'}}/></div>
             </div>
             <div className="panel-bottom">
               <div className="piece-label">
-                {sd ? (
+                {selData ? (
                   <span style={{fontWeight:700}}>
-                    {sp&&ICONS[sp.color][sp.type]} {sd.level===2?EVOLUTIONS[sp.type]?.name:'Base'} Lv.{sd.level}
+                    {selPiece && ICONS[selPiece.color][selPiece.type]} {selData.level===2 ? {p:'Assaltatore',n:'Destriero',b:'Spettro',r:'Alchimista',q:'Imperatrice',k:'Re'}[selPiece.type] : 'Base'} Lv.{selData.level}
                   </span>
-                ) : <span style={{color:'#475569'}}>Seleziona un pezzo</span>}
+                ) : <span style={{color:'#475569'}}>Seleziona un pezzo (Viola = Abilità sulla mappa)</span>}
               </div>
-              <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>
-                {isKingInDanger(game,pd,sm,turn,stunned)?'SCACCO!':turn==='w'?'⬜':'⬛'}
+              <div className="turn-pill" style={{color:activeColor==='w'?'#38bdf8':'#f43f5e'}}>
+                {isKingInCheck(game, activeColor, pd, sm, stunned) ? 'SCACCO!' : activeColor==='w'?'⬜':'⬛'}
               </div>
             </div>
-            {sel && (
+            {sel && showAbilities.length > 0 && (
               <div className="btn-row">
-                {showFrenzy && <button className="ability-btn" onClick={()=>{
-                  // Attiva selezione primo salto
-                  const frenzyMove = moves.find(m=>m.ability==='frenzyCharge');
-                  if(frenzyMove){
-                    setSel(sel);
-                    // Mostra solo le prime mosse disponibili
-                    setMoves(frenzyMove.jumps.map(j=>({type:'frenzyStep1', from:sel, to:j})));
-                  }
-                }} style={{borderColor:'#f59e0b',color:'#f59e0b'}}>⚔️ Carica (3⚡)</button>}
-                {showGhostMarch && <button className="ability-btn" onClick={()=>{
-                  executeAction({type:'ability', ability:'ghostMarch', from:sel, cost:3}, turn);
-                  setPostPlayer(turn);
-                  setPostPhase(true);
-                }} style={{borderColor:'#eab308',color:'#eab308'}}>👻 Marcia (3⚡)</button>}
-                {showElixir && <span style={{fontSize:10,color:'#fbbf24'}}>Seleziona alleato per Elisir</span>}
-                {showSpectral && <span style={{fontSize:10,color:'#a78bfa'}}>Clicca casa viola per teletrasporto</span>}
-                {showRoyal && <button className="ability-btn" onClick={()=>{
-                  executeAction({type:'ability', ability:'royalCommand', from:sel, cost:4}, turn);
-                }} style={{borderColor:'#ec4899',color:'#ec4899'}}>👑 Comando (4⚡)</button>}
+                {showAbilities.map((a, i) => (
+                  <button key={i} className="ability-btn" style={{borderColor:'#ec4899',color:'#ec4899'}}
+                    onClick={() => {
+                      if (a.ability==='royalCommand') {
+                        setCommandMode(true); setCommandQueenSq(sel); setCommandCost(a.cost);
+                        setPts(prev => ({...prev, [activeColor]: prev[activeColor] - a.cost}));
+                      } else if (a.ability==='elixir') {
+                        setElixirMode(true); setElixirCost(a.cost); setElixirRookSq(sel);
+                      }
+                    }}>
+                    {a.desc} ({a.cost}⚡)
+                  </button>
+                ))}
               </div>
             )}
           </>
@@ -802,11 +710,9 @@ function App(){
       </div>
       {gameOver && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14}}>
-          <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>
-            {gameOver.winner ? `🏆 ${gameOver.winner==='w'?'⬜ Bianco vince!':'⬛ Nero vince!'}` : '🤝 Pareggio'}
-          </div>
+          <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{gameOver.winner ? `🏆 ${gameOver.winner==='w'?'⬜ Bianco vince!':'⬛ Nero vince!'}` : '🤝 Pareggio'}</div>
           <div style={{fontSize:12,color:'#64748b'}}>{gameOver.reason}</div>
-          <button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>RIVINCITA</button>
+          <button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer'}}>RIVINCITA</button>
         </div>
       )}
     </div>

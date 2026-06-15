@@ -3,24 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG - Omega V8.6 (fix rook + AI turn)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.2</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
     #root{height:100%}
     .app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
-    .top-bar{flex-shrink:0;height:40px;display:flex;gap:6px;align-items:center}
-    .mode-btn{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;color:#94a3b8;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
-    .mode-btn.active{color:#030712!important}
-    .flip-btn{flex-shrink:0;padding:0 12px;height:100%;background:#1e293b;border:none;color:#94a3b8;border-radius:8px;font-size:13px;cursor:pointer}
-    .train-btn{flex-shrink:0;padding:0 8px;height:100%;background:#22c55e;border:none;color:#030712;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer}
-    .train-btn:disabled{opacity:0.5;cursor:not-allowed}
+    .top-bar{flex-shrink:0;height:40px;display:flex;gap:6px;align-items:center;justify-content:flex-end}
+    .flip-btn{padding:0 12px;height:100%;background:#1e293b;border:none;color:#94a3b8;border-radius:8px;font-size:13px;cursor:pointer}
+    .prestige-badge{flex-shrink:0;padding:0 12px;height:100%;background:#1e293b;border:none;color:#eab308;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:4px;font-weight:700}
     .player-row{flex-shrink:0;height:48px;display:flex;gap:8px;align-items:center}
     .player-label{flex:1;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;justify-content:center;padding:0 12px;overflow:hidden}
     .player-name{font-size:13px;font-weight:700;display:flex;align-items:center;gap:7px}
     .last-move-hint{font-size:10px;color:#475569;margin-top:1px}
-    .thinking-dot{flex-shrink:0;width:7px;height:7px;border-radius:50%;background:#38bdf8;animation:blink 1s infinite}
-    @keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
     .energy-badge{flex-shrink:0;width:58px;height:100%;background:#0b0f19;border:1px solid #1e293b;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:900}
     .board-wrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
     .board{--side:min(calc(100vw - 16px),calc(100vh - 280px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
@@ -30,20 +25,23 @@
     .cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
     .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
     .cell.evo-highlight{outline:3px dashed #0ea5e9;outline-offset:-3px}
-    .cell.summon-highlight{outline:2px dashed #ec4899;outline-offset:-2px}
-    .cell.devolve-target-highlight{outline:2px dashed #22c55e;outline-offset:-2px}
+    .cell.aura-cell{box-shadow:inset 0 0 12px rgba(239,68,68,0.7)}
+    .cell.stunned{box-shadow:inset 0 0 12px rgba(99,102,241,0.8)}
+    .cell.immune-highlight{outline:2px solid #fbbf24;outline-offset:-2px}
+    .cell.command-highlight{outline:2px solid #ec4899;outline-offset:-2px}
     .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
     .piece-w{color:#fff;text-shadow:0 0 0 #000,0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.7))}
     .piece-b{color:#000;text-shadow:0 0 0 #fff,0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,0 -1px 0 #fff;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))}
     .evo2{filter:drop-shadow(0 0 4px #a855f7)!important}
-    .summoned-pawn{outline:2px solid #6b7280;outline-offset:-2px;border-radius:2px}
-    .panel{flex-shrink:0;height:80px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:5px}
+    .panel{flex-shrink:0;height:90px;background:#0b0f19;border:1px solid #1e293b;border-radius:12px;padding:6px 10px;display:flex;flex-direction:column;gap:4px}
     .charge-row{display:flex;justify-content:space-between;font-size:10px;font-weight:800;color:#94a3b8}
     .charge-track{width:100%;height:4px;background:#1e293b;border-radius:2px;overflow:hidden;margin-top:2px}
     .panel-bottom{display:flex;align-items:center;gap:6px;flex:1}
     .piece-label{flex:1;font-size:11px;min-width:0}
     .turn-pill{flex-shrink:0;padding:3px 8px;border-radius:16px;font-size:11px;font-weight:700;background:#1e293b}
-    .debug-bar{position:fixed;bottom:0;left:0;right:0;background:rgba(6,9,19,.95);padding:3px 10px;font-size:9px;color:#38bdf8;border-top:1px solid #1e293b;z-index:50;display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .btn-row{display:flex;gap:4px;flex-wrap:wrap}
+    .ability-btn{flex:1;min-width:70px;padding:4px 6px;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid #334155;background:#0f172a;color:#cbd5e1;text-align:center}
+    .ability-btn:disabled{opacity:0.4;cursor:not-allowed}
     @keyframes lvlup{0%{transform:scale(1)}40%{transform:scale(1.8) rotate(10deg)}100%{transform:scale(1)}}
   </style>
 </head>
@@ -61,715 +59,760 @@ const ICONS = {w:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'},b:{k:'♚',q:
 let globalIdCounter = 0;
 function nextId() { return ++globalIdCounter; }
 
-// ═══════════ HELPERS ═══════════
-function moveLeavesKingInCheck(fen,from,to,piece){
-  try {
-    const g=new Chess(fen);
-    const existingTarget = g.get(to);
-    if(existingTarget) g.remove(to);
-    g.remove(from);
-    try { g.put(piece, to); } catch(e) { return false; }
-    const parts = g.fen().split(' ');
-    parts[1] = piece.color;
-    const testFen = parts.join(' ');
-    const test = new Chess();
-    return test.load(testFen) && test.in_check();
-  } catch(e) { return false; }
-}
-
-function execAbilityMove(game,from,to){
-  try {
-    let piece=game.get(from); if(!piece) return null;
-    const captured=game.get(to)||null;
-    const g=new Chess(game.fen());
-    g.remove(from); if(captured) g.remove(to);
-    if(piece.type==='p' && (to[1]==='8'||to[1]==='1')){
-      piece = {type:'q', color: piece.color};
-    }
-    try { g.put(piece, to); } catch(e) { return null; }
-    const parts=g.fen().split(' ');
-    if(piece.type==='k') parts[2]=parts[2].replace(piece.color==='w'?/[KQ]/g:/[kq]/g,'');
-    if(piece.type==='r'){
-      if(from==='a1') parts[2]=parts[2].replace('Q',''); if(from==='h1') parts[2]=parts[2].replace('K','');
-      if(from==='a8') parts[2]=parts[2].replace('q',''); if(from==='h8') parts[2]=parts[2].replace('k','');
-    }
-    if(captured && captured.type==='r'){
-      if(to==='a1') parts[2]=parts[2].replace('Q',''); if(to==='h1') parts[2]=parts[2].replace('K','');
-      if(to==='a8') parts[2]=parts[2].replace('q',''); if(to==='h8') parts[2]=parts[2].replace('k','');
-    }
-    if(parts[2]==='') parts[2]='-';
-    parts[3]='-';
-    if(piece.type==='p' || captured) parts[4] = '0';
-    const wasW=parts[1]==='w'; parts[1]=wasW?'b':'w';
-    if(!wasW) { const fullmove = parseInt(parts[5]||'1'); parts[5] = String(fullmove + 1); }
-    const ng=new Chess();
-    return ng.load(parts.join(' ')) ? {newGame:ng, capturedPiece:captured} : null;
-  } catch(e) { return null; }
-}
-
-function isSquareAttackedByEvo(game,pd,sm,targetSq,attackerColor){
+// ═══════════ CONTROLLO SCACCO ESTESO ═══════════
+function isSquareAttackedByEvo(game,pd,sm,targetSq,attackerColor,stunned){
   try {
     const tf=targetSq.charCodeAt(0)-97,tr=parseInt(targetSq[1]);
     for(const[sq,id]of Object.entries(sm)){
       const p=game.get(sq);if(!p||p.color!==attackerColor)continue;
+      if(stunned && stunned.has(id)) continue;
       const d=pd[id];if(!d||d.level<2)continue;
       const f=sq.charCodeAt(0)-97,r=parseInt(sq[1]);
-      if(p.type==='p'&&tf===f){const dir=attackerColor==='w'?1:-1;if(tr===r+dir)return true;}
-      if(p.type==='n'&&((tf===f&&Math.abs(tr-r)===1)||(tr===r&&Math.abs(tf-f)===1)))return true;
-      if(p.type==='b'&&Math.abs(tf-f)===Math.abs(tr-r)){const df=Math.sign(tf-f),dr=Math.sign(tr-r);let obs=0,cf=f+df,cr=r+dr;while(!(cf===tf&&cr===tr)){if(game.get(String.fromCharCode(97+cf)+cr))obs++;cf+=df;cr+=dr;}if(obs===1)return true;}
-      if(p.type==='q'&&((Math.abs(tf-f)===2&&Math.abs(tr-r)===1)||(Math.abs(tf-f)===1&&Math.abs(tr-r)===2)))return true;
+      // Pedone Assaltatore
+      if(p.type==='p' && d.level===2){
+        const dir=attackerColor==='w'?1:-1;
+        if(tr===r+dir && (tf===f || tf===f-1 || tf===f+1)) return true;
+      }
+      // Regina Imperatrice (ha movimento Cavallo)
+      if(p.type==='q' && d.level===2){
+        if((Math.abs(tf-f)===2&&Math.abs(tr-r)===1)||(Math.abs(tf-f)===1&&Math.abs(tr-r)===2)) return true;
+        // Movimento Torre
+        if(tf===f || tr===r){
+          let blocked=false;
+          const dc=tf===f?0:(tf>f?1:-1), dr2=tr===r?0:(tr>r?1:-1);
+          let cf=f+dc, cr2=r+dr2;
+          while(!(cf===tf&&cr2===tr)){
+            if(game.get(String.fromCharCode(97+cf)+cr2)){blocked=true;break;}
+            cf+=dc; cr2+=dr2;
+          }
+          if(!blocked) return true;
+        }
+        // Movimento Alfiere
+        if(Math.abs(tf-f)===Math.abs(tr-r)){
+          let blocked=false;
+          const dc=tf>f?1:-1, dr2=tr>r?1:-1;
+          let cf=f+dc, cr2=r+dr2;
+          while(!(cf===tf&&cr2===tr)){
+            if(game.get(String.fromCharCode(97+cf)+cr2)){blocked=true;break;}
+            cf+=dc; cr2+=dr2;
+          }
+          if(!blocked) return true;
+        }
+      }
     }
     return false;
   } catch(e) { return false; }
 }
 
-function isKingInDanger(game,pd,sm,color){
+function isKingInDanger(game,pd,sm,color,stunned){
   try {
     const fen=game.fen().split(' '); fen[1]=color; fen[3]='-';
     const test=new Chess(fen.slice(0,4).join(' ')+' 0 1'); if(test.in_check()) return true;
     let kingSq=null; const board=game.board();
     for(let r=0;r<8;r++){ let found=false; for(let c=0;c<8;c++){ const p=board[r][c]; if(p&&p.type==='k'&&p.color===color){ kingSq='abcdefgh'[c]+(8-r); found=true; break; } } if(found) break; }
-    return kingSq ? isSquareAttackedByEvo(game,pd,sm,kingSq,color==='w'?'b':'w') : false;
+    return kingSq ? isSquareAttackedByEvo(game,pd,sm,kingSq,color==='w'?'b':'w',stunned) : false;
   } catch(e) { return false; }
 }
 
-function estimateWinner(game, pd, sm){
-  let white=0, black=0;
-  const board=game.board();
-  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
-    const p=board[r][c]; if(!p)continue;
-    const sq = 'abcdefgh'[c]+(8-r);
-    const id = sm[sq];
-    const d = id ? pd[id] : null;
-    let val = BASE_VALS[p.type] || 0;
-    if(d && d.level > 1) val = rpgVal(d.type, d.level);
-    if(p.color==='w') white+=val; else black+=val;
-  }
-  if(white===black) return null;
-  return white>black?'w':'b';
+// ═══════════ FUNZIONI DI SUPPORTO ═══════════
+function getPieceAt(game,sq){ return game.get(sq); }
+
+// ═══════════ APPLY ACTION GENERALE ═══════════
+function applyStandardMove(game, from, to, promotion){
+  const g = new Chess(game.fen());
+  const mv = g.move({from, to, promotion: promotion||'q'});
+  if(!mv) return null;
+  let cap = null;
+  if(mv.captured) cap = {type: mv.captured};
+  if(mv.flags?.includes('e')) cap = {type:'p', _sq: to[0]+from[1]};
+  return {game: g, captured: cap, castleK: mv.flags?.includes('k'), castleQ: mv.flags?.includes('q')};
 }
 
-// ═══════════ EVOLUZIONI ═══════════
-const EVOLUTIONS={
-  p:{levels:[{name:'Pedone',color:'#64748b',desc:'Standard'},{name:'Assaltatore',color:'#eab308',desc:'Triangolo frontale'}],
-    getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]),dir=color==='w'?1:-1;const r=rank+dir;if(r>=1&&r<=8){const fwdSq=String.fromCharCode(97+file)+r,fwdP=game.get(fwdSq);if(fwdP&&fwdP.color!==color)moves.push({from:sq,to:fwdSq,isCapture:true});for(const df of[-1,1]){const f=file+df;if(f>=0&&f<=7){const dSq=String.fromCharCode(97+f)+r;if(!game.get(dSq))moves.push({from:sq,to:dSq,isCapture:false})}}}return moves.filter(m=>!moveLeavesKingInCheck(game.fen(),m.from,m.to,game.get(sq)))}},
-  n:{levels:[{name:'Cavallo',color:'#64748b',desc:'Standard'},{name:'Destriero',color:'#3b82f6',desc:'L + X (unico salto)'}],
-    getAbilityMoves(sq,game,level,color){
-      if(level<2)return[];
-      const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);
-      const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
-      const DIAG=[[1,1],[1,-1],[-1,1],[-1,-1]];
-      for(const[df,dr]of J){
-        const mf=file+df,mr=rank+dr;
-        if(mf<0||mf>7||mr<1||mr>8)continue;
-        for(const[dd,dr2]of DIAG){
-          const ef=mf+dd,er=mr+dr2;
-          if(ef<0||ef>7||er<1||er>8)continue;
-          const end=String.fromCharCode(97+ef)+er;
-          if(end===sq)continue;
-          const t=game.get(end);
-          if(t&&t.color===color)continue;
-          if(!moveLeavesKingInCheck(game.fen(),sq,end,piece))
-            moves.push({from:sq,to:end,isCapture:!!t});
+function buildState(g){
+  const pd={},sm={};
+  g.board().forEach((row,r)=>row.forEach((cell,c)=>{
+    if(cell){
+      const sq='abcdefgh'[c]+(8-r);
+      const id = `${cell.color}${cell.type}_${sq}`;
+      pd[id]={type:cell.type,color:cell.color,level:1};
+      sm[sq]=id;
+    }
+  }));
+  return {pd,sm};
+}
+
+// ═══════════ APP PRINCIPALE ═══════════
+function App(){
+  const[game,setGame]=useState(()=>new Chess());
+  const[pd,setPd]=useState({});
+  const[sm,setSm]=useState({});
+  const[sel,setSel]=useState(null);
+  const[moves,setMoves]=useState([]); // {sq, type:'std'|'ability'|'swap', ...}
+  const[lvlUp,setLvlUp]=useState(null);
+  const[pts,setPts]=useState({w:0,b:0});
+  const[last,setLast]=useState(null);
+  const[flipped,setFlip]=useState(false);
+  const[postPhase,setPostPhase]=useState(false);
+  const[postPlayer,setPostPlayer]=useState(null);
+  const[stunned,setStunned] = useState(new Set()); // id dei pezzi storditi
+  const[immune,setImmune] = useState(null); // {sq, id} pezzo immune
+  const[commandMode,setCommandMode] = useState(false); // modalità comando Regina
+  const[commandQueenSq,setCommandQueenSq] = useState(null);
+  const[gameOver,setGameOver] = useState(null);
+  const lvlUpTimer=useRef(null);
+
+  useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm);},[]);
+  useEffect(()=>()=>{if(lvlUpTimer.current)clearTimeout(lvlUpTimer.current);},[]);
+
+  // Reset stordimenti a fine turno
+  const clearStunned = useCallback((color) => {
+    setStunned(prev => {
+      const next = new Set(prev);
+      for(const id of next){
+        if(pd[id]?.color === color) next.delete(id);
+      }
+      return next;
+    });
+  }, [pd]);
+
+  // Calcola Punti Prestigio
+  const calcPrestige = useCallback((color) => {
+    const vals = {p:1, n:2, b:2, r:3, q:4};
+    let total = 0;
+    for(const[sq,id] of Object.entries(sm)){
+      const p = game.get(sq);
+      if(p && p.color===color && pd[id]?.level===2){
+        total += vals[p.type] || 0;
+      }
+    }
+    return total;
+  }, [game, sm, pd]);
+
+  // Calcola case dell'Aura di Terrore del Cavallo
+  const getAuraCells = useCallback((sq) => {
+    const file = sq.charCodeAt(0)-97, rank = parseInt(sq[1]);
+    const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+    const cells = [];
+    for(const[df,dr] of J){
+      const nf=file+df, nr=rank+dr;
+      if(nf>=0&&nf<=7&&nr>=1&&nr<=8) cells.push(String.fromCharCode(97+nf)+nr);
+    }
+    return cells;
+  }, []);
+
+  // Verifica se un pezzo è sotto l'Aura di Terrore nemica
+  const isInEnemyAura = useCallback((sq, color) => {
+    const opp = color==='w'?'b':'w';
+    for(const[osq, oid] of Object.entries(sm)){
+      const op = game.get(osq);
+      if(op && op.color===opp && op.type==='n' && pd[oid]?.level===2){
+        const aura = getAuraCells(osq);
+        if(aura.includes(sq)) return true;
+      }
+    }
+    return false;
+  }, [game, sm, pd, getAuraCells]);
+
+  // Ottiene mosse legali e abilità per il pezzo selezionato
+  const getMoves = useCallback((sq) => {
+    const p = game.get(sq);
+    if(!p) return [];
+    const color = p.color;
+    const id = sm[sq];
+    const d = pd[id];
+    const stunnedSet = stunned.has(id);
+    if(stunnedSet) return []; // Stordito non può muovere
+
+    const result = [];
+    // Mosse standard
+    const raw = game.moves({square:sq, verbose:true});
+    for(const m of raw){
+      // Impedisci promozione pedone se non è regina (semplificato)
+      if(m.promotion && m.promotion!=='q') continue;
+      // Controllo scacco dopo mossa
+      const ng = new Chess(game.fen());
+      const mv = ng.move({from:m.from, to:m.to, promotion:m.promotion||'q'});
+      if(mv && !isKingInDanger(ng, pd, sm, color, stunned)){
+        result.push({type:'std', from:sq, to:m.to, promotion:m.promotion});
+      }
+    }
+    // Abilità specifiche per pezzo evoluto
+    if(d && d.level===2){
+      const evo = EVOLUTIONS[p.type];
+      if(evo){
+        const abilities = evo.getAbilities(sq, game, pd, sm, pts[color], color, stunned, immune, commandMode);
+        for(const ab of abilities){
+          result.push(ab);
         }
       }
-      return moves;
     }
-  },
-  b:{levels:[{name:'Alfiere',color:'#64748b',desc:'Standard'},{name:'Spettro',color:'#06b6d4',desc:'Salta 1 ostacolo'}],
-    getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr,jumped=false;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(!jumped){jumped=true}else{if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}}else if(jumped){if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false})}f+=df;r+=dr}}return moves}},
-  r:{levels:[{name:'Torre',color:'#64748b',desc:'Standard'},{name:'Archivista',color:'#22c55e',desc:'Swap a distanza (max 5) | Disevolvi globale (∞)'}],
-    getAbilityMoves(sq,game,level,color){if(level<2)return[];const moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){for(let i=1;i<=5;i++){const nf=file+df*i,nr=rank+dr*i;if(nf<0||nf>7||nr<1||nr>8)break;const tSq=String.fromCharCode(97+nf)+nr,target=game.get(tSq);if(target&&target.color===color&&target.type!=='k'){moves.push({from:sq,to:tSq,isCapture:false,isSwap:true});break;}}}return moves}},
-  q:{levels:[{name:'Regina',color:'#64748b',desc:'Standard'},{name:'Imperatrice',color:'#ec4899',desc:'Amazzone (R+B+N) | Evoca pedone'}],
-    getAbilityMoves(sq,game,level,color){if(level<2)return[];const piece=game.get(sq),moves=[],file=sq.charCodeAt(0)-97,rank=parseInt(sq[1]);for(const[df,dr]of[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]){const nf=file+df,nr=rank+dr;if(nf<0||nf>7||nr<1||nr>8)continue;const tSq=String.fromCharCode(97+nf)+nr,t=game.get(tSq);if(t&&t.color===color)continue;if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:!!t})}for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}for(const[df,dr]of[[1,1],[1,-1],[-1,1],[-1,-1]]){let f=file+df,r=rank+dr;while(f>=0&&f<=7&&r>=1&&r<=8){const tSq=String.fromCharCode(97+f)+r,t=game.get(tSq);if(t){if(t.color!==color&&!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:true});break}if(!moveLeavesKingInCheck(game.fen(),sq,tSq,piece))moves.push({from:sq,to:tSq,isCapture:false});f+=df;r+=dr}}return moves}},
-  k:{levels:[{name:'Re',color:'#64748b',desc:'Standard'}],getAbilityMoves:()=>[]}
-};
+    return result;
+  }, [game, sm, pd, pts, stunned, immune, commandMode]);
 
-const BASE_VALS={p:1,n:3.2,b:3.3,r:5,q:9,k:200};
-function rpgVal(type,level){const b=BASE_VALS[type]||0;if(level===2){if(type==='p')return b+0.7;if(type==='n')return b+1.5;if(type==='b')return b+1.7;if(type==='r')return b+2.5;if(type==='q')return b+5.0}return b}
+  // ═══════════ EVOLUZIONI ═══════════
+  const EVOLUTIONS = {
+    p: {
+      cost: 2, prestige: 1,
+      name: 'Assaltatore',
+      getAbilities: (sq, game, pd, sm, energy, color) => {
+        const res = [];
+        if(energy >= 3){
+          // Marcia Fantasma: non è una mossa, è un effetto globale
+          res.push({type:'ability', ability:'ghostMarch', from:sq, cost:3, desc:'Marcia Fantasma (3⚡)'});
+        }
+        return res;
+      }
+    },
+    n: {
+      cost: 2, prestige: 2,
+      name: 'Destriero',
+      getAbilities: (sq, game, pd, sm, energy, color) => {
+        const res = [];
+        if(energy >= 3){
+          // Carica Forsennata
+          const jumps = getKnightJumps(sq, game, color, pd, sm, stunned);
+          if(jumps.length > 0){
+            res.push({type:'ability', ability:'frenzyCharge', from:sq, cost:3, desc:'Carica Forsennata (3⚡)', jumps});
+          }
+        }
+        return res;
+      }
+    },
+    b: {
+      cost: 2, prestige: 2,
+      name: 'Spettro',
+      getAbilities: (sq, game, pd, sm, energy, color) => {
+        const res = [];
+        if(energy >= 3){
+          // Passo Spettrale
+          res.push({type:'ability', ability:'spectralStep', from:sq, cost:3, desc:'Passo Spettrale (3⚡)'});
+        }
+        return res;
+      }
+    },
+    r: {
+      cost: 3, prestige: 3,
+      name: 'Alchimista',
+      getAbilities: (sq, game, pd, sm, energy, color) => {
+        const res = [];
+        // Swap (passivo, ma lo mostriamo come mossa speciale)
+        // Lo swap è già incluso come mossa normale nella UI
+        if(energy >= 3){
+          res.push({type:'ability', ability:'elixir', from:sq, cost:3, desc:'Elisir di Protezione (3⚡)'});
+        }
+        return res;
+      }
+    },
+    q: {
+      cost: 5, prestige: 4,
+      name: 'Imperatrice',
+      getAbilities: (sq, game, pd, sm, energy, color) => {
+        const res = [];
+        if(energy >= 4){
+          res.push({type:'ability', ability:'royalCommand', from:sq, cost:4, desc:'Comando Reale (4⚡)'});
+        }
+        return res;
+      }
+    },
+    k: { cost: 0, prestige: 0, name: 'Re', getAbilities: ()=>[] }
+  };
 
-// ═══════════ ACTIONS ═══════════
-function getAIActions(game,pd,sm,pts,color){
-  const actions=[];
-  for(const m of game.moves({verbose:true})){
-    if(m.promotion&&m.promotion!=='q')continue;
-    actions.push({type:'move',from:m.from,to:m.to,promotion:m.promotion});
-  }
-  for(const[sq,id]of Object.entries(sm)){
-    const piece=game.get(sq);if(!piece||piece.color!==color)continue;
-    const d=pd[id],evo=EVOLUTIONS[piece.type];if(!evo)continue;
-    for(const ab of evo.getAbilityMoves(sq,game,d.level,color)) {
-      const target = game.get(ab.to);
-      if(target && target.type==='k') continue;
-      actions.push({type:'ability',from:ab.from,to:ab.to,isSwap:ab.isSwap||false});
-    }
-  }
-  const allSummoned = Object.values(pd).filter(d=>d.type==='p'&&d.color===color&&d.summoned).length;
-  if(allSummoned < 2 && pts[color]>=2 && !game.in_check() && !isKingInDanger(game,pd,sm,color)) {
-    for(const[sq,id]of Object.entries(sm)){
-      if(pd[id]?.type==='q' && pd[id]?.level>=2 && pd[id]?.color===color){
-        const file=sq.charCodeAt(0)-97, rank=parseInt(sq[1]);
-        for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){
-          const nf=file+df,nr=rank+dr;
-          if(nf>=0&&nf<=7&&nr>=1&&nr<=8){
-            const tSq=String.fromCharCode(97+nf)+nr;
-            if(!game.get(tSq)) actions.push({type:'summon',queenSq:sq,targetSq:tSq,cost:2});
+  // Funzione per mosse di Cavallo standard
+  function getKnightJumps(sq, game, color, pd, sm, stunned){
+    const file = sq.charCodeAt(0)-97, rank = parseInt(sq[1]);
+    const J=[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]];
+    const jumps = [];
+    for(const[df,dr] of J){
+      const nf=file+df, nr=rank+dr;
+      if(nf>=0&&nf<=7&&nr>=1&&nr<=8){
+        const tsq = String.fromCharCode(97+nf)+nr;
+        const tp = game.get(tsq);
+        if(!tp || tp.color!==color){
+          const ng = new Chess(game.fen());
+          const mv = ng.move({from:sq, to:tsq});
+          if(mv && !isKingInDanger(ng, pd, sm, color, stunned)){
+            jumps.push(tsq);
           }
         }
       }
     }
+    return jumps;
   }
-  for(const[sq,id]of Object.entries(sm)){
-    if(pd[id]?.type==='r' && pd[id]?.level>=2 && pd[id]?.color===color){
-      for(const[tsq,tid]of Object.entries(sm)){
-        const tp=game.get(tsq);
-        if(!tp||tp.color!==color||tp.type==='k'||tp.type==='r') continue;
-        const td=pd[tid];
-        if(td&&td.level>1) actions.push({type:'devolve',towerSq:sq,targetSq:tsq,targetId:tid});
+
+  // Applica un'azione e ritorna il nuovo stato o null
+  const applyAction = useCallback((action, color) => {
+    const curGame = game;
+    const curPd = {...pd};
+    const curSm = {...sm};
+    const curPts = {...pts};
+    const curStunned = new Set(stunned);
+    let nextImmune = immune;
+
+    if(action.type === 'std'){
+      const res = applyStandardMove(curGame, action.from, action.to, action.promotion);
+      if(!res) return null;
+      const ng = res.game;
+      let energyGain = 1;
+      if(res.captured) energyGain += 1;
+      if(ng.in_check()) energyGain += 1;
+      // Pedone Assaltatore cattura extra
+      const mid = curSm[action.from];
+      const pieceData = curPd[mid];
+      if(pieceData?.type==='p' && pieceData?.level===2 && res.captured) energyGain += 1;
+      // Aggiorna sm e pd
+      const nsm = {...curSm}, npd = {...curPd};
+      if(res.castleK || res.castleQ){
+        const rank = color==='w'?'1':'8';
+        if(res.castleK){ nsm['f'+rank]=nsm['h'+rank]; delete nsm['h'+rank]; }
+        if(res.castleQ){ nsm['d'+rank]=nsm['a'+rank]; delete nsm['a'+rank]; }
       }
-    }
-  }
-  for(const evo of getEvolvablePieces(game,pd,sm,pts,color)) {
-    actions.push({type:'evolve', sq: evo.sq, cost: evo.cost, newLevel: evo.newLevel});
-  }
-  return actions;
-}
-
-function getEvolvablePieces(game,pd,sm,pts,color){
-  const evoCosts={p:2,n:2,b:2,r:3,q:5},result=[];
-  if(pts[color]<2)return result;
-  for(const[sq,id]of Object.entries(sm)){
-    const piece=game.get(sq);if(!piece||piece.color!==color)continue;
-    const d=pd[id];if(!d)continue;
-    if(d.summoned) continue;
-    const maxLvl=EVOLUTIONS[d.type]?.levels?.length||1;
-    if(d.level>=maxLvl)continue;
-    const cost=evoCosts[d.type]||2;
-    if(pts[color]>=cost)result.push({sq,id,type:d.type,cost,newLevel:d.level+1});
-  }
-  return result;
-}
-
-function applyAction(game,pd,sm,pts,action,cooldowns,playerColor){
-  try {
-    const color = playerColor || game.turn();
-    if(action.type==='ability'&&action.isSwap){
-      const p1=game.get(action.from),p2=game.get(action.to);
-      if(!p1||!p2) return null;
-      const g=new Chess(game.fen());
-      g.remove(action.from);g.remove(action.to);g.put(p1,action.to);g.put(p2,action.from);
-      const parts=g.fen().split(' '), wasW=parts[1]==='w'; parts[1]=wasW?'b':'w';
-      if(!wasW) parts[5]=String(parseInt(parts[5]||'1')+1);
-      parts[3]='-';parts[4]='0';
-      if(p1.type==='k'||p2.type==='k') parts[2]=parts[2].replace(color==='w'?/[KQ]/g:/[kq]/g,'');
-      if(p1.type==='r'||p2.type==='r'){['a1','h1','a8','h8'].forEach(sq=>{if(action.from===sq||action.to===sq){if(sq==='a1')parts[2]=parts[2].replace('Q','');if(sq==='h1')parts[2]=parts[2].replace('K','');if(sq==='a8')parts[2]=parts[2].replace('q','');if(sq==='h8')parts[2]=parts[2].replace('k','');}});}
-      if(parts[2]==='') parts[2]='-';
-      const ng=new Chess(); if(!ng.load(parts.join(' '))) return null;
-      const nsm={...sm},id1=nsm[action.from],id2=nsm[action.to]; nsm[action.from]=id2; nsm[action.to]=id1;
-      if(isKingInDanger(ng,{...pd},nsm,color)) return null;
-      return{game:ng,pd:{...pd},sm:nsm,pts:{...pts,[color]:pts[color]+1},cooldowns:{...cooldowns}};
-    }
-    if(action.type==='summon'){
-      const queenSq=action.queenSq, targetSq=action.targetSq; if(!targetSq) return null;
-      const newId=`${color}p_${nextId()}`;
-      const npd={...pd,[newId]:{type:'p',color,level:1,summoned:true}}, nsm={...sm,[targetSq]:newId};
-      const ng=new Chess(game.fen());
-      try { ng.put({type:'p',color},targetSq); } catch(e) { return null; }
-      if(isKingInDanger(ng,npd,nsm,color)) return null;
-      return{game:ng, pd:npd, sm:nsm, pts:{...pts,[color]:pts[color]-2}, cooldowns:{...cooldowns}};
-    }
-    if(action.type==='devolve'){
-      const targetData=pd[action.targetId]; if(!targetData||targetData.level<=1) return null;
-      const npd={...pd,[action.targetId]:{...targetData,level:targetData.level-1}};
-      return{game: new Chess(game.fen()), pd:npd, sm:{...sm}, pts:{...pts,[color]:pts[color]+1}, cooldowns:{...cooldowns}};
-    }
-    if(action.type==='evolve'){
-      const pieceData = pd[sm[action.sq]];
-      if(!pieceData || pieceData.level >= (EVOLUTIONS[pieceData.type]?.levels?.length||1)) return null;
-      const npd = {...pd, [sm[action.sq]]: {...pieceData, level: pieceData.level+1}};
-      const npts = {...pts, [color]: pts[color] - action.cost};
-      return {game: new Chess(game.fen()), pd: npd, sm: {...sm}, pts: npts, cooldowns: {...cooldowns}};
-    }
-    if(action.promotion && action.type==='move'){
-      const piece=game.get(action.from);
-      if(piece && piece.type==='p' && pd[sm[action.from]]?.summoned) return null;
-    }
-    let ng,cap=null,isCastleK=false,isCastleQ=false;
-    if(action.type==='ability'){const r=execAbilityMove(game,action.from,action.to);if(!r)return null;ng=r.newGame;cap=r.capturedPiece;}
-    else{ng=new Chess(game.fen());const mv=ng.move({from:action.from,to:action.to,promotion:action.promotion||'q'});if(!mv)return null;if(mv.captured)cap={type:mv.captured};if(mv.flags?.includes('e'))cap={type:'p',_sq:action.to[0]+action.from[1]};if(mv.flags?.includes('k'))isCastleK=true;if(mv.flags?.includes('q'))isCastleQ=true;}
-    const mid=sm[action.from],nsm={...sm},npd={...pd};
-    if(isCastleK||isCastleQ){const rank=color==='w'?'1':'8';if(isCastleK){nsm['f'+rank]=nsm['h'+rank];delete nsm['h'+rank];}if(isCastleQ){nsm['d'+rank]=nsm['a'+rank];delete nsm['a'+rank];}}
-    if(cap){const cs=cap._sq||action.to,cid=nsm[cs];if(cid){delete npd[cid];delete nsm[cs];}}
-    const np=ng.get(action.to);
-    if(np&&mid&&npd[mid]&&np.type!==npd[mid].type){
-      const old= npd[mid] || {};
-      const newPromoId=`${np.color}${np.type}_${nextId()}`;
-      npd[newPromoId]={...old,type:np.type,color:np.color,level:1};
-      delete npd[mid];
-      nsm[action.to]=newPromoId;
-    } else {
-      nsm[action.to]=mid;
-    }
-    delete nsm[action.from];
-    let p=1; if(cap) p++; if(ng.in_check()) p++;
-    const newCooldowns = {...cooldowns};
-    return{game:ng,pd:npd,sm:nsm,pts:{...pts,[color]:pts[color]+p},cooldowns:newCooldowns};
-  } catch(e) { return null; }
-}
-
-// ═══════════ RETE NEURALE COMPATTA (128 → 64 → 1) ═══════════
-class CompactValueNet {
-  constructor() {
-    const scale1 = Math.sqrt(2.0/128);
-    const scale2 = Math.sqrt(2.0/64);
-    this.w1 = new Float32Array(64*128);
-    for(let i=0;i<this.w1.length;i++) this.w1[i] = (Math.random()*2-1)*scale1;
-    this.b1 = new Float32Array(64);
-    this.w2 = new Float32Array(64);
-    for(let i=0;i<64;i++) this.w2[i] = (Math.random()*2-1)*scale2;
-    this.b2 = 0;
-  }
-  forward(input) {
-    this.a1 = new Float32Array(64);
-    this.z1 = new Float32Array(64);
-    for(let i=0;i<64;i++) {
-      let sum = this.b1[i];
-      for(let j=0;j<128;j++) sum += input[j] * this.w1[i*128+j];
-      this.z1[i] = sum;
-      this.a1[i] = sum > 0 ? sum : 0;
-    }
-    let sum = this.b2;
-    for(let i=0;i<64;i++) sum += this.a1[i] * this.w2[i];
-    this.z2 = sum;
-    return Math.tanh(sum);
-  }
-  train(input, target, lr=0.005) {
-    this.forward(input);
-    const output = Math.tanh(this.z2);
-    const error = target - output;
-    const dout = error * (1 - output*output);
-    const dw2 = new Float32Array(64);
-    for(let i=0;i<64;i++) dw2[i] = dout * this.a1[i];
-    const db2 = dout;
-    const da1 = new Float32Array(64);
-    for(let i=0;i<64;i++) da1[i] = this.z1[i] > 0 ? dout * this.w2[i] : 0;
-    for(let i=0;i<64;i++) this.w2[i] += lr * dw2[i];
-    this.b2 += lr * db2;
-    for(let i=0;i<64;i++) {
-      for(let j=0;j<128;j++) {
-        this.w1[i*128+j] += lr * da1[i] * input[j];
+      if(res.captured){
+        const cs = res.captured._sq || action.to;
+        const cid = nsm[cs];
+        if(cid){ delete npd[cid]; delete nsm[cs]; }
       }
-      this.b1[i] += lr * da1[i];
+      nsm[action.to] = mid;
+      delete nsm[action.from];
+      return {game: ng, pd: npd, sm: nsm, pts: {...curPts, [color]: curPts[color]+energyGain}, stunned: curStunned, immune: nextImmune};
     }
-  }
-  save() {
-    return JSON.stringify({
-      w1: Array.from(this.w1), b1: Array.from(this.b1),
-      w2: Array.from(this.w2), b2: this.b2
-    });
-  }
-  load(json) {
-    try {
-      const d = JSON.parse(json);
-      this.w1 = new Float32Array(d.w1);
-      this.b1 = new Float32Array(d.b1);
-      this.w2 = new Float32Array(d.w2);
-      this.b2 = d.b2;
-      return true;
-    } catch(e) { return false; }
-  }
-}
 
-const VNET = new CompactValueNet();
-const savedNet = localStorage.getItem('omega_v83_net');
-if (savedNet) VNET.load(savedNet);
-
-// ═══════════ ENCODING 128 ═══════════
-function encodeState(game, pd, sm, pts, color) {
-  const v = new Float32Array(128);
-  const board = game.board();
-  const typeMap = {p:1,n:3,b:4,r:5,q:9,k:20};
-  let idx = 0;
-  for (let r=0; r<8; r++) for (let c=0; c<8; c++) {
-    const p = board[r][c];
-    if (p) {
-      const sq = 'abcdefgh'[c]+(8-r);
-      const data = pd[sm[sq]];
-      const level = data?.level || 1;
-      v[idx] = typeMap[p.type] * level * (p.color===color?1:-1);
+    if(action.ability === 'ghostMarch'){
+      if(curPts[color] < 3) return null;
+      // Effetto puramente passivo, non modifica la posizione
+      return {game: new Chess(curGame.fen()), pd: curPd, sm: curSm, pts: {...curPts, [color]: curPts[color]-3}, ghostMarch: color, stunned: curStunned, immune: nextImmune};
     }
-    idx++;
-  }
-  for (let r=0; r<8; r++) {
-    let sumLevel = 0, sumSummon = 0;
-    for (let c=0; c<8; c++) {
-      const p = board[r][c];
-      if (p) {
-        const sq = 'abcdefgh'[c]+(8-r);
-        const data = pd[sm[sq]];
-        sumLevel += (data?.level||1) * (p.color===color?1:-1);
-        sumSummon += (data?.summoned?1:0) * (p.color===color?1:-1);
+
+    if(action.ability === 'frenzyCharge'){
+      if(curPts[color] < 3) return null;
+      // Primo salto già scelto dall'utente (action.firstJumpTo)
+      const firstRes = applyStandardMove(curGame, action.from, action.firstJumpTo);
+      if(!firstRes) return null;
+      let ng = firstRes.game;
+      let nsm = {...curSm}, npd = {...curPd};
+      // Aggiorna per il primo salto
+      const mid = nsm[action.from];
+      if(firstRes.captured){
+        const cs = firstRes.captured._sq || action.firstJumpTo;
+        delete npd[nsm[cs]]; delete nsm[cs];
       }
-    }
-    v[idx++] = sumLevel;
-    v[idx++] = sumSummon;
-  }
-  for (let c=0; c<8; c++) {
-    let sumLevel = 0, sumSummon = 0;
-    for (let r=0; r<8; r++) {
-      const p = board[r][c];
-      if (p) {
-        const sq = 'abcdefgh'[c]+(8-r);
-        const data = pd[sm[sq]];
-        sumLevel += (data?.level||1) * (p.color===color?1:-1);
-        sumSummon += (data?.summoned?1:0) * (p.color===color?1:-1);
+      nsm[action.firstJumpTo] = mid;
+      delete nsm[action.from];
+      // Secondo salto
+      const secondRes = applyStandardMove(ng, action.firstJumpTo, action.secondJumpTo);
+      if(!secondRes) return null;
+      ng = secondRes.game;
+      if(secondRes.captured){
+        const cs = secondRes.captured._sq || action.secondJumpTo;
+        delete npd[nsm[cs]]; delete nsm[cs];
       }
-    }
-    v[idx++] = sumLevel;
-    v[idx++] = sumSummon;
-  }
-  const opp = color==='w'?'b':'w';
-  v[idx++] = pts[color]/10;
-  v[idx++] = pts[opp]/10;
-  v[idx++] = game.turn()===color ? 1 : 0;
-  v[idx++] = game.in_check() ? 1 : 0;
-  while(idx < 128) v[idx++] = 0;
-  return v;
-}
-
-// ═══════════ RICERCA 2-PLY ═══════════
-function evaluatePos(game,pd,sm,pts,color) {
-  return VNET.forward(encodeState(game,pd,sm,pts,color));
-}
-
-function searchBestAction(game,pd,sm,pts,color,cooldowns) {
-  const allActions = getAIActions(game,pd,sm,pts,color);
-  const validActions = allActions.filter(a => {
-    const next = applyAction(game,pd,sm,pts,a,cooldowns,color);
-    return next && !isKingInDanger(next.game,next.pd,next.sm,color);
-  });
-  if (!validActions.length) return null;
-  let bestAction = validActions[0];
-  let bestScore = -Infinity;
-  const opp = color==='w'?'b':'w';
-  for (const a of validActions) {
-    const next = applyAction(game,pd,sm,pts,a,cooldowns,color);
-    if (!next) continue;
-    let score = evaluatePos(next.game, next.pd, next.sm, next.pts, color);
-    const oppActions = getAIActions(next.game, next.pd, next.sm, next.pts, opp)
-      .filter(a2 => applyAction(next.game, next.pd, next.sm, next.pts, a2, cooldowns, opp));
-    if (oppActions.length > 0) {
-      const sortedOppActions = oppActions.sort((a2,b2) => {
-        const isCapA = a2.to ? !!game.get(a2.to) : false;
-        const isCapB = b2.to ? !!game.get(b2.to) : false;
-        return (isCapB ? 1 : 0) - (isCapA ? 1 : 0);
-      }).slice(0, 20);
-      let worst = Infinity;
-      for (const oa of sortedOppActions) {
-        const oppNext = applyAction(next.game, next.pd, next.sm, next.pts, oa, cooldowns, opp);
-        if (!oppNext) continue;
-        const val = evaluatePos(oppNext.game, oppNext.pd, oppNext.sm, oppNext.pts, color);
-        worst = Math.min(worst, val);
+      nsm[action.secondJumpTo] = mid;
+      delete nsm[action.firstJumpTo];
+      let energyGain = 1;
+      if(firstRes.captured || secondRes.captured) energyGain += (firstRes.captured?1:0)+(secondRes.captured?1:0);
+      if(ng.in_check()) energyGain += 1;
+      if(mid && npd[mid]?.type==='p' && npd[mid]?.level===2){
+        if(firstRes.captured) energyGain += 1;
+        if(secondRes.captured) energyGain += 1;
       }
-      score = -worst;
+      return {game: ng, pd: npd, sm: nsm, pts: {...curPts, [color]: curPts[color]+energyGain-3}, stunned: curStunned, immune: nextImmune};
     }
-    if (score > bestScore) {
-      bestScore = score;
-      bestAction = a;
-    }
-  }
-  return bestAction;
-}
 
-// ═══════════ FUNZIONE POST-MOSSA IA ═══════════
-function aiPostPhase(state, color) {
-  const freeActions = getAIActions(state.game, state.pd, state.sm, state.pts, color)
-    .filter(a => a.type === 'evolve' || a.type === 'summon' || a.type === 'devolve')
-    .filter(a => {
-      const next = applyAction(state.game, state.pd, state.sm, state.pts, a, state.cooldowns, color);
-      return next && !isKingInDanger(next.game, next.pd, next.sm, color);
-    });
-
-  if (!freeActions.length) return state;
-
-  let bestAction = null, bestScore = -Infinity;
-  for (const a of freeActions) {
-    const next = applyAction(state.game, state.pd, state.sm, state.pts, a, state.cooldowns, color);
-    if (!next) continue;
-    const score = evaluatePos(next.game, next.pd, next.sm, next.pts, color);
-    if (score > bestScore) { bestScore = score; bestAction = a; }
-  }
-
-  if (!bestAction) return state;
-
-  const next = applyAction(state.game, state.pd, state.sm, state.pts, bestAction, state.cooldowns, color);
-  if (!next) return state;
-
-  return aiPostPhase(next, color);
-}
-
-// ═══════════ TRAINING CON REPLAY BUFFER ═══════════
-const replay = [];
-async function trainNetwork(totalGames, onProgress, wakeLockRef) {
-  let completed = 0, wins = {w:0,b:0};
-  for (let i=0; i<totalGames; i++) {
-    const g = new Chess();
-    let state = {game:g, ...buildState(g), cooldowns:{}};
-    const history = [];
-    for (let mc=0; mc<200; mc++) {
-      if (state.game.game_over()) break;
-      const color = state.game.turn();
-      const stateVec = encodeState(state.game, state.pd, state.sm, state.pts, color);
-      const action = searchBestAction(state.game, state.pd, state.sm, state.pts, color, state.cooldowns);
-      if (!action) break;
-      let next = applyAction(state.game, state.pd, state.sm, state.pts, action, state.cooldowns, color);
-      if (!next) break;
-      next = aiPostPhase(next, color);
-      const nextVec = encodeState(next.game, next.pd, next.sm, next.pts, color==='w'?'b':'w');
-      history.push({s:stateVec, ns:nextVec, color});
-      state = next;
-    }
-    let winner = null;
-    if (state.game.in_checkmate()) {
-      winner = state.game.turn()==='w'?'b':'w';
-    }
-    if (winner) wins[winner]++;
-    for (const step of history) {
-      const reward = step.color===winner ? 1 : -1;
-      replay.push({s:step.s, ns:step.ns, r:reward});
-      if (replay.length > 20000) replay.shift();
-    }
-    if (i%10===0 && replay.length>32) {
-      for (let b=0; b<64; b++) {
-        const idx = Math.floor(Math.random()*replay.length);
-        const exp = replay[idx];
-        const target = exp.r;
-        VNET.train(exp.s, target, 0.005);
+    if(action.ability === 'spectralStep'){
+      if(curPts[color] < 3) return null;
+      const targetSq = action.targetSq;
+      const fromSq = action.from;
+      // Verifica che target sia sulla stessa diagonale
+      const ff=fromSq.charCodeAt(0)-97, fr=parseInt(fromSq[1]);
+      const tf2=targetSq.charCodeAt(0)-97, tr2=parseInt(targetSq[1]);
+      if(Math.abs(tf2-ff) !== Math.abs(tr2-fr)) return null;
+      if(targetSq === fromSq) return null;
+      // Il target deve essere libero o occupato da nemico? La descrizione dice "casa libera"
+      if(game.get(targetSq)) return null; // solo casa libera per semplicità
+      // Stordisci nemici e guadagna energia per alleati oltrepassati
+      let energyBonus = 0;
+      const dc = tf2>ff?1:-1, dr2 = tr2>fr?1:-1;
+      let cf = ff+dc, cr = fr+dr2;
+      while(!(cf===tf2 && cr===tr2)){
+        const midSq = String.fromCharCode(97+cf)+cr;
+        const mp = game.get(midSq);
+        if(mp){
+          if(mp.color !== color){
+            curStunned.add(sm[midSq]);
+          } else {
+            energyBonus += 1;
+          }
+        }
+        cf+=dc; cr+=dr2;
       }
-      localStorage.setItem('omega_v83_net', VNET.save());
-      localStorage.setItem('omega_games_count', i+1);
+      // Teletrasporta
+      const ng = new Chess(game.fen());
+      ng.remove(fromSq);
+      const piece = game.get(fromSq);
+      ng.put({type:piece.type, color:piece.color}, targetSq);
+      const nsm = {...curSm, [targetSq]: sm[fromSq]};
+      delete nsm[fromSq];
+      return {game: ng, pd: curPd, sm: nsm, pts: {...curPts, [color]: curPts[color]-3+energyBonus}, stunned: curStunned, immune: nextImmune};
     }
-    if (i%100===0) await new Promise(r=>setTimeout(r,50));
-    await new Promise(r=>setTimeout(r,0));
-    completed = i+1;
-    if (onProgress) onProgress({current:completed, total:totalGames, wins});
-  }
-  if (wakeLockRef?.current) wakeLockRef.current.release();
-  return {total:completed, wins};
-}
 
-// ═══════════ PERSISTENZA ═══════════
-function buildState(g){const pd={},sm={};g.board().forEach((row,r)=>row.forEach((cell,c)=>{if(cell){const sq='abcdefgh'[c]+(8-r);pd[`${cell.color}${cell.type}_${sq}`]={type:cell.type,color:cell.color,level:1};sm[sq]=`${cell.color}${cell.type}_${sq}`;}}));return{pd,sm};}
+    if(action.ability === 'elixir'){
+      if(curPts[color] < 3) return null;
+      const targetSq = action.targetSq;
+      const targetId = sm[targetSq];
+      if(!targetId) return null;
+      nextImmune = {sq: targetSq, id: targetId};
+      return {game: new Chess(curGame.fen()), pd: curPd, sm: curSm, pts: {...curPts, [color]: curPts[color]-3}, stunned: curStunned, immune: nextImmune};
+    }
 
-// ═══════════ APP ═══════════
-const PERSONALITIES={human:{name:'Umano',ai:false,color:'#94a3b8'},omega:{name:'Omega Neural',ai:true,color:'#eab308'}};
+    if(action.ability === 'royalCommand'){
+      if(curPts[color] < 4) return null;
+      // Attiva modalità comando
+      setCommandMode(true);
+      setCommandQueenSq(action.from);
+      return null; // non esegue subito, imposta lo stato
+    }
 
-function App(){
-  const[game,setGame]=useState(()=>new Chess()),[pd,setPd]=useState({}),[sm,setSm]=useState({}),[sel,setSel]=useState(null),[stdM,setStd]=useState([]),[abilM,setAbl]=useState([]);
-  const[lvlUp,setLvlUp]=useState(null),[pts,setPts]=useState({w:0,b:0}),[wAI,setWAI]=useState('human'),[bAI,setBAI]=useState('omega'),[thinking,setThink]=useState(false),[last,setLast]=useState(null);
-  const[flipped,setFlip]=useState(false),[debug,setDebug]=useState(''),[training,setTraining]=useState(false),[trainProgress,setTrainProgress]=useState('');
-  const[cooldowns,setCooldowns]=useState({}),[postPhase,setPostPhase]=useState(false),[postPlayer,setPostPlayer]=useState(null);
-  const[summonMode,setSummonMode]=useState(false),[summonQueenSq,setSummonQueenSq]=useState(null);
-  const[devolveMode,setDevolveMode]=useState(false),[devolveTowerSq,setDevolveTowerSq]=useState(null);
-  const[rpgGameOver,setRpgGameOver]=useState(null);
-  const timer=useRef(null),gen=useRef(0),wakeLockRef=useRef(null),lvlUpTimer=useRef(null),gameHistory=useRef([]);
-  const brainStats=useRef({games:parseInt(localStorage.getItem('omega_games_count')||'0'),wins:{w:0,b:0}}).current;
+    if(action.type === 'swap'){
+      // Trasmutazione Spaziale (Torre)
+      const fromSq = action.from, toSq = action.to;
+      const p1 = game.get(fromSq), p2 = game.get(toSq);
+      if(!p1 || !p2 || p2.color!==color) return null;
+      // Verifica stessa riga o colonna e nessun ostacolo
+      const ff=fromSq.charCodeAt(0)-97, fr=parseInt(fromSq[1]);
+      const tf2=toSq.charCodeAt(0)-97, tr2=parseInt(toSq[1]);
+      if(ff!==tf2 && fr!==tr2) return null;
+      // Controlla linea libera
+      if(ff===tf2){
+        const minR=Math.min(fr,tr2), maxR=Math.max(fr,tr2);
+        for(let r=minR+1; r<maxR; r++){
+          if(game.get(String.fromCharCode(97+ff)+r)) return null;
+        }
+      } else {
+        const minF=Math.min(ff,tf2), maxF=Math.max(ff,tf2);
+        for(let f=minF+1; f<maxF; f++){
+          if(game.get(String.fromCharCode(97+f)+fr)) return null;
+        }
+      }
+      const ng = new Chess(game.fen());
+      ng.remove(fromSq); ng.remove(toSq);
+      ng.put(p1, toSq); ng.put(p2, fromSq);
+      const nsm = {...curSm, [fromSq]: sm[toSq], [toSq]: sm[fromSq]};
+      return {game: ng, pd: curPd, sm: nsm, pts: {...curPts, [color]: curPts[color]+1}, stunned: curStunned, immune: nextImmune};
+    }
 
-  useEffect(()=>{const s=buildState(game);setPd(s.pd);setSm(s.sm);},[]);
-  useEffect(()=>{setFlip(!PERSONALITIES[bAI]?.ai&&PERSONALITIES[wAI]?.ai);},[wAI,bAI]);
-  useEffect(()=>()=>{if(wakeLockRef.current)wakeLockRef.current.release().catch(()=>{});if(lvlUpTimer.current)clearTimeout(lvlUpTimer.current);},[]);
+    return null;
+  }, [game, pd, sm, pts, stunned, immune]);
 
-  const getMoves=useCallback(sq=>{
-    const p=game.get(sq);if(!p)return{std:[],abil:[]};
-    const rawStd=game.moves({square:sq,verbose:true}),id=sm[sq],d=pd[id],evo=EVOLUTIONS[p.type],rawAbil=evo&&d?evo.getAbilityMoves(sq,game,d.level,p.color):[];
-    const filterMoves=(moves,isAbil)=>moves.filter(m=>{
-      const to=m.to,targetPiece=game.get(to);
-      if(targetPiece&&targetPiece.type==='k')return false;
-      if(!isAbil&&p.type==='p'&&d?.summoned&&(to[1]==='8'||to[1]==='1'))return false;
-      const actionObj=isAbil?{...m,type:'ability',from:sq,to}:{type:'move',from:sq,to,promotion:m.promotion};
-      const next=applyAction(game,pd,sm,pts,actionObj,cooldowns,p.color);if(!next)return false;
-      return !isKingInDanger(next.game,next.pd,next.sm,p.color);
-    });
-    return{std:filterMoves(rawStd,false),abil:filterMoves(rawAbil,true)};
-  },[game,sm,pd,pts,cooldowns]);
-
-  // Wrapper che applica un'azione e aggiorna lo stato (usato solo da mosse umane)
-  const applyAndSetState = useCallback((actionObj, color) => {
-    const next = applyAction(game, pd, sm, pts, actionObj, cooldowns, color);
-    if (!next) return null;
-    setPts(next.pts);
-    setGame(next.game);
-    setPd(next.pd);
-    setSm(next.sm);
-    setCooldowns(next.cooldowns || {});
-    setLast({ from: actionObj.from, to: actionObj.to });
+  // Esegue un'azione e aggiorna lo stato
+  const executeAction = useCallback((action, color) => {
+    const res = applyAction(action, color);
+    if(!res) return false;
+    setGame(res.game);
+    setPd(res.pd);
+    setSm(res.sm);
+    setPts(res.pts);
+    setStunned(res.stunned);
+    setImmune(res.immune);
+    setLast({from: action.from, to: action.to || action.targetSq || '??'});
     setSel(null);
-    setStd([]);
-    setAbl([]);
-    return next;
-  }, [game, pd, sm, pts, cooldowns]);
-
-  // Registra lo stato attuale nella history
-  const recordHistory = useCallback((color) => {
-    gameHistory.current.push({
-      state: encodeState(game, pd, sm, pts, color),
-      color: color
-    });
-  }, [game, pd, sm, pts]);
-
-  // Allena la rete su tutta la partita e pulisce la history
-  const trainOnGameEnd = useCallback((winner) => {
-    if (winner) {
-      for (const step of gameHistory.current) {
-        const reward = step.color === winner ? 1 : -1;
-        VNET.train(step.state, reward, 0.01);
-      }
-      localStorage.setItem('omega_v83_net', VNET.save());
+    setMoves([]);
+    if(res.ghostMarch){
+      // Imposta marcia fantasma
     }
-    brainStats.games++;
-    localStorage.setItem('omega_games_count', String(brainStats.games));
-    gameHistory.current = [];
-  }, []);
+    return true;
+  }, [applyAction]);
 
-  const move = useCallback((actionObj) => {
+  // Gestione click su casa
+  const click = useCallback((sq) => {
     const turn = game.turn();
-    recordHistory(turn);
-    const next = applyAndSetState(actionObj, turn);
-    if (!next) return;
-    if (next.game.game_over()) {
-      const winner = next.game.in_checkmate() ? (next.game.turn() === 'w' ? 'b' : 'w') : null;
-      trainOnGameEnd(winner);
-    }
-    const isHuman = turn === 'w' ? !PERSONALITIES[wAI]?.ai : !PERSONALITIES[bAI]?.ai;
-    if (isHuman && !next.game.game_over()) {
-      setPostPlayer(turn);
-      setPostPhase(true);
-    } else {
-      setPostPlayer(null);
-      setPostPhase(false);
-    }
-  }, [game, wAI, bAI, recordHistory, applyAndSetState, trainOnGameEnd]);
+    const p = game.get(sq);
+    const color = turn;
 
-  const handleEvoClick=useCallback(sq=>{
-    if(!postPhase||!postPlayer)return;const piece=game.get(sq);if(!piece||piece.color!==postPlayer)return;
-    const id=sm[sq],d=pd[id];if(!d)return;
-    if(d.summoned) return;
-    const evoCosts={p:2,n:2,b:2,r:3,q:5},cost=evoCosts[d.type]||2,maxLvl=EVOLUTIONS[d.type]?.levels?.length||1;
-    if(d.level>=maxLvl||pts[postPlayer]<cost)return;
-    const npd={...pd,[id]:{...d,level:d.level+1}},npts={...pts,[postPlayer]:pts[postPlayer]-cost};
-    setPd(npd);setPts(npts);setLvlUp(sq);
-    if(lvlUpTimer.current)clearTimeout(lvlUpTimer.current);
-    lvlUpTimer.current=setTimeout(()=>setLvlUp(null),900);
-  },[postPhase,postPlayer,game,sm,pd,pts]);
-
-  const skipPost=useCallback(()=>{setPostPhase(false);setPostPlayer(null);setSummonMode(false);setDevolveMode(false);},[]);
-  const startSummon=useCallback((qSqO)=>{
-    const qSq=qSqO||sel;if(!qSq)return;const id=sm[qSq],d=pd[id];if(!d||d.type!=='q'||d.level<2)return;
-    const sc=Object.values(pd).filter(d=>d.type==='p'&&d.color===postPlayer&&d.summoned).length;
-    if(sc>=2||pts[postPlayer]<2||game.in_check()||isKingInDanger(game,pd,sm,postPlayer))return;
-    setSummonMode(true);setSummonQueenSq(qSq);setSel(null);setStd([]);setAbl([]);
-  },[sel,sm,pd,pts,game,postPlayer]);
-  const handleSummonClick=useCallback(sq=>{
-    if(!summonMode||!summonQueenSq)return;
-    const queenSq=summonQueenSq,file=queenSq.charCodeAt(0)-97,rank=parseInt(queenSq[1]),adj=[];
-    for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){const nf=file+df,nr=rank+dr;if(nf>=0&&nf<=7&&nr>=1&&nr<=8){const s=String.fromCharCode(97+nf)+nr;if(!game.get(s))adj.push(s);}}
-    if(!adj.includes(sq)){setSummonMode(false);setSummonQueenSq(null);return;}
-    const next=applyAction(game,pd,sm,pts,{type:'summon',queenSq,targetSq:sq,cost:2},cooldowns,postPlayer);if(!next){setSummonMode(false);setSummonQueenSq(null);return;}
-    setPts(next.pts);setGame(next.game);setPd(next.pd);setSm(next.sm);setCooldowns(next.cooldowns||{});setLast({from:queenSq,to:'summon'});setSummonMode(false);setSummonQueenSq(null);
-  },[summonMode,summonQueenSq,game,pd,sm,pts,cooldowns,postPlayer]);
-  const doDevolve=useCallback((tSq,tgSq)=>{
-    if(!tSq||!tgSq)return;const id=sm[tSq],d=pd[id];if(!d||d.type!=='r'||d.level<2)return;
-    const targetId=sm[tgSq],targetData=pd[targetId];if(!targetData||targetData.level<=1)return;
-    const next=applyAction(game,pd,sm,pts,{type:'devolve',towerSq:tSq,targetSq:tgSq,targetId},cooldowns,postPlayer);if(!next)return;
-    setPd(next.pd);setPts(next.pts);setCooldowns(next.cooldowns||{});setLast({from:tSq,to:tgSq+' devolve'});setDevolveMode(false);setDevolveTowerSq(null);
-  },[game,sm,pd,pts,cooldowns,postPlayer]);
-
-  const click=useCallback(sq=>{
-    if(devolveMode&&devolveTowerSq){const piece=game.get(sq);if(!piece||piece.color!==postPlayer||piece.type==='k'||piece.type==='r'){setDevolveMode(false);setDevolveTowerSq(null);return;}const id=sm[sq];if(id&&pd[id]?.level>1){doDevolve(devolveTowerSq,sq);}else{setDevolveMode(false);setDevolveTowerSq(null);}return;}
-    if(summonMode){handleSummonClick(sq);return;}
-    if(postPhase&&postPlayer){const p=game.get(sq);if(!p||p.color!==postPlayer){skipPost();return;}const id=sm[sq],d=pd[id];if(d?.type==='q'&&d?.level>=2&&pts[postPlayer]>=2&&!game.in_check()&&!isKingInDanger(game,pd,sm,postPlayer)){const sc=Object.values(pd).filter(x=>x.type==='p'&&x.color===postPlayer&&x.summoned).length;if(sc<2){if(summonMode&&summonQueenSq===sq){setSummonMode(false);setSummonQueenSq(null);return;}startSummon(sq);return;}}if(d?.type==='r'&&d?.level>=2){const has=Object.values(pd).some(x=>x.color===postPlayer&&x.level>1&&x.type!=='k'&&x.type!=='r');if(has){setDevolveMode(true);setDevolveTowerSq(sq);return;}}handleEvoClick(sq);return;}
-    const turn=game.turn(),isHuman=turn==='w'?!PERSONALITIES[wAI]?.ai:!PERSONALITIES[bAI]?.ai;if(!isHuman||thinking||training)return;
-    const p=game.get(sq);
-    if(sel){const stdHit=stdM.find(m=>m.to===sq);if(stdHit){move({type:'move',from:sel,to:sq,promotion:stdHit.promotion});return;}const abilHit=abilM.find(m=>m.to===sq);if(abilHit){move({...abilHit,type:'ability',from:sel,to:sq});return;}if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);return;}setSel(null);setStd([]);setAbl([]);return;}
-    if(p?.color===turn){setSel(sq);const m=getMoves(sq);setStd(m.std);setAbl(m.abil);}else{setSel(null);setStd([]);setAbl([]);}
-  },[game,sel,stdM,abilM,getMoves,move,wAI,bAI,thinking,training,postPhase,postPlayer,summonMode,summonQueenSq,devolveMode,devolveTowerSq,handleEvoClick,handleSummonClick,skipPost,startSummon,doDevolve,sm,pd,pts]);
-
-  // ═══════════ AI TURN ═══════════
-  useEffect(()=>{
-    const turn=game.turn(),ai=turn==='w'?wAI:bAI;
-    if(training||!PERSONALITIES[ai]?.ai||game.game_over()||postPhase||summonMode||devolveMode||rpgGameOver)return;
-    gen.current++;const myGen=gen.current;clearTimeout(timer.current);
-    timer.current=setTimeout(async()=>{
-      setThink(true);setDebug('🧠 Neural thinking...');const t0=Date.now();
-      const action=searchBestAction(game,pd,sm,pts,turn,cooldowns);
-      if(gen.current!==myGen){setThink(false);return;}
-      if(!action){
-        setThink(false);
-        setDebug('🚨 RPG CHECKMATE! L\'IA si arrende.');
-        setRpgGameOver({ winner: turn === 'w' ? 'b' : 'w' });
+    // Se in modalità Comando Reale
+    if(commandMode){
+      if(p && p.color===turn && sq !== commandQueenSq){
+        // Esegui Comando: turno extra per questo pezzo
+        // Per semplicità, esci dalla modalità e lascia che il giocatore muova normalmente
+        setCommandMode(false);
+        setCommandQueenSq(null);
+        // Imposta lo stato per far muovere il pezzo selezionato
+        setSel(sq);
+        const m = getMoves(sq);
+        setMoves(m);
+        setPostPhase(false);
+        return;
+      } else {
+        setCommandMode(false);
+        setCommandQueenSq(null);
         return;
       }
-      // Applica l'azione e la post‑fase SENZA toccare lo stato React fino alla fine
-      let next = applyAction(game, pd, sm, pts, action, cooldowns, turn);
-      if (!next) { setThink(false); return; }
-      next = aiPostPhase(next, turn);
+    }
 
-      // Salva nella history e aggiorna lo stato in un colpo solo
-      recordHistory(turn);
-      setPts(next.pts);
-      setGame(next.game);
-      setPd(next.pd);
-      setSm(next.sm);
-      setCooldowns(next.cooldowns || {});
-      setLast({ from: action.from, to: action.to });
-      setSel(null);
-      setStd([]);
-      setAbl([]);
-
-      // Gestione fine partita
-      if (next.game.game_over()) {
-        const winner = next.game.in_checkmate() ? (next.game.turn() === 'w' ? 'b' : 'w') : null;
-        trainOnGameEnd(winner);
+    // Se in post-fase, cliccare su un pezzo proprio permette evoluzione
+    if(postPhase && postPlayer === color){
+      if(p && p.color === color){
+        const id = sm[sq];
+        const d = pd[id];
+        if(d && d.level < 2){
+          const evoCost = EVOLUTIONS[p.type]?.cost || 999;
+          if(pts[color] >= evoCost){
+            // Evolvi
+            const npd = {...pd, [id]: {...d, level:2}};
+            const npts = {...pts, [color]: pts[color]-evoCost};
+            setPd(npd); setPts(npts);
+            setLvlUp(sq);
+            if(lvlUpTimer.current) clearTimeout(lvlUpTimer.current);
+            lvlUpTimer.current = setTimeout(()=>setLvlUp(null), 900);
+          }
+        }
+      } else if(!p){
+        // Clic su vuoto termina post-fase
+        setPostPhase(false);
+        setPostPlayer(null);
+        clearStunned(color);
+        setImmune(null);
       }
+      return;
+    }
 
-      setThink(false);
-      setDebug(`✅ Neural | ${((Date.now()-t0)/1000).toFixed(1)}s`);
-    },0);
-    return()=>clearTimeout(timer.current);
-  },[game,pd,sm,pts,wAI,bAI,cooldowns,training,postPhase,summonMode,devolveMode,rpgGameOver,recordHistory,trainOnGameEnd]);
+    // Gioco normale
+    if(!sel){
+      if(p && p.color === color && !stunned.has(sm[sq])){
+        setSel(sq);
+        const m = getMoves(sq);
+        setMoves(m);
+      }
+    } else {
+      // Controlla se clicca su una mossa valida
+      const moveTarget = moves.find(m => (m.type==='std'||m.type==='swap') && m.to===sq);
+      if(moveTarget){
+        if(moveTarget.type === 'swap'){
+          executeAction({type:'swap', from:sel, to:sq}, color);
+        } else {
+          executeAction({type:'std', from:sel, to:sq, promotion:moveTarget.promotion}, color);
+        }
+        if(!game.game_over()){
+          setPostPlayer(color);
+          setPostPhase(true);
+        }
+        return;
+      }
+      // Abilità Marcia Fantasma
+      const ghostMarch = moves.find(m => m.ability==='ghostMarch');
+      if(ghostMarch){
+        executeAction({type:'ability', ability:'ghostMarch', from:sel, cost:3}, color);
+        setPostPlayer(color);
+        setPostPhase(true);
+        return;
+      }
+      // Abilità Elisir
+      const elixir = moves.find(m => m.ability==='elixir');
+      if(elixir && p && p.color===color && sq!==sel){
+        executeAction({type:'ability', ability:'elixir', from:sel, targetSq:sq, cost:3}, color);
+        setPostPlayer(color);
+        setPostPhase(true);
+        return;
+      }
+      // Abilità Passo Spettrale
+      const spectral = moves.find(m => m.ability==='spectralStep');
+      if(spectral && !p){
+        executeAction({type:'ability', ability:'spectralStep', from:sel, targetSq:sq, cost:3}, color);
+        setPostPlayer(color);
+        setPostPhase(true);
+        return;
+      }
+      // Abilità Comando Reale
+      const royal = moves.find(m => m.ability==='royalCommand');
+      if(royal){
+        executeAction({type:'ability', ability:'royalCommand', from:sel, cost:4}, color);
+        return;
+      }
+      // Se clicca su un altro pezzo proprio, cambia selezione
+      if(p && p.color === color && !stunned.has(sm[sq])){
+        setSel(sq);
+        const m = getMoves(sq);
+        setMoves(m);
+      } else {
+        setSel(null);
+        setMoves([]);
+      }
+    }
+  }, [sel, moves, game, sm, pd, pts, stunned, immune, postPhase, postPlayer, commandMode, commandQueenSq, getMoves, executeAction, clearStunned]);
 
-  const exportBrain=()=>{const w=VNET.save();if(!w){alert('Nessun cervello');return;}const blob=new Blob([w],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`omega_brain_${Date.now()}.json`;a.click();URL.revokeObjectURL(url);};
-  const importBrain=(e)=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=(ev)=>{try{const ok=VNET.load(ev.target.result);if(!ok){alert('File non valido');return;}localStorage.setItem('omega_v83_net',VNET.save());alert('Cervello importato!');reset();}catch(err){alert('File non valido');}};reader.readAsText(file);};
-  const startTraining=async()=>{setTraining(true);setThink(false);const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});clearTimeout(timer.current);setDebug('🎮 Auto-training 20.000 partite...');if('wakeLock' in navigator){try{wakeLockRef.current=await navigator.wakeLock.request('screen');wakeLockRef.current.addEventListener('release',()=>setDebug('⚠️ Schermo sbloccato'));}catch(e){}}const result=await trainNetwork(20000,(p)=>setTrainProgress(`${p.current}/${p.total} | W:${p.wins.w} B:${p.wins.b}`),wakeLockRef);setTraining(false);setDebug(`✅ Training completato! ${result.total} partite`);reset();};
-  const reset=()=>{const g=new Chess(),s=buildState(g);setGame(g);setPd(s.pd);setSm(s.sm);setPts({w:0,b:0});setSel(null);setStd([]);setAbl([]);setThink(false);setLast(null);setDebug('');setTrainProgress('');setCooldowns({});setPostPhase(false);setPostPlayer(null);setSummonMode(false);setDevolveMode(false);setRpgGameOver(null);if(lvlUpTimer.current)clearTimeout(lvlUpTimer.current);gen.current++;globalIdCounter=0;gameHistory.current=[];};
+  // Reset partita
+  const reset = () => {
+    const g = new Chess();
+    const s = buildState(g);
+    setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
+    setSel(null); setMoves([]); setLast(null);
+    setPostPhase(false); setPostPlayer(null);
+    setStunned(new Set()); setImmune(null);
+    setCommandMode(false); setCommandQueenSq(null);
+    setGameOver(null);
+    globalIdCounter = 0;
+  };
 
-  const raw=game.board(),bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw,turn=game.turn(),sid=sel?sm[sel]:null,sd=sid?pd[sid]:null,sp=sel?game.get(sel):null,evo=sp?EVOLUTIONS[sp.type]:null,li=evo&&sd?evo.levels[sd.level-1]:null,cp=pts[turn];
-  const evoCosts={p:2,n:2,b:2,r:3,q:5},nextCost=sd?(evoCosts[sd.type]||2):2,cpct=Math.min(cp/nextCost*100,100);
-  const isAI=PERSONALITIES[turn==='w'?wAI:bAI]?.ai;
-  const evolvableSqs=postPhase&&postPlayer?getEvolvablePieces(game,pd,sm,pts,postPlayer).map(c=>c.sq):[];
-  let summonAdjSqs=[];if(summonMode&&summonQueenSq){const file=summonQueenSq.charCodeAt(0)-97,rank=parseInt(summonQueenSq[1]);for(const[df,dr]of[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]){const nf=file+df,nr=rank+dr;if(nf>=0&&nf<=7&&nr>=1&&nr<=8){const s=String.fromCharCode(97+nf)+nr;if(!game.get(s))summonAdjSqs.push(s);}}}
-  let devolveTargetSqs=[];if(devolveMode&&devolveTowerSq&&postPlayer){devolveTargetSqs=Object.entries(sm).filter(([sq,id])=>{const tp=game.get(sq);return tp&&tp.color===postPlayer&&tp.type!=='k'&&tp.type!=='r'&&pd[id]?.level>1;}).map(e=>e[0]);}
+  // Fine partita
+  useEffect(()=>{
+    if(game.game_over() && !gameOver){
+      if(game.in_checkmate()){
+        const winner = game.turn()==='w'?'b':'w';
+        setGameOver({winner, reason:'Scacco matto'});
+      } else {
+        setGameOver({winner:null, reason:'Patta'});
+      }
+    }
+  }, [game, gameOver]);
 
-  const Bar=({color,cur,onChange})=>(<div className="top-bar">{Object.entries(PERSONALITIES).map(([k,v])=>(<button key={k} className={`mode-btn ${cur===k?'active':''}`} style={cur===k?{background:v.color,borderColor:v.color}:{}} onClick={()=>onChange(k)}>{color==='w'?'⬜':'⬛'} {v.name}</button>))}{color==='w'&&<button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄</button>}{color==='b'&&<button className="train-btn" onClick={startTraining} disabled={training}>{training?'🏋️':'🧠'} Allena 20k</button>}</div>);
+  // Rendering
+  const raw=game.board(), bd=flipped?[...raw].reverse().map(r=>[...r].reverse()):raw, turn=game.turn();
+  const currentPrestige = calcPrestige(turn);
+  const sid=sel?sm[sel]:null, sd=sid?pd[sid]:null, sp=sel?game.get(sel):null;
+  const showGhostMarch = moves.some(m=>m.ability==='ghostMarch');
+  const showElixir = moves.some(m=>m.ability==='elixir');
+  const showSpectral = moves.some(m=>m.ability==='spectralStep');
+  const showRoyal = moves.some(m=>m.ability==='royalCommand');
+  const showFrenzy = moves.some(m=>m.ability==='frenzyCharge');
 
-  const gameIsOver = game.game_over() || rpgGameOver;
-  const winnerMessage = rpgGameOver 
-    ? `🏆 ${rpgGameOver.winner === 'w' ? '⬜ Bianco vince!' : '⬛ Nero vince!'}`
-    : (game.in_checkmate() ? (turn === 'w' ? '⬛ Nero vince!' : '⬜ Bianco vince!') : '🤝 Pareggio');
-  const subMessage = rpgGameOver ? 'Scacco matto RPG' : (game.in_checkmate() ? 'Scacco matto' : 'Patta');
+  // Raccogli tutte le case possibili per le mosse
+  const moveTargets = new Set(moves.filter(m=>m.type==='std'||m.type==='swap').map(m=>m.to));
+  const spectralTargets = showSpectral ? getSpectralTargets(sel, game) : [];
 
-  return(<div className="app">
-    {training&&<div style={{position:'fixed',inset:0,background:'#060913',zIndex:200,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:20}}><div style={{fontSize:48}}>🧠</div><div style={{fontSize:24,fontWeight:900,color:'#eab308'}}>TRAINING IN CORSO</div><div style={{fontSize:18,color:'#38bdf8'}}>{trainProgress||'Avvio...'}</div><div style={{fontSize:14,color:'#64748b',marginTop:20}}>Non chiudere questa pagina</div><div style={{fontSize:12,color:'#475569'}}>Partite: {brainStats.games}</div></div>}
-    <Bar color="b" cur={bAI} onChange={k=>{setBAI(k);setTimeout(reset,0);}}/>
-    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[bAI]?.color}`}}><div className="player-name">{thinking&&turn==='b'&&<div className="thinking-dot"/>}⬛ {PERSONALITIES[bAI]?.name}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span></div></div>
-    <div className="board-wrap"><div className="board">{bd.map((row,r)=>row.map((cell,c)=>{const fi=flipped?7-c:c,ri=flipped?r:7-r,sq='abcdefgh'[fi]+(ri+1),light=(fi+ri)%2!==0,isSel=sel===sq,isStd=stdM.some(m=>m.to===sq),isAbil=abilM.some(m=>m.to===sq),id=sm[sq],data=id?pd[id]:null,level=data?.level??1,evoCls=level===2?'evo2':'',isEvoHighlight=postPhase&&evolvableSqs.includes(sq),isSummonHighlight=summonMode&&summonAdjSqs.includes(sq),isDevolveTarget=devolveMode&&devolveTargetSqs.includes(sq),isSummoned=data?.summoned;return(<div key={sq} onClick={()=>click(sq)} className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${isEvoHighlight?'evo-highlight':''} ${isSummonHighlight?'summon-highlight':''} ${isDevolveTarget?'devolve-target-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>{isStd&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}{isAbil&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#f59e0b',boxShadow:'0 0 10px #f59e0b',zIndex:1}}/>}{isStd&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}{isAbil&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f59e0b',borderRadius:'3px',zIndex:1}}/>}{cell&&<span className={`piece piece-${cell.color} ${evoCls} ${isSummoned?'summoned-pawn':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}{level>=2&&<div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,0.8)',zIndex:3}}/>}</div>)}))}</div></div>
-    <div className="player-row"><div className="player-label" style={{borderLeft:`3px solid ${PERSONALITIES[wAI]?.color}`}}><div className="player-name">{thinking&&turn==='w'&&<div className="thinking-dot"/>}⬜ {PERSONALITIES[wAI]?.name}{isAI&&thinking&&<span style={{fontSize:10,color:'#38bdf8',marginLeft:4}}>Neural...</span>}</div>{last&&<div className="last-move-hint">{last.from} → {last.to}</div>}</div><div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}><span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span></div></div>
-    <div className="panel">{summonMode?<div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#ec4899',fontWeight:700}}>✨ Clicca una casella rosa per evocare</div>:devolveMode?<div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#22c55e',fontWeight:700}}>♻️ Scegli il pezzo da disevolvere (clicca o fuori)</div>:postPhase?<div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}><span style={{fontSize:12,fontWeight:700,color:'#0ea5e9'}}>⚡ Post-mossa: clicca un pezzo o fuori</span></div>:<><div><div className="charge-row"><span>🔋 {turn==='w'?'BIANCO':'NERO'}{isAI&&thinking?' · analisi...':''}{training?' · TRAINING...':''}</span><span style={{color:cp>=nextCost?'#22c55e':'#38bdf8'}}>{cp}/{nextCost}{cp>=nextCost?' • PRONTO':''}</span></div><div className="charge-track"><div style={{width:`${cpct}%`,height:'100%',background:cp>=nextCost?'#22c55e':'#38bdf8',transition:'width .3s',borderRadius:'2px'}}/></div></div><div className="panel-bottom"><div className="piece-label">{sd&&evo?<span style={{fontWeight:700,color:li?.color||'#94a3b8'}}>{sp&&ICONS[sp.color][sp.type]} {li?.name} Lv.{sd.level}<span style={{fontSize:9,color:'#64748b',marginLeft:4}}>{li?.desc}</span></span>:<span style={{color:'#475569'}}>Seleziona un pezzo</span>}</div><div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>{isKingInDanger(game,pd,sm,turn)?'SCACCO!':turn==='w'?'⬜':'⬛'}</div></div></>}</div>
-    <Bar color="w" cur={wAI} onChange={k=>{setWAI(k);setTimeout(reset,0);}}/>
-    {gameIsOver&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14,backdropFilter:'blur(8px)'}}><div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{winnerMessage}</div><div style={{fontSize:12,color:'#64748b'}}>{subMessage}</div><button onClick={()=>{reset();setRpgGameOver(null);}} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>RIVINCITA</button></div>}
-    <div className="debug-bar"><button onClick={exportBrain} style={{background:'none',border:'none',color:'#22c55e',fontSize:'9px',cursor:'pointer'}}>💾</button><label style={{color:'#38bdf8',fontSize:'9px',cursor:'pointer',marginLeft:'6px'}}>📤<input type="file" accept=".json" onChange={importBrain} style={{display:'none'}}/></label>🧠 Rete neurale | {brainStats.games} partite | {debug||'pronto'} {trainProgress}</div>
-  </div>);
+  function getSpectralTargets(sq, game){
+    if(!sq) return [];
+    const ff=sq.charCodeAt(0)-97, fr=parseInt(sq[1]);
+    const targets = [];
+    for(const[df,dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]){
+      let f=ff+df, r=fr+dr;
+      while(f>=0&&f<=7&&r>=1&&r<=8){
+        const tsq=String.fromCharCode(97+f)+r;
+        if(!game.get(tsq)) targets.push(tsq);
+        f+=df; r+=dr;
+      }
+    }
+    return targets;
+  }
+
+  return (
+    <div className="app">
+      <div className="top-bar">
+        <div className="prestige-badge">⭐ {currentPrestige}</div>
+        <button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄 Ruota</button>
+      </div>
+      <div className="player-row">
+        <div className="player-label" style={{borderLeft:'3px solid #f43f5e'}}>
+          <div className="player-name">⬛ Nero</div>
+          {last && <div className="last-move-hint">{last.from} → {last.to}</div>}
+        </div>
+        <div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>=2?'#22c55e':'#94a3b8'}}>
+          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.b}</span>
+        </div>
+      </div>
+      <div className="board-wrap">
+        <div className="board">
+          {bd.map((row,r)=>row.map((cell,c)=>{
+            const fi=flipped?7-c:c, ri=flipped?r:7-r, sq='abcdefgh'[fi]+(ri+1);
+            const light=(fi+ri)%2!==0;
+            const isSel=sel===sq;
+            const isMoveTarget=moveTargets.has(sq);
+            const isSpectralTarget=spectralTargets.includes(sq);
+            const id=sm[sq], data=id?pd[id]:null;
+            const level=data?.level??1;
+            const isEvo2=level===2;
+            const isStunned=stunned.has(id);
+            const isImmune=immune && immune.sq===sq;
+            const auraEnemy = turn ? isInEnemyAura(sq, turn) : false;
+            return (
+              <div key={sq} onClick={()=>click(sq)}
+                className={`cell ${light?'light':'dark'} ${isSel?'sel':''} ${auraEnemy?'aura-cell':''} ${isStunned?'stunned':''} ${isImmune?'immune-highlight':''} ${postPhase&&data&&data.level<2&&game.get(sq)?.color===postPlayer?'evo-highlight':''} ${last?.from===sq?'last-from':''} ${last?.to===sq?'last-to':''}`}>
+                {isMoveTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1}}/>}
+                {isSpectralTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#a78bfa',boxShadow:'0 0 10px #a78bfa',zIndex:1}}/>}
+                {isMoveTarget&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #f43f5e',borderRadius:'3px',zIndex:1}}/>}
+                {cell&&<span className={`piece piece-${cell.color} ${isEvo2?'evo2':''}`} style={{transform:lvlUp===sq?'scale(1.5)':'scale(1)',transition:'transform .15s',animation:lvlUp===sq?'lvlup 1s ease':undefined}}>{ICONS[cell.color][cell.type]}</span>}
+                {isEvo2&&<div style={{position:'absolute',inset:'3px',border:'2px solid #a855f7',borderRadius:'4px',pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,0.8)',zIndex:3}}/>}
+              </div>
+            );
+          }))}
+        </div>
+      </div>
+      <div className="player-row">
+        <div className="player-label" style={{borderLeft:'3px solid #f8fafc'}}>
+          <div className="player-name">⬜ Bianco</div>
+          {last && <div className="last-move-hint">{last.from} → {last.to}</div>}
+        </div>
+        <div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>=2?'#22c55e':'#94a3b8'}}>
+          <span style={{fontSize:16}}>⚡</span><span style={{fontSize:11}}>{pts.w}</span>
+        </div>
+      </div>
+      <div className="panel">
+        {commandMode ? (
+          <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',color:'#ec4899',fontWeight:700}}>👑 Scegli un alleato per il turno extra</div>
+        ) : postPhase ? (
+          <div style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+            <span style={{fontSize:12,fontWeight:700,color:'#0ea5e9'}}>⚡ Potenziamento: clicca un pezzo per evolvere, vuoto per passare</span>
+          </div>
+        ) : (
+          <>
+            <div>
+              <div className="charge-row">
+                <span>🔋 {turn==='w'?'BIANCO':'NERO'} | Prestigio {currentPrestige}</span>
+                <span>{pts[turn]}⚡</span>
+              </div>
+              <div className="charge-track"><div style={{width:`${Math.min(pts[turn]/10*100,100)}%`,height:'100%',background:'#38bdf8',transition:'width .3s',borderRadius:'2px'}}/></div>
+            </div>
+            <div className="panel-bottom">
+              <div className="piece-label">
+                {sd ? (
+                  <span style={{fontWeight:700}}>
+                    {sp&&ICONS[sp.color][sp.type]} {sd.level===2?EVOLUTIONS[sp.type]?.name:'Base'} Lv.{sd.level}
+                  </span>
+                ) : <span style={{color:'#475569'}}>Seleziona un pezzo</span>}
+              </div>
+              <div className="turn-pill" style={{color:turn==='w'?'#38bdf8':'#f43f5e'}}>
+                {isKingInDanger(game,pd,sm,turn,stunned)?'SCACCO!':turn==='w'?'⬜':'⬛'}
+              </div>
+            </div>
+            {sel && (
+              <div className="btn-row">
+                {showFrenzy && <button className="ability-btn" onClick={()=>{
+                  // Attiva selezione primo salto
+                  const frenzyMove = moves.find(m=>m.ability==='frenzyCharge');
+                  if(frenzyMove){
+                    setSel(sel);
+                    // Mostra solo le prime mosse disponibili
+                    setMoves(frenzyMove.jumps.map(j=>({type:'frenzyStep1', from:sel, to:j})));
+                  }
+                }} style={{borderColor:'#f59e0b',color:'#f59e0b'}}>⚔️ Carica (3⚡)</button>}
+                {showGhostMarch && <button className="ability-btn" onClick={()=>{
+                  executeAction({type:'ability', ability:'ghostMarch', from:sel, cost:3}, turn);
+                  setPostPlayer(turn);
+                  setPostPhase(true);
+                }} style={{borderColor:'#eab308',color:'#eab308'}}>👻 Marcia (3⚡)</button>}
+                {showElixir && <span style={{fontSize:10,color:'#fbbf24'}}>Seleziona alleato per Elisir</span>}
+                {showSpectral && <span style={{fontSize:10,color:'#a78bfa'}}>Clicca casa viola per teletrasporto</span>}
+                {showRoyal && <button className="ability-btn" onClick={()=>{
+                  executeAction({type:'ability', ability:'royalCommand', from:sel, cost:4}, turn);
+                }} style={{borderColor:'#ec4899',color:'#ec4899'}}>👑 Comando (4⚡)</button>}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      <div className="top-bar" style={{justifyContent:'center'}}>
+        <button onClick={reset} style={{padding:'4px 16px',background:'#1e293b',color:'#94a3b8',borderRadius:6,fontSize:12,cursor:'pointer'}}>🔄 Nuova Partita</button>
+      </div>
+      {gameOver && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.9)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14}}>
+          <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>
+            {gameOver.winner ? `🏆 ${gameOver.winner==='w'?'⬜ Bianco vince!':'⬛ Nero vince!'}` : '🤝 Pareggio'}
+          </div>
+          <div style={{fontSize:12,color:'#64748b'}}>{gameOver.reason}</div>
+          <button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer',marginTop:6}}>RIVINCITA</button>
+        </div>
+      )}
+    </div>
+  );
 }
+
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>

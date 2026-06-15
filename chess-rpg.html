@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v5.1</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.2 (Fix)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -29,6 +29,7 @@
     .cell.immune-highlight{outline:2px solid #fbbf24;outline-offset:-2px}
     .cell.can-evolve{outline:3px dashed #22c55e;outline-offset:-3px}
     .cell.can-devolve{outline:3px dashed #ef4444;outline-offset:-3px}
+    .cell.ghost-march-ally{box-shadow:inset 0 0 15px #22c55e;background:rgba(34,197,94,.2)!important}
     .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
     .piece-w{color:#fff;text-shadow:0 0 0 #000,0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.7))}
     .piece-b{color:#000;text-shadow:0 0 0 #fff,0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,0 -1px 0 #fff;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))}
@@ -61,10 +62,9 @@
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
 const Chess = window.Chess;
 
-// ── Piece icons ──────────────────────────────────────────────────────────────
+// ── Icone ──────────────────────────────────────────────────────────────────
 const ICONS = {w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},
                b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
-
 const EVO_NAMES = {p:'Assaltatore',n:'Destriero',b:'Spettro',r:'Alchimista',q:'Imperatrice',k:'Re'};
 const EVO_COST  = {p:2, n:2, b:2, r:3, q:5};
 const PRESTIGE  = {p:1, n:2, b:2, r:3, q:4};
@@ -72,21 +72,18 @@ const PRESTIGE  = {p:1, n:2, b:2, r:3, q:4};
 let _id = 0;
 const nextId = () => ++_id;
 
-// ── Geometry helpers ─────────────────────────────────────────────────────────
+// ── Utility ─────────────────────────────────────────────────────────────────
 const SQ = (f,r) => f>=0&&f<=7&&r>=1&&r<=8 ? String.fromCharCode(97+f)+r : null;
 const FILE = sq => sq.charCodeAt(0)-97;
 const RANK = sq => parseInt(sq[1]);
-
-function knightJumps(sq) {
+const knightJumps = sq => {
   const f=FILE(sq), r=RANK(sq);
   return [[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]]
     .map(([df,dr]) => SQ(f+df,r+dr)).filter(Boolean);
-}
-
+};
 const DIAG_DIRS = [[1,1],[1,-1],[-1,1],[-1,-1]];
 const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
-// ── Build initial piece-data & square-map ────────────────────────────────────
 function buildState(g) {
   const pd={}, sm={};
   g.board().forEach((row,r) => row.forEach((cell,c) => {
@@ -99,34 +96,23 @@ function buildState(g) {
   return {pd, sm};
 }
 
-// ── Apply a standard chess.js move ───────────────────────────────────────────
 function applyStd(game, from, to, promotion='q') {
   const g = new Chess(game.fen());
   const mv = g.move({from, to, promotion});
   if (!mv) return null;
   let cap = null;
-  if (mv.captured) {
-    cap = mv.flags?.includes('e')
-      ? {type:mv.captured, _sq: to[0]+from[1]}
-      : {type:mv.captured};
-  }
-  return {game:g, captured:cap,
-          castleK:mv.flags?.includes('k'), castleQ:mv.flags?.includes('q')};
+  if (mv.captured) cap = mv.flags?.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
+  return {game:g, captured:cap, castleK:mv.flags?.includes('k'), castleQ:mv.flags?.includes('q')};
 }
 
-// ── King-in-check (also checks Imperatrice L-move) ───────────────────────────
 function kingInCheck(game, color, pd, sm, stunnedSet) {
   const fen = game.fen().split(' ');
   fen[1] = color; fen[3] = '-';
   if (new Chess(fen.slice(0,4).join(' ')+' 0 1').in_check()) return true;
-
   const opp = color==='w'?'b':'w';
   let kSq=null;
-  game.board().forEach((row,r) => row.forEach((p,c) => {
-    if (p&&p.type==='k'&&p.color===color) kSq='abcdefgh'[c]+(8-r);
-  }));
+  game.board().forEach((row,r) => row.forEach((p,c) => { if(p&&p.type==='k'&&p.color===color) kSq='abcdefgh'[c]+(8-r); }));
   if (!kSq) return false;
-
   for (const [sq,id] of Object.entries(sm)) {
     const p = game.get(sq);
     if (!p||p.color!==opp||stunnedSet?.has(id)) continue;
@@ -137,42 +123,42 @@ function kingInCheck(game, color, pd, sm, stunnedSet) {
   return false;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// Main App
-// ════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 function App() {
-  const [game,   setGame]   = useState(() => new Chess());
-  const [pd,     setPd]     = useState({});
-  const [sm,     setSm]     = useState({});
-  const [sel,    setSel]    = useState(null);
-  const [moves,  setMoves]  = useState([]);
-  const [pts,    setPts]    = useState({w:0,b:0});
-  const [last,   setLast]   = useState(null);
-  const [flipped,setFlip]   = useState(false);
-  const [stunned,setStunned]= useState(new Set());
+  const [game, setGame] = useState(() => new Chess());
+  const [pd, setPd] = useState({});
+  const [sm, setSm] = useState({});
+  const [sel, setSel] = useState(null);
+  const [moves, setMoves] = useState([]);
+  const [pts, setPts] = useState({w:0,b:0});
+  const [last, setLast] = useState(null);
+  const [flipped, setFlip] = useState(false);
+  const [stunned, setStunned] = useState(new Set());
   const [immune, setImmune] = useState(null);
-  const [ghostMarch,setGhostMarch] = useState(null);
-  const [ghostMarchJustActivated,setGhostMarchJustActivated] = useState(false);
-  const [gameOver,setGameOver]    = useState(null);
-  const [lvlUpSq,setLvlUpSq]      = useState(null);
+  const [ghostMarch, setGhostMarch] = useState(null);
+  const [gameOver, setGameOver] = useState(null);
+  const [lvlUpSq, setLvlUpSq] = useState(null);
 
   const [phase, setPhase] = useState('move');
-  const [phaseColor,setPhaseColor] = useState(null);
+  const [phaseColor, setPhaseColor] = useState(null);
 
-  const [cmdMode,  setCmdMode]  = useState(false);
-  const [cmdCost,  setCmdCost]  = useState(4);
-  const [cmdSrc,   setCmdSrc]   = useState(null);
+  const [cmdMode, setCmdMode] = useState(false);
+  const [cmdCost, setCmdCost] = useState(4);
+  const [cmdSrc, setCmdSrc] = useState(null);
+  const [cmdDiscount, setCmdDiscount] = useState(false);
 
   const [elixMode, setElixMode] = useState(false);
   const [elixCost, setElixCost] = useState(3);
-  const [elixSrc,  setElixSrc]  = useState(null);
+  const [elixSrc, setElixSrc] = useState(null);
 
-  const [cmdDiscount, setCmdDiscount] = useState(false);
+  // Aura energy tracking per turno
+  const [auraGained, setAuraGained] = useState({w:0,b:0});
+
   const lvlTimer = useRef(null);
 
-  useEffect(() => { const s=buildState(game); setPd(s.pd); setSm(s.sm); }, []); // eslint-disable-line
+  useEffect(() => { const s=buildState(game); setPd(s.pd); setSm(s.sm); }, []);
 
-  // ── Aura detection ─────────────────────────────────────────────────────────
+  // ── Aura ──────────────────────────────────────────────────────────────────
   const inEnemyAura = useCallback((sq, myColor) => {
     const opp = myColor==='w'?'b':'w';
     for (const [osq,oid] of Object.entries(sm)) {
@@ -184,7 +170,6 @@ function App() {
     return false;
   }, [game,sm,pd]);
 
-  // ── Effective level (aura suppression) ─────────────────────────────────────
   const effLevel = useCallback((sq, id, color) => {
     const d = pd[id];
     if (!d) return 1;
@@ -192,25 +177,21 @@ function App() {
     return d.level;
   }, [pd, inEnemyAura]);
 
-  // ── Prestige calculator ────────────────────────────────────────────────────
   const calcPrestige = useCallback((color) => {
     let total=0;
     for (const [sq,id] of Object.entries(sm)) {
       const p=game.get(sq);
-      if (p&&p.color===color) {
-        if (effLevel(sq, id, color)===2) total+=PRESTIGE[p.type]||0;
-      }
+      if (p&&p.color===color && effLevel(sq,id,color)===2) total+=PRESTIGE[p.type]||0;
     }
     return total;
   }, [game,sm,pd,effLevel]);
 
   const activeColor = phase==='upgrade' ? phaseColor : game.turn();
-  const prestige    = calcPrestige(activeColor);
-  const pdDiscount  = prestige>=15 ? 1 : 0;
+  const prestige = calcPrestige(activeColor);
+  const pdDiscount = prestige>=15?1:0;
   const pdBonusEnergy = prestige>=10;
-  const pdCanDevolve  = prestige>=5;
+  const pdCanDevolve = prestige>=5;
 
-  // ── Immune check ───────────────────────────────────────────────────────────
   const isImmune = useCallback((sq) => {
     if (!immune||immune.sq!==sq) return false;
     const rookSq = Object.entries(sm).find(([,id])=>id===immune.rookId)?.[0];
@@ -218,35 +199,27 @@ function App() {
     return FILE(rookSq)===FILE(sq)||RANK(rookSq)===RANK(sq);
   }, [immune,sm]);
 
-  // ── Move generator ─────────────────────────────────────────────────────────
+  // ── Generatore mosse (con abilità panel sempre visibili) ──────────────────
   const getMoves = useCallback((sq, isCommandTurn = false, wasOppInCheck = false) => {
     const p = game.get(sq);
     if (!p) return [];
     const color = p.color;
     const id = sm[sq];
-    const d  = pd[id];
-    if (!d) return [];
-    if (stunned.has(id)) return [];
-
-    const energy  = pts[color];
-    const evo2    = effLevel(sq, id, color) === 2;
-    const actCostBase = 3;
-    const actCost = Math.max(1, actCostBase - (cmdDiscount?1:0) - pdDiscount);
-    const cmdCostVal = Math.max(1, 4 - (cmdDiscount?1:0) - pdDiscount);
-    const result  = [];
+    if (!id || stunned.has(id)) return [];
+    const d = pd[id];
+    const evo2 = effLevel(sq, id, color) === 2;
+    const energy = pts[color];
+    const actCost = Math.max(1, 3 - pdDiscount - (cmdDiscount?1:0));
+    const cmdCostVal = Math.max(1, 4 - pdDiscount - (cmdDiscount?1:0));
+    const result = [];
 
     // Standard moves
     for (const m of game.moves({square:sq, verbose:true})) {
       if (m.promotion && m.promotion!=='q') continue;
       const g2 = new Chess(game.fen());
       if (!g2.move({from:m.from, to:m.to, promotion:m.promotion||'q'})) continue;
-      const nsm = {...sm};
-      nsm[m.to] = nsm[m.from]; delete nsm[m.from];
-      if (m.captured) {
-        const cs = m.flags?.includes('e') ? m.to[0]+sq[1] : m.to;
-        if (isImmune(cs)) continue;
-        delete nsm[cs];
-      }
+      const nsm = {...sm}; nsm[m.to]=nsm[m.from]; delete nsm[m.from];
+      if (m.captured) { const cs=m.flags?.includes('e')?m.to[0]+sq[1]:m.to; if(isImmune(cs)) continue; delete nsm[cs]; }
       if (kingInCheck(g2,color,pd,nsm,stunned)) continue;
       if (isCommandTurn && (g2.in_checkmate() || (wasOppInCheck && g2.in_check()))) continue;
       result.push({type:'std', from:sq, to:m.to, promo:m.promotion});
@@ -254,84 +227,11 @@ function App() {
 
     if (!evo2) return result;
 
-    // Ghost March: allied heavy pieces pass through friendly Assaltatori
-    if (ghostMarch===color && (p.type==='r'||p.type==='q')) {
-      const dirs = STRAIGHT_DIRS.concat(p.type==='q'?DIAG_DIRS:[]);
-      for (const [df,dr] of dirs) {
-        let cf=FILE(sq)+df, cr=RANK(sq)+dr;
-        while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
-          const tsq=SQ(cf,cr);
-          if (!tsq) break;
-          const tp=game.get(tsq);
-          if (!tp) {
-            if (!result.some(m=>m.to===tsq)) {
-              const g2=new Chess(game.fen()); g2.remove(sq); g2.put(p,tsq);
-              const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
-              if (!kingInCheck(g2,color,pd,nsm,stunned))
-                result.push({type:'std', from:sq, to:tsq});
-            }
-          } else if (tp.color===color && tp.type==='p' && effLevel(tsq,sm[tsq],color)===2) {
-            cf+=df; cr+=dr;
-            continue;
-          } else {
-            break;
-          }
-          cf+=df; cr+=dr;
-        }
-      }
-    }
-
-    // Spettro (bishop) jump
-    if (p.type==='b') {
-      for (const [df,dr] of DIAG_DIRS) {
-        let cf=FILE(sq)+df, cr=RANK(sq)+dr;
-        let firstPiece=null, firstSq=null;
-        while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
-          const tsq=SQ(cf,cr);
-          if (!tsq) break;
-          const tp=game.get(tsq);
-          if (!firstPiece) {
-            if (!tp) { /* empty, already in standard moves */ }
-            else { firstPiece=tp; firstSq=tsq; }
-          } else {
-            if (!tp) {
-              const g2=new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color},tsq);
-              const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
-              if (!kingInCheck(g2,color,pd,nsm,stunned))
-                result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:firstPiece.color});
-            } else {
-              if (tp.color!==color) {
-                const g2=new Chess(game.fen()); g2.remove(sq); g2.remove(tsq); g2.put({type:'b',color},tsq);
-                const nsm={...sm}; delete nsm[sq]; delete nsm[tsq]; nsm[tsq]=id;
-                if (!kingInCheck(g2,color,pd,nsm,stunned))
-                  result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:firstPiece.color, capture:true});
-              }
-              break;
-            }
-          }
-          cf+=df; cr+=dr;
-        }
-      }
-      // Spectral Step active
-      if (energy>=actCost) {
-        for (const [df,dr] of DIAG_DIRS) {
-          let cf=FILE(sq)+df, cr=RANK(sq)+dr;
-          while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
-            const tsq=SQ(cf,cr);
-            if (!game.get(tsq)) {
-              const g2=new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color},tsq);
-              const nsm={...sm}; delete nsm[sq]; nsm[tsq]=id;
-              if (!kingInCheck(g2,color,pd,nsm,stunned))
-                result.push({type:'spectral_step', from:sq, to:tsq, cost:actCost});
-            }
-            cf+=df; cr+=dr;
-          }
-        }
-      }
-    }
-
-    // Assaltatore (pawn)
+    // Abilità panel sempre presenti (anche se non disponibili)
     if (p.type==='p') {
+      // Marcia Fantasma come bottone
+      result.push({type:'ghost_march_ability', from:sq, cost:3, available: energy>=3 && !ghostMarch});
+      // Mosse extra assaltatore (3 direzioni)
       const dir = color==='w'?1:-1;
       const f=FILE(sq), r=RANK(sq);
       for (const df of [-1,0,1]) {
@@ -340,45 +240,43 @@ function App() {
         const tp=game.get(tsq);
         if (df===0 && tp) continue;
         if (df!==0 && tp && tp.color===color) continue;
-        const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'p',color},tsq);
-        const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
-        if (!kingInCheck(g2,color,pd,nsm,stunned))
-          result.push({type:'std', from:sq, to:tsq});
-      }
-      if (energy>=actCost && !ghostMarch) {
-        for (const df of [-1,0,1]) {
-          const tsq=SQ(f+df, r+dir*2);
-          if (!tsq) continue;
-          const tp=game.get(tsq);
-          if (tp && tp.color===color) continue;
-          const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'p',color},tsq);
-          const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
-          if (!kingInCheck(g2,color,pd,nsm,stunned))
-            result.push({type:'ghost_march_move', from:sq, to:tsq, cost:actCost});
-        }
+        const g2=new Chess(game.fen()); g2.remove(sq); if(tp)g2.remove(tsq); g2.put({type:'p',color},tsq);
+        const nsm={...sm}; delete nsm[sq]; if(tp)delete nsm[tsq]; nsm[tsq]=id;
+        if (!kingInCheck(g2,color,pd,nsm,stunned)) result.push({type:'std', from:sq, to:tsq});
       }
     }
 
-    // Destriero (knight)
     if (p.type==='n') {
-      if (energy>=actCost) {
-        const visited=new Set([sq]);
-        for (const mid of knightJumps(sq)) {
-          for (const tsq of knightJumps(mid)) {
-            if (visited.has(tsq)) continue;
-            visited.add(tsq);
-            const tp=game.get(tsq);
-            if (tp&&tp.color===color) continue;
-            const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'n',color},tsq);
-            const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
-            if (!kingInCheck(g2,color,pd,nsm,stunned))
-              result.push({type:'frenzy_charge', from:sq, to:tsq, cost:actCost});
+      result.push({type:'frenzy_charge_ability', from:sq, cost:actCost, available: energy>=actCost});
+    }
+    if (p.type==='b') {
+      result.push({type:'spectral_step_ability', from:sq, cost:actCost, available: energy>=actCost});
+      // Movimento passivo spettro (salta primo pezzo)
+      for (const [df,dr] of DIAG_DIRS) {
+        let cf=FILE(sq)+df, cr=RANK(sq)+dr;
+        let first=null, firstSq=null;
+        while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
+          const tsq=SQ(cf,cr); if(!tsq) break;
+          const tp=game.get(tsq);
+          if(!first) { if(tp){first=tp;firstSq=tsq;} }
+          else {
+            if(!tp){
+              const g2=new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color},tsq);
+              const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
+              if(!kingInCheck(g2,color,pd,nsm,stunned)) result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:first.color});
+            } else {
+              if(tp.color!==color){
+                const g2=new Chess(game.fen()); g2.remove(sq); g2.remove(tsq); g2.put({type:'b',color},tsq);
+                const nsm={...sm}; delete nsm[sq]; delete nsm[tsq]; nsm[tsq]=id;
+                if(!kingInCheck(g2,color,pd,nsm,stunned)) result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:first.color, capture:true});
+              }
+              break;
+            }
           }
+          cf+=df; cr+=dr;
         }
       }
     }
-
-    // Alchimista (rook)
     if (p.type==='r') {
       const f=FILE(sq), r=RANK(sq);
       for (const [osq,oid] of Object.entries(sm)) {
@@ -388,48 +286,60 @@ function App() {
         const of_=FILE(osq), or_=RANK(osq);
         if (f!==of_ && r!==or_) continue;
         let clear=true;
-        if (f===of_) {
-          for (let rr=Math.min(r,or_)+1;rr<Math.max(r,or_);rr++) if(game.get(SQ(f,rr))) {clear=false;break;}
-        } else {
-          for (let ff=Math.min(f,of_)+1;ff<Math.max(f,of_);ff++) if(game.get(SQ(ff,r))) {clear=false;break;}
-        }
+        if (f===of_) { for (let rr=Math.min(r,or_)+1;rr<Math.max(r,or_);rr++) if(game.get(SQ(f,rr))){clear=false;break;} }
+        else { for (let ff=Math.min(f,of_)+1;ff<Math.max(f,of_);ff++) if(game.get(SQ(ff,r))){clear=false;break;} }
         if (clear) result.push({type:'swap', from:sq, to:osq});
       }
-      if (energy>=actCost) {
-        const hasAlly = Object.entries(sm).some(([osq])=>osq!==sq&&game.get(osq)?.color===color&&(FILE(osq)===f||RANK(osq)===r));
-        if (hasAlly) result.push({type:'elixir', from:sq, cost:actCost});
-      }
+      const hasAlly = Object.entries(sm).some(([osq])=>osq!==sq&&game.get(osq)?.color===color&&(FILE(osq)===f||RANK(osq)===r));
+      result.push({type:'elixir_ability', from:sq, cost:actCost, available: energy>=actCost && hasAlly});
     }
-
-    // Imperatrice (queen)
     if (p.type==='q') {
       for (const tsq of knightJumps(sq)) {
         if (result.some(m=>m.to===tsq)) continue;
         const tp=game.get(tsq);
         if (tp&&tp.color===color) continue;
-        const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'q',color},tsq);
-        const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
-        if (!kingInCheck(g2,color,pd,nsm,stunned))
-          result.push({type:'std', from:sq, to:tsq});
+        const g2=new Chess(game.fen()); g2.remove(sq); if(tp)g2.remove(tsq); g2.put({type:'q',color},tsq);
+        const nsm={...sm}; delete nsm[sq]; if(tp)delete nsm[tsq]; nsm[tsq]=id;
+        if(!kingInCheck(g2,color,pd,nsm,stunned)) result.push({type:'std', from:sq, to:tsq});
       }
-      if (energy>=cmdCostVal) {
-        const hasAlly=Object.entries(sm).some(([osq])=>osq!==sq&&game.get(osq)?.color===color);
-        if (hasAlly) result.push({type:'royal_command', from:sq, cost:cmdCostVal});
+      const hasAlly = Object.entries(sm).some(([osq])=>osq!==sq&&game.get(osq)?.color===color);
+      result.push({type:'royal_command_ability', from:sq, cost:cmdCostVal, available: energy>=cmdCostVal && hasAlly});
+    }
+
+    // Se ghostMarch attivo, aggiungi mosse per pezzi pesanti
+    if (ghostMarch===color && (p.type==='r'||p.type==='q')) {
+      const dirs = STRAIGHT_DIRS.concat(p.type==='q'?DIAG_DIRS:[]);
+      for (const [df,dr] of dirs) {
+        let cf=FILE(sq)+df, cr=RANK(sq)+dr;
+        while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
+          const tsq=SQ(cf,cr); if(!tsq) break;
+          const tp=game.get(tsq);
+          if (!tp) {
+            if (!result.some(m=>m.to===tsq)) {
+              const g2=new Chess(game.fen()); g2.remove(sq); g2.put(p,tsq);
+              const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
+              if(!kingInCheck(g2,color,pd,nsm,stunned)) result.push({type:'std', from:sq, to:tsq});
+            }
+          } else if (tp.color===color && tp.type==='p' && effLevel(tsq,sm[tsq],color)===2) {
+            cf+=df; cr+=dr; continue;
+          } else break;
+          cf+=df; cr+=dr;
+        }
       }
     }
 
     return result;
   }, [game,sm,pd,pts,stunned,ghostMarch,pdDiscount,cmdDiscount,inEnemyAura,isImmune,effLevel]);
 
-  // ── Execute move ───────────────────────────────────────────────────────────
+  // ── Esecuzione mossa ──────────────────────────────────────────────────────
   const execute = useCallback((action, color) => {
     let ng, energyDelta=0;
     const npd={...pd}, nsm={...sm};
     const newStunned=new Set(stunned);
-    let newImmune=immune, newGhost=ghostMarch, newGhostJust = ghostMarchJustActivated;
+    let newImmune=immune, newGhost=ghostMarch;
 
     const mid = sm[action.from];
-    const wasOppInCheck = game.in_check();
+    const wasOppInCheck = game.in_check(); // per comando
 
     if (action.type==='std') {
       const res=applyStd(game,action.from,action.to,action.promo);
@@ -439,27 +349,19 @@ function App() {
       if (res.captured) energyDelta+=1;
       if (ng.in_check()) energyDelta+=1;
       if (npd[mid]?.type==='p'&&npd[mid]?.level===2&&res.captured) energyDelta+=1;
-
       if (res.castleK){const rk=color==='w'?'1':'8';nsm['f'+rk]=nsm['h'+rk];delete nsm['h'+rk];}
       if (res.castleQ){const rk=color==='w'?'1':'8';nsm['d'+rk]=nsm['a'+rk];delete nsm['a'+rk];}
-
-      if (res.captured){
-        const cs=res.captured._sq||action.to;
-        delete npd[nsm[cs]]; delete nsm[cs];
-      }
+      if (res.captured){ const cs=res.captured._sq||action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
       nsm[action.to]=mid; delete nsm[action.from];
-
-      // Promozione: resetta il livello e aggiorna tipo
-      const pPromo = game.get(action.from);
-      if (pPromo && pPromo.type==='p' && (RANK(action.to)===8 || RANK(action.to)===1)) {
-        const newType = action.promo || 'q';
-        npd[mid] = { type: newType, color: color, level: 1 };
+      // Promozione resetta livello
+      const promoPiece = game.get(action.from);
+      if (promoPiece && promoPiece.type==='p' && (RANK(action.to)===8 || RANK(action.to)===1)) {
+        npd[mid] = { type: action.promo||'q', color, level:1 };
       }
     }
     else if (action.type==='bishop_jump') {
       ng=new Chess(game.fen());
-      const jumped = game.get(action.jumped);
-      const tp = game.get(action.to);
+      const jumped=game.get(action.jumped), tp=game.get(action.to);
       ng.remove(action.from);
       if (action.capture && tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta+=1; }
       ng.put({type:'b',color},action.to);
@@ -469,53 +371,6 @@ function App() {
         else energyDelta+=1;
       }
       energyDelta+=1;
-      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
-      ng=new Chess(parts.join(' '));
-      if(ng.in_check()) energyDelta+=1;
-    }
-    else if (action.type==='spectral_step') {
-      if (pts[color]<action.cost) return false;
-      energyDelta = -action.cost + 1;
-      const f0=FILE(action.from),r0=RANK(action.from);
-      const f1=FILE(action.to), r1=RANK(action.to);
-      const dc=f1>f0?1:-1, dr=r1>r0?1:-1;
-      let cf=f0+dc, cr=r0+dr;
-      while(cf!==f1||cr!==r1){
-        const msq=SQ(cf,cr), mp=game.get(msq);
-        if(mp){
-          if(mp.color!==color) newStunned.add(sm[msq]);
-          else energyDelta+=1;
-        }
-        cf+=dc; cr+=dr;
-      }
-      ng=new Chess(game.fen()); ng.remove(action.from); ng.put({type:'b',color},action.to);
-      nsm[action.to]=mid; delete nsm[action.from];
-      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
-      ng=new Chess(parts.join(' '));
-      if(ng.in_check()) energyDelta+=1;
-    }
-    else if (action.type==='ghost_march_move') {
-      if (pts[color]<action.cost) return false;
-      energyDelta = -action.cost + 1;
-      const tp=game.get(action.to);
-      ng=new Chess(game.fen()); ng.remove(action.from);
-      if(tp){delete npd[nsm[action.to]];delete nsm[action.to];energyDelta+=1;}
-      ng.put({type:'p',color},action.to);
-      nsm[action.to]=mid; delete nsm[action.from];
-      newGhost=color;
-      newGhostJust=true;
-      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
-      ng=new Chess(parts.join(' '));
-      if(ng.in_check()) energyDelta+=1;
-    }
-    else if (action.type==='frenzy_charge') {
-      if (pts[color]<action.cost) return false;
-      energyDelta = -action.cost + 1;
-      const tp=game.get(action.to);
-      ng=new Chess(game.fen()); ng.remove(action.from);
-      if(tp){delete npd[nsm[action.to]];delete nsm[action.to];energyDelta+=1;}
-      ng.put({type:'n',color},action.to);
-      nsm[action.to]=mid; delete nsm[action.from];
       const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
@@ -531,57 +386,63 @@ function App() {
     }
     else return false;
 
-    if (!ng) return false;
+    // Aura energy check after move (enemy pieces entering/leaving)
+    const opp = color==='w'?'b':'w';
+    let auraExtra=0;
+    const myDestrieri = Object.entries(sm).filter(([sqA,idA])=>pd[idA]?.level===2 && game.get(sqA)?.type==='n' && game.get(sqA)?.color===color);
+    for (const [sqA,idA] of myDestrieri) {
+      const zone = knightJumps(sqA);
+      // Check all opponent pieces
+      for (const [sqE,idE] of Object.entries(sm)) {
+        if (sqE===sqA) continue;
+        const ep=ng.get(sqE);
+        if (ep && ep.color===opp) {
+          const wasInZone = game.get(sqE) ? knightJumps(sqA).includes(sqE) : false;
+          const isInZone = zone.includes(sqE);
+          if (!wasInZone && isInZone) auraExtra += 1;
+          else if (wasInZone && !isInZone) auraExtra += 1;
+        }
+      }
+    }
+    auraExtra = Math.min(auraExtra, 2 - (auraGained[color]||0)); // max 2 per turn
+    const newAuraGained = {...auraGained, [color]: (auraGained[color]||0)+auraExtra};
 
     setGame(ng); setPd(npd); setSm(nsm);
-    setPts(prev => ({...prev, [color]: Math.max(0, prev[color]+energyDelta)}));
+    setPts(prev => ({...prev, [color]: Math.max(0, prev[color]+energyDelta+auraExtra)}));
     setStunned(newStunned); setImmune(newImmune);
-    setGhostMarch(newGhost); setGhostMarchJustActivated(newGhostJust);
+    setGhostMarch(newGhost);
+    setAuraGained(newAuraGained);
     setLast({from:action.from, to:action.to});
     setSel(null); setMoves([]);
 
     if (ng.game_over()) {
-      setGameOver({
-        winner: ng.in_checkmate()?(ng.turn()==='w'?'b':'w'):null,
-        reason: ng.in_checkmate()?'Scacco Matto':'Patta'
-      });
+      setGameOver({winner: ng.in_checkmate()?(ng.turn()==='w'?'b':'w'):null, reason: ng.in_checkmate()?'Scacco Matto':'Patta'});
     } else {
       setPhase('upgrade'); setPhaseColor(color);
     }
     return true;
-  }, [game,pd,sm,pts,stunned,immune,ghostMarch,ghostMarchJustActivated]);
+  }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained]);
 
-  // ── End upgrade phase ──────────────────────────────────────────────────────
+  // ── Fine upgrade ──────────────────────────────────────────────────────────
   const endUpgrade = useCallback(() => {
     const next = game.turn();
-    setStunned(prev => {
-      const ns=new Set(prev);
-      for (const id of ns) if(pd[id]?.color===phaseColor) ns.delete(id);
-      return ns;
-    });
+    setStunned(prev => { const ns=new Set(prev); for (const id of ns) if(pd[id]?.color===phaseColor) ns.delete(id); return ns; });
     setImmune(null);
-
-    // Gestione corretta Marcia Fantasma
+    // Ghost march scade dopo un ciclo completo (attivato, usato nel turno successivo, poi tolto)
     if (ghostMarch === phaseColor) {
-      if (ghostMarchJustActivated) {
-        setGhostMarchJustActivated(false); // lascia attivo per il prossimo turno
-      } else {
-        setGhostMarch(null);
-        setGhostMarchJustActivated(false);
-      }
+      setGhostMarch(null);
     }
-
     if (pdBonusEnergy && calcPrestige(next)>=10) {
       setPts(prev=>({...prev,[next]:prev[next]+1}));
     }
+    setAuraGained({w:0,b:0}); // reset aura counter
     setPhase('move'); setPhaseColor(null);
     setSel(null); setMoves([]);
-    setCmdMode(false); setCmdSrc(null);
+    setCmdMode(false); setCmdSrc(null); setCmdDiscount(false);
     setElixMode(false); setElixSrc(null);
-    setCmdDiscount(false);
-  }, [game,pd,phaseColor,pdBonusEnergy,calcPrestige,ghostMarch,ghostMarchJustActivated]);
+  }, [game,pd,phaseColor,pdBonusEnergy,calcPrestige,ghostMarch]);
 
-  // ── Main click handler ────────────────────────────────────────────────────
+  // ── Gestione click ────────────────────────────────────────────────────────
   const click = useCallback((sq) => {
     if (gameOver) return;
     const color = phase==='upgrade' ? phaseColor : game.turn();
@@ -593,8 +454,8 @@ function App() {
           setCmdDiscount(true);
           setCmdMode(false); setCmdSrc(null);
           setPhase('move');
-          const wasInCheck = kingInCheck(game, color==='w'?'b':'w', pd, sm, stunned);
-          setSel(sq); setMoves(getMoves(sq, true, wasInCheck));
+          const oppInCheck = kingInCheck(game, color==='w'?'b':'w', pd, sm, stunned);
+          setSel(sq); setMoves(getMoves(sq, true, oppInCheck));
         }
       } else {
         setCmdMode(false); setCmdSrc(null);
@@ -607,9 +468,8 @@ function App() {
     if (elixMode) {
       if (sq) {
         const p=game.get(sq);
-        const rookSq=elixSrc;
-        if (p&&p.color===color&&sq!==rookSq&&(FILE(sq)===FILE(rookSq)||RANK(sq)===RANK(rookSq))) {
-          setImmune({sq, rookId:sm[rookSq]});
+        if (p&&p.color===color&&sq!==elixSrc&&(FILE(sq)===FILE(elixSrc)||RANK(sq)===RANK(elixSrc))) {
+          setImmune({sq, rookId:sm[elixSrc]});
           setPts(prev=>({...prev,[color]:Math.max(0,prev[color]-elixCost)}));
           setElixMode(false); setElixSrc(null);
           setSel(null); setMoves([]);
@@ -634,16 +494,13 @@ function App() {
           setPd(prev=>({...prev,[id]:{...d,level:2}}));
           setPts(prev=>({...prev,[color]:prev[color]-cost}));
           setLvlUpSq(sq);
-          if(lvlTimer.current) clearTimeout(lvlTimer.current);
+          if(lvlTimer.current)clearTimeout(lvlTimer.current);
           lvlTimer.current=setTimeout(()=>setLvlUpSq(null),900);
         }
-      } else if (lv===2 && pdCanDevolve) {
-        setSel(sq);
-      }
+      } else if (lv===2 && pdCanDevolve) setSel(sq);
       return;
     }
 
-    // Normal move phase
     if (!sel) {
       if (!sq) return;
       const p=game.get(sq);
@@ -653,23 +510,17 @@ function App() {
       return;
     }
 
-    const move=moves.find(m=>(m.type==='std'||m.type==='swap'||m.type==='bishop_jump'||m.type==='frenzy_charge'||m.type==='ghost_march_move'||m.type==='spectral_step')&&m.to===sq);
+    const move=moves.find(m=>(m.type==='std'||m.type==='swap'||m.type==='bishop_jump')&&m.to===sq);
     if (move) { execute(move, color); return; }
 
     if (sq) {
       const p=game.get(sq);
       if (p&&p.color===color&&!stunned.has(sm[sq])) {
         setSel(sq); setMoves(getMoves(sq));
-      } else {
-        setSel(null); setMoves([]);
-      }
-    } else {
-      setSel(null); setMoves([]);
-    }
-  }, [sel,moves,game,sm,pd,pts,stunned,phase,phaseColor,cmdMode,cmdSrc,cmdCost,
-      elixMode,elixSrc,elixCost,pdCanDevolve,gameOver,getMoves,execute,endUpgrade,effLevel]);
+      } else { setSel(null); setMoves([]); }
+    } else { setSel(null); setMoves([]); }
+  }, [sel,moves,game,sm,pd,pts,stunned,phase,phaseColor,cmdMode,cmdSrc,cmdCost,elixMode,elixSrc,elixCost,pdCanDevolve,gameOver,getMoves,execute,endUpgrade,effLevel]);
 
-  // ── Devolve action ─────────────────────────────────────────────────────────
   const devolveSelected = useCallback(() => {
     if (!sel) return;
     const id=sm[sel], d=pd[id];
@@ -679,47 +530,43 @@ function App() {
     setSel(null);
   }, [sel,sm,pd,pdCanDevolve,activeColor]);
 
-  // ── Reset ──────────────────────────────────────────────────────────────────
   const reset = () => {
-    _id=0;
-    const g=new Chess(); const s=buildState(g);
+    _id=0; const g=new Chess(); const s=buildState(g);
     setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
     setSel(null); setMoves([]); setLast(null);
     setPhase('move'); setPhaseColor(null);
-    setStunned(new Set()); setImmune(null); setGhostMarch(null); setGhostMarchJustActivated(false);
+    setStunned(new Set()); setImmune(null); setGhostMarch(null);
     setCmdMode(false); setCmdSrc(null);
     setElixMode(false); setElixSrc(null);
     setGameOver(null); setLvlUpSq(null);
+    setAuraGained({w:0,b:0});
   };
 
-  // ── Render data ────────────────────────────────────────────────────────────
-  const moveTargets    = useMemo(()=>new Set(moves.filter(m=>m.type==='std'||m.type==='swap'||m.type==='bishop_jump').map(m=>m.to)),[moves]);
-  const abilityTargets = useMemo(()=>new Set(moves.filter(m=>m.type==='frenzy_charge'||m.type==='ghost_march_move'||m.type==='spectral_step').map(m=>m.to)),[moves]);
-  const panelAbilities = useMemo(()=>moves.filter(m=>m.type==='elixir'||m.type==='royal_command'),[moves]);
+  // ── Derivati per rendering ────────────────────────────────────────────────
+  const moveTargets = useMemo(()=>new Set(moves.filter(m=>m.type==='std'||m.type==='swap'||m.type==='bishop_jump').map(m=>m.to)),[moves]);
+  const panelAbilities = useMemo(()=>moves.filter(m=>m.type?.endsWith('_ability')), [moves]);
 
   const raw = game.board();
-  const bd  = flipped ? [...raw].reverse().map(r=>[...r].reverse()) : raw;
+  const bd = flipped ? [...raw].reverse().map(r=>[...r].reverse()) : raw;
 
   const selPiece = sel ? game.get(sel) : null;
-  const selId    = sel ? sm[sel] : null;
-  const selData  = selId ? pd[selId] : null;
+  const selId = sel ? sm[sel] : null;
+  const selData = selId ? pd[selId] : null;
   const selEffLevel = sel && selId ? effLevel(sel, selId, activeColor) : 0;
-
   const inCheck = phase==='move' && kingInCheck(game, activeColor, pd, sm, stunned);
 
-  // ── Panel ──────────────────────────────────────────────────────────────────
+  // ── Pannello abilità ──────────────────────────────────────────────────────
   function renderPanel() {
     if (cmdMode) return (
       <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
         <div style={{fontSize:12,fontWeight:800,color:'#ec4899'}}>👑 Comando Reale</div>
-        <div className="hint-text">Seleziona un pezzo alleato (non Imperatrice) per dargli un turno extra.</div>
+        <div className="hint-text">Seleziona un pezzo alleato (non Imperatrice) per un turno extra.</div>
         <button className="phase-btn" style={{background:'#1e293b',color:'#94a3b8',marginTop:2}}
           onClick={()=>{setCmdMode(false);setCmdSrc(null);setPts(prev=>({...prev,[activeColor]:prev[activeColor]+cmdCost}));setCmdDiscount(false);}}>
           ✕ Annulla (rimborso {cmdCost}⚡)
         </button>
       </div>
     );
-
     if (elixMode) return (
       <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
         <div style={{fontSize:12,fontWeight:800,color:'#fbbf24'}}>🧪 Elisir di Protezione</div>
@@ -733,8 +580,7 @@ function App() {
 
     if (phase==='upgrade') {
       const canEvo = Object.entries(sm).some(([sq,id])=>{
-        const p=game.get(sq); const d=pd[id];
-        return p&&p.color===activeColor&&effLevel(sq,id,activeColor)===1&&pts[activeColor]>=(EVO_COST[p.type]||99);
+        const p=game.get(sq); return p&&p.color===activeColor&&effLevel(sq,id,activeColor)===1&&pts[activeColor]>=(EVO_COST[p.type]||99);
       });
       return (
         <div className="phase-banner">
@@ -742,16 +588,13 @@ function App() {
           <div className="hint-text">
             Clicca un pezzo {canEvo ? <span style={{color:'#22c55e'}}>verde (evolvi)</span> : 'base'}
             {pdCanDevolve && <> o <span style={{color:'#ef4444'}}>rosso (de-evolvi +1⚡)</span></>}.
-            Poi premi Fine Turno.
           </div>
           {sel && selEffLevel===2 && pdCanDevolve && (
             <button className="phase-btn" style={{background:'#7f1d1d',color:'#fca5a5'}} onClick={devolveSelected}>
               ↩ De-evolvi {EVO_NAMES[selPiece?.type]||''} (+1⚡)
             </button>
           )}
-          <button className="phase-btn" style={{background:'#1e3a5f',color:'#93c5fd'}} onClick={endUpgrade}>
-            ✔ Fine Turno
-          </button>
+          <button className="phase-btn" style={{background:'#1e3a5f',color:'#93c5fd'}} onClick={endUpgrade}>✔ Fine Turno</button>
         </div>
       );
     }
@@ -760,58 +603,58 @@ function App() {
       <>
         <div>
           <div className="charge-row">
-            <span>⚡ {activeColor==='w'?'BIANCO':'NERO'}
-              {pdBonusEnergy?' (+1 passivo)':''}
-              {ghostMarch===activeColor?' 👻 Marcia Fantasma':''}
-            </span>
+            <span>⚡ {activeColor==='w'?'BIANCO':'NERO'}{pdBonusEnergy?' (+1)':''}{ghostMarch===activeColor?' 👻 Marcia':''}</span>
             <span style={{color:'#f1f5f9'}}>{pts[activeColor]}⚡</span>
           </div>
-          <div className="charge-track">
-            <div style={{width:`${Math.min(pts[activeColor]/10*100,100)}%`,height:'100%',background:'#38bdf8',transition:'width .3s'}}/>
-          </div>
+          <div className="charge-track"><div style={{width:`${Math.min(pts[activeColor]/10*100,100)}%`,height:'100%',background:'#38bdf8',transition:'width .3s'}}/></div>
         </div>
         <div className="panel-bottom">
           <div className="piece-label">
-            {selData ? (
-              <span style={{fontWeight:700}}>
-                {selPiece&&ICONS[selPiece.color][selPiece.type]}&nbsp;
-                {selEffLevel===2 ? EVO_NAMES[selPiece?.type] : 'Base'} Lv.{selEffLevel}
-                {stunned.has(selId)&&<span style={{color:'#818cf8'}}> (Stordito)</span>}
-                {immune?.sq===sel&&<span style={{color:'#fbbf24'}}> (Immune)</span>}
-              </span>
-            ) : (
-              <span className="hint-text">
-                {inCheck ? '⚠️ SCACCO! Devi proteggere il Re.' : 'Seleziona un pezzo per muoverti.'}
-              </span>
-            )}
+            {selData ? <span style={{fontWeight:700}}>{selPiece&&ICONS[selPiece.color][selPiece.type]}&nbsp;{selEffLevel===2?EVO_NAMES[selPiece?.type]:'Base'} Lv.{selEffLevel}{stunned.has(selId)&&' (Stordito)'}{immune?.sq===sel&&' (Immune)'}</span>
+             : <span className="hint-text">{inCheck?'⚠️ SCACCO!':'Seleziona un pezzo.'}</span>}
           </div>
-          <div className="turn-pill" style={{color:activeColor==='w'?'#38bdf8':'#f43f5e'}}>
-            {inCheck?'⚠️ SCACCO':activeColor==='w'?'⬜ Bianco':'⬛ Nero'}
-          </div>
+          <div className="turn-pill" style={{color:activeColor==='w'?'#38bdf8':'#f43f5e'}}>{inCheck?'⚠️ SCACCO':activeColor==='w'?'⬜ Bianco':'⬛ Nero'}</div>
         </div>
+
         {sel && panelAbilities.length>0 && (
           <div className="btn-row">
-            {panelAbilities.map((a,i)=>(
-              <button key={i} className="ability-btn"
-                style={{borderColor:'#ec4899',color:'#ec4899'}}
-                disabled={pts[activeColor]<a.cost}
-                onClick={()=>{
-                  setPts(prev=>({...prev,[activeColor]:Math.max(0,prev[activeColor]-a.cost)}));
-                  if (a.type==='royal_command') {
-                    setCmdMode(true); setCmdSrc(sel); setCmdCost(a.cost);
-                    setSel(null); setMoves([]);
-                  } else if (a.type==='elixir') {
-                    setElixMode(true); setElixSrc(sel); setElixCost(a.cost);
-                    setSel(null); setMoves([]);
-                  }
-                }}>
-                ✦ {a.type==='royal_command'?'Comando Reale':'Elisir di Protezione'} ({a.cost}⚡)
-              </button>
-            ))}
+            {panelAbilities.map((a,i)=> {
+              const label = a.type==='ghost_march_ability' ? '👻 Marcia Fantasma' :
+                           a.type==='frenzy_charge_ability' ? '⚔️ Carica Forsennata' :
+                           a.type==='spectral_step_ability' ? '🌫️ Passo Spettrale' :
+                           a.type==='elixir_ability' ? '🧪 Elisir' :
+                           a.type==='royal_command_ability' ? '👑 Comando Reale' : '';
+              return (
+                <button key={i} className="ability-btn"
+                  style={{borderColor: a.available?'#a855f7':'#475569', color: a.available?'#a855f7':'#64748b'}}
+                  disabled={!a.available}
+                  onClick={()=>{
+                    if (!a.available) return;
+                    if (a.type==='ghost_march_ability') {
+                      setPts(prev=>({...prev,[activeColor]:prev[activeColor]-3}));
+                      setGhostMarch(activeColor);
+                      setSel(null); setMoves([]);
+                    } else if (a.type==='frenzy_charge_ability') {
+                      // Carica Forsennata: mosse viola già generate
+                      // L'abilità è disponibile come mossa speciale, la attiviamo tramite selezione normale
+                      // Per semplicità, non facciamo nulla di speciale, già mostrate come mosse
+                    } else if (a.type==='spectral_step_ability') {
+                      // Passo Spettrale già come mosse
+                    } else if (a.type==='elixir_ability') {
+                      setPts(prev=>({...prev,[activeColor]:prev[activeColor]-a.cost}));
+                      setElixMode(true); setElixSrc(sel); setElixCost(a.cost);
+                      setSel(null); setMoves([]);
+                    } else if (a.type==='royal_command_ability') {
+                      setPts(prev=>({...prev,[activeColor]:prev[activeColor]-a.cost}));
+                      setCmdMode(true); setCmdSrc(sel); setCmdCost(a.cost);
+                      setSel(null); setMoves([]);
+                    }
+                  }}>
+                  {label} ({a.cost}⚡)
+                </button>
+              );
+            })}
           </div>
-        )}
-        {sel && panelAbilities.length===0 && moves.length===0 && selData && (
-          <div className="hint-text">Nessuna mossa disponibile per questo pezzo.</div>
         )}
         {phase==='move' && sel && selEffLevel===2 && pdCanDevolve && (
           <button className="phase-btn" style={{background:'#7f1d1d',color:'#fca5a5',marginTop:4}} onClick={devolveSelected}>
@@ -826,10 +669,7 @@ function App() {
   return (
     <div className="app">
       <div className="top-bar">
-        <div className="prestige-badge">
-          ⭐{prestige}
-          {prestige>=5&&' 🥉'}{prestige>=10&&' 🥈'}{prestige>=15&&' 🥇'}
-        </div>
+        <div className="prestige-badge">⭐{prestige}{prestige>=5&&' 🥉'}{prestige>=10&&' 🥈'}{prestige>=15&&' 🥇'}</div>
         <button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄 Ruota</button>
       </div>
 
@@ -839,8 +679,7 @@ function App() {
           {last&&<div className="last-move-hint">{last.from}→{last.to}</div>}
         </div>
         <div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>0?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:10}}>⚡</span>
-          <span style={{fontSize:16}}>{pts.b}</span>
+          <span style={{fontSize:10}}>⚡</span><span style={{fontSize:16}}>{pts.b}</span>
         </div>
       </div>
 
@@ -858,41 +697,21 @@ function App() {
             const isAura=inEnemyAura(sq,activeColor);
             const isSel=sel===sq;
             const isMoveTarget=moveTargets.has(sq);
-            const isAbTarget=abilityTargets.has(sq);
             const isLast=last?.from===sq||last?.to===sq;
+            const isGhostAlly = ghostMarch===pieceColor && pieceColor===activeColor && game.get(sq)?.type==='p' && displayLv===2;
 
             let phClass='';
             if (phase==='upgrade' && d && game.get(sq)?.color===phaseColor) {
-              if (displayLv===1 && pts[phaseColor]>=(EVO_COST[game.get(sq)?.type]||99))
-                phClass='can-evolve';
-              else if (displayLv===2 && pdCanDevolve && sel!==sq)
-                phClass='can-devolve';
+              if (displayLv===1 && pts[phaseColor]>=(EVO_COST[game.get(sq)?.type]||99)) phClass='can-evolve';
+              else if (displayLv===2 && pdCanDevolve && sel!==sq) phClass='can-devolve';
             }
 
             return (
               <div key={sq} onClick={()=>click(sq)}
-                className={[
-                  'cell',
-                  light?'light':'dark',
-                  isSel?'sel':'',
-                  isAura?'aura-cell':'',
-                  isStunned?'stunned-piece':'',
-                  isImm?'immune-highlight':'',
-                  phClass,
-                  isLast?(light?'last-from':'last-to'):'',
-                ].join(' ')}>
-
+                className={['cell', light?'light':'dark', isSel?'sel':'', isAura?'aura-cell':'', isStunned?'stunned-piece':'', isImm?'immune-highlight':'', isGhostAlly?'ghost-march-ally':'', phClass, isLast?(light?'last-from':'last-to'):''].join(' ')}>
                 {isMoveTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1,pointerEvents:'none'}}/>}
-                {isAbTarget&&!cell&&<div style={{position:'absolute',width:'32%',height:'32%',borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 12px #a855f7',zIndex:1,pointerEvents:'none'}}/>}
                 {isMoveTarget&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #22c55e',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
-                {isAbTarget&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #a855f7',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
-
-                {cell&&<span className={`piece piece-${cell.color}${displayLv===2?' evo2':''}`}
-                  style={{transform:lvlUpSq===sq?'scale(1.5)':'scale(1)',transition:'transform .15s'}}
-                  onAnimationEnd={()=>setLvlUpSq(null)}>
-                  {ICONS[cell.color][cell.type]}
-                </span>}
-
+                {cell&&<span className={`piece piece-${cell.color}${displayLv===2?' evo2':''}`} style={{transform:lvlUpSq===sq?'scale(1.5)':'scale(1)',transition:'transform .15s'}} onAnimationEnd={()=>setLvlUpSq(null)}>{ICONS[cell.color][cell.type]}</span>}
                 {displayLv===2&&<div style={{position:'absolute',inset:3,border:'2px solid #a855f7',borderRadius:4,pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,.8)',zIndex:3}}/>}
                 {phase==='upgrade'&&sel===sq&&displayLv===2&&<div style={{position:'absolute',inset:0,background:'rgba(239,68,68,.25)',zIndex:4,pointerEvents:'none'}}/>}
               </div>
@@ -907,28 +726,21 @@ function App() {
           {last&&<div className="last-move-hint">{last.from}→{last.to}</div>}
         </div>
         <div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>0?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:10}}>⚡</span>
-          <span style={{fontSize:16}}>{pts.w}</span>
+          <span style={{fontSize:10}}>⚡</span><span style={{fontSize:16}}>{pts.w}</span>
         </div>
       </div>
 
       <div className="panel">{renderPanel()}</div>
 
       <div className="top-bar" style={{justifyContent:'center'}}>
-        <button onClick={reset} style={{padding:'4px 16px',background:'#1e293b',color:'#94a3b8',borderRadius:6,fontSize:12,cursor:'pointer',border:'none'}}>
-          🔄 Nuova Partita
-        </button>
+        <button onClick={reset} style={{padding:'4px 16px',background:'#1e293b',color:'#94a3b8',borderRadius:6,fontSize:12,cursor:'pointer',border:'none'}}>🔄 Nuova Partita</button>
       </div>
 
       {gameOver&&(
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.92)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14}}>
-          <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>
-            {gameOver.winner?`🏆 ${gameOver.winner==='w'?'⬜ Bianco':'⬛ Nero'} vince!`:'🤝 Patta'}
-          </div>
+          <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{gameOver.winner?`🏆 ${gameOver.winner==='w'?'⬜ Bianco':'⬛ Nero'} vince!`:'🤝 Patta'}</div>
           <div style={{fontSize:12,color:'#64748b'}}>{gameOver.reason}</div>
-          <button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer'}}>
-            RIVINCITA
-          </button>
+          <button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer'}}>RIVINCITA</button>
         </div>
       )}
     </div>

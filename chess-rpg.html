@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v5.0</title>
+  <title>Chess RPG – L'Esercito dell'Anima v5.1</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -83,11 +83,10 @@ function knightJumps(sq) {
     .map(([df,dr]) => SQ(f+df,r+dr)).filter(Boolean);
 }
 
-// Diagonal directions for bishop/queen sliding
 const DIAG_DIRS = [[1,1],[1,-1],[-1,1],[-1,-1]];
 const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
-// ── Build initial piece-data & square-map from a Chess instance ──────────────
+// ── Build initial piece-data & square-map ────────────────────────────────────
 function buildState(g) {
   const pd={}, sm={};
   g.board().forEach((row,r) => row.forEach((cell,c) => {
@@ -100,7 +99,7 @@ function buildState(g) {
   return {pd, sm};
 }
 
-// ── Utility: apply a standard chess.js move, return enriched result ──────────
+// ── Apply a standard chess.js move ───────────────────────────────────────────
 function applyStd(game, from, to, promotion='q') {
   const g = new Chess(game.fen());
   const mv = g.move({from, to, promotion});
@@ -108,14 +107,14 @@ function applyStd(game, from, to, promotion='q') {
   let cap = null;
   if (mv.captured) {
     cap = mv.flags?.includes('e')
-      ? {type:mv.captured, _sq: to[0]+from[1]}   // en-passant
+      ? {type:mv.captured, _sq: to[0]+from[1]}
       : {type:mv.captured};
   }
   return {game:g, captured:cap,
           castleK:mv.flags?.includes('k'), castleQ:mv.flags?.includes('q')};
 }
 
-// ── King-in-check detector (includes evolved-queen L-move threat) ────────────
+// ── King-in-check (also checks Imperatrice L-move) ───────────────────────────
 function kingInCheck(game, color, pd, sm, stunnedSet) {
   const fen = game.fen().split(' ');
   fen[1] = color; fen[3] = '-';
@@ -145,40 +144,35 @@ function App() {
   const [game,   setGame]   = useState(() => new Chess());
   const [pd,     setPd]     = useState({});
   const [sm,     setSm]     = useState({});
-  const [sel,    setSel]    = useState(null);   // selected square
-  const [moves,  setMoves]  = useState([]);     // legal moves for sel
+  const [sel,    setSel]    = useState(null);
+  const [moves,  setMoves]  = useState([]);
   const [pts,    setPts]    = useState({w:0,b:0});
   const [last,   setLast]   = useState(null);
   const [flipped,setFlip]   = useState(false);
   const [stunned,setStunned]= useState(new Set());
-  const [immune, setImmune] = useState(null);   // {sq, rookId}
-  const [ghostMarch,setGhostMarch] = useState(null); // color that activated it
+  const [immune, setImmune] = useState(null);
+  const [ghostMarch,setGhostMarch] = useState(null);
+  const [ghostMarchJustActivated,setGhostMarchJustActivated] = useState(false);
   const [gameOver,setGameOver]    = useState(null);
   const [lvlUpSq,setLvlUpSq]      = useState(null);
 
-  // Post-move upgrade phase
-  const [phase, setPhase] = useState('move'); // 'move' | 'upgrade'
+  const [phase, setPhase] = useState('move');
   const [phaseColor,setPhaseColor] = useState(null);
 
-  // Command (Imperatrice) mode
   const [cmdMode,  setCmdMode]  = useState(false);
   const [cmdCost,  setCmdCost]  = useState(4);
   const [cmdSrc,   setCmdSrc]   = useState(null);
 
-  // Elixir (Alchimista) mode
   const [elixMode, setElixMode] = useState(false);
   const [elixCost, setElixCost] = useState(3);
   const [elixSrc,  setElixSrc]  = useState(null);
 
-  // Discount for commanded piece ability
   const [cmdDiscount, setCmdDiscount] = useState(false);
-
   const lvlTimer = useRef(null);
 
-  // Init
   useEffect(() => { const s=buildState(game); setPd(s.pd); setSm(s.sm); }, []); // eslint-disable-line
 
-  // ── Aura helper: is sq in any enemy evolved Destriero's knight-jumps? ─────
+  // ── Aura detection ─────────────────────────────────────────────────────────
   const inEnemyAura = useCallback((sq, myColor) => {
     const opp = myColor==='w'?'b':'w';
     for (const [osq,oid] of Object.entries(sm)) {
@@ -190,7 +184,7 @@ function App() {
     return false;
   }, [game,sm,pd]);
 
-  // ── Effective level: aura suppresses evolution ─────────────────────────────
+  // ── Effective level (aura suppression) ─────────────────────────────────────
   const effLevel = useCallback((sq, id, color) => {
     const d = pd[id];
     if (!d) return 1;
@@ -198,14 +192,13 @@ function App() {
     return d.level;
   }, [pd, inEnemyAura]);
 
-  // ── Prestige calculation: only count evolved pieces NOT in enemy aura ──────
+  // ── Prestige calculator ────────────────────────────────────────────────────
   const calcPrestige = useCallback((color) => {
     let total=0;
     for (const [sq,id] of Object.entries(sm)) {
       const p=game.get(sq);
       if (p&&p.color===color) {
-        const lv = effLevel(sq, id, color);
-        if (lv===2) total+=PRESTIGE[p.type]||0;
+        if (effLevel(sq, id, color)===2) total+=PRESTIGE[p.type]||0;
       }
     }
     return total;
@@ -217,7 +210,7 @@ function App() {
   const pdBonusEnergy = prestige>=10;
   const pdCanDevolve  = prestige>=5;
 
-  // ── Immune-to-capture check ───────────────────────────────────────────────
+  // ── Immune check ───────────────────────────────────────────────────────────
   const isImmune = useCallback((sq) => {
     if (!immune||immune.sq!==sq) return false;
     const rookSq = Object.entries(sm).find(([,id])=>id===immune.rookId)?.[0];
@@ -225,14 +218,7 @@ function App() {
     return FILE(rookSq)===FILE(sq)||RANK(rookSq)===RANK(sq);
   }, [immune,sm]);
 
-  // ── Does a move (from->to) result in check or checkmate? ───────────────────
-  function checkRestrictions(g2, oppKingColor, wasInCheck) {
-    if (g2.in_checkmate()) return 'checkmate';
-    if (wasInCheck && g2.in_check()) return 'check'; // cannot deliver check if already in check
-    return null;
-  }
-
-  // ── Legal move generator ──────────────────────────────────────────────────
+  // ── Move generator ─────────────────────────────────────────────────────────
   const getMoves = useCallback((sq, isCommandTurn = false, wasOppInCheck = false) => {
     const p = game.get(sq);
     if (!p) return [];
@@ -244,12 +230,12 @@ function App() {
 
     const energy  = pts[color];
     const evo2    = effLevel(sq, id, color) === 2;
-    const actCostBase = 3; // base active ability cost
+    const actCostBase = 3;
     const actCost = Math.max(1, actCostBase - (cmdDiscount?1:0) - pdDiscount);
     const cmdCostVal = Math.max(1, 4 - (cmdDiscount?1:0) - pdDiscount);
     const result  = [];
 
-    // ── Standard chess.js moves ──────────────────────────────────────────
+    // Standard moves
     for (const m of game.moves({square:sq, verbose:true})) {
       if (m.promotion && m.promotion!=='q') continue;
       const g2 = new Chess(game.fen());
@@ -262,16 +248,13 @@ function App() {
         delete nsm[cs];
       }
       if (kingInCheck(g2,color,pd,nsm,stunned)) continue;
-      if (isCommandTurn) {
-        const restr = checkRestrictions(g2, color==='w'?'b':'w', wasOppInCheck);
-        if (restr==='checkmate' || restr==='check') continue;
-      }
+      if (isCommandTurn && (g2.in_checkmate() || (wasOppInCheck && g2.in_check()))) continue;
       result.push({type:'std', from:sq, to:m.to, promo:m.promotion});
     }
 
     if (!evo2) return result;
 
-    // ── Ghost March: allied heavy pieces can pass through friendly Assaltatori ──
+    // Ghost March: allied heavy pieces pass through friendly Assaltatori
     if (ghostMarch===color && (p.type==='r'||p.type==='q')) {
       const dirs = STRAIGHT_DIRS.concat(p.type==='q'?DIAG_DIRS:[]);
       for (const [df,dr] of dirs) {
@@ -281,20 +264,16 @@ function App() {
           if (!tsq) break;
           const tp=game.get(tsq);
           if (!tp) {
-            // empty square – add if not already in standard moves
             if (!result.some(m=>m.to===tsq)) {
-              const g2=new Chess(game.fen());
-              g2.remove(sq); g2.put(p,tsq);
+              const g2=new Chess(game.fen()); g2.remove(sq); g2.put(p,tsq);
               const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
               if (!kingInCheck(g2,color,pd,nsm,stunned))
                 result.push({type:'std', from:sq, to:tsq});
             }
           } else if (tp.color===color && tp.type==='p' && effLevel(tsq,sm[tsq],color)===2) {
-            // friendly evolved pawn – can pass through, continue
             cf+=df; cr+=dr;
             continue;
           } else {
-            // any other piece blocks
             break;
           }
           cf+=df; cr+=dr;
@@ -302,44 +281,27 @@ function App() {
       }
     }
 
-    // ── Spettro (evolved bishop) ─────────────────────────────────────────
+    // Spettro (bishop) jump
     if (p.type==='b') {
-      // Passive: slide diagonally, ignoring first piece
       for (const [df,dr] of DIAG_DIRS) {
         let cf=FILE(sq)+df, cr=RANK(sq)+dr;
-        let firstPiece = null;
-        let firstSq = null;
-        let behindFirst = false;
+        let firstPiece=null, firstSq=null;
         while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
           const tsq=SQ(cf,cr);
           if (!tsq) break;
           const tp=game.get(tsq);
           if (!firstPiece) {
-            if (!tp) {
-              // empty square – add normal move (already in standard moves)
-            } else {
-              // first piece encountered
-              firstPiece = tp;
-              firstSq = tsq;
-              behindFirst = true;
-              // do not add this square as a move, pass through
-            }
+            if (!tp) { /* empty, already in standard moves */ }
+            else { firstPiece=tp; firstSq=tsq; }
           } else {
-            // after first piece
             if (!tp) {
-              // empty square behind – add jump move
-              const g2=new Chess(game.fen());
-              g2.remove(sq); g2.put({type:'b',color},tsq);
+              const g2=new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color},tsq);
               const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
-              // do not delete first piece (we passed through)
               if (!kingInCheck(g2,color,pd,nsm,stunned))
                 result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:firstPiece.color});
             } else {
-              // second piece blocks, capture possible if enemy
               if (tp.color!==color) {
-                const g2=new Chess(game.fen());
-                g2.remove(sq); g2.remove(tsq);
-                g2.put({type:'b',color},tsq);
+                const g2=new Chess(game.fen()); g2.remove(sq); g2.remove(tsq); g2.put({type:'b',color},tsq);
                 const nsm={...sm}; delete nsm[sq]; delete nsm[tsq]; nsm[tsq]=id;
                 if (!kingInCheck(g2,color,pd,nsm,stunned))
                   result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:firstPiece.color, capture:true});
@@ -350,15 +312,14 @@ function App() {
           cf+=df; cr+=dr;
         }
       }
-      // Active ability: spectral step (unchanged)
+      // Spectral Step active
       if (energy>=actCost) {
         for (const [df,dr] of DIAG_DIRS) {
           let cf=FILE(sq)+df, cr=RANK(sq)+dr;
           while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
             const tsq=SQ(cf,cr);
             if (!game.get(tsq)) {
-              const g2=new Chess(game.fen());
-              g2.remove(sq); g2.put({type:'b',color},tsq);
+              const g2=new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color},tsq);
               const nsm={...sm}; delete nsm[sq]; nsm[tsq]=id;
               if (!kingInCheck(g2,color,pd,nsm,stunned))
                 result.push({type:'spectral_step', from:sq, to:tsq, cost:actCost});
@@ -369,7 +330,7 @@ function App() {
       }
     }
 
-    // ── Assaltatore (evolved pawn) extra moves ───────────────────────────
+    // Assaltatore (pawn)
     if (p.type==='p') {
       const dir = color==='w'?1:-1;
       const f=FILE(sq), r=RANK(sq);
@@ -379,23 +340,18 @@ function App() {
         const tp=game.get(tsq);
         if (df===0 && tp) continue;
         if (df!==0 && tp && tp.color===color) continue;
-        const g2=new Chess(game.fen());
-        g2.remove(sq); if(tp) g2.remove(tsq);
-        g2.put({type:'p',color}, tsq);
+        const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'p',color},tsq);
         const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
         if (!kingInCheck(g2,color,pd,nsm,stunned))
           result.push({type:'std', from:sq, to:tsq});
       }
-      // Ghost March ability (2 squares forward in 3 directions)
       if (energy>=actCost && !ghostMarch) {
         for (const df of [-1,0,1]) {
           const tsq=SQ(f+df, r+dir*2);
           if (!tsq) continue;
           const tp=game.get(tsq);
           if (tp && tp.color===color) continue;
-          const g2=new Chess(game.fen());
-          g2.remove(sq); if(tp) g2.remove(tsq);
-          g2.put({type:'p',color}, tsq);
+          const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'p',color},tsq);
           const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
           if (!kingInCheck(g2,color,pd,nsm,stunned))
             result.push({type:'ghost_march_move', from:sq, to:tsq, cost:actCost});
@@ -403,7 +359,7 @@ function App() {
       }
     }
 
-    // ── Destriero (evolved knight) ───────────────────────────────────────
+    // Destriero (knight)
     if (p.type==='n') {
       if (energy>=actCost) {
         const visited=new Set([sq]);
@@ -413,9 +369,7 @@ function App() {
             visited.add(tsq);
             const tp=game.get(tsq);
             if (tp&&tp.color===color) continue;
-            const g2=new Chess(game.fen());
-            g2.remove(sq); if(tp) g2.remove(tsq);
-            g2.put({type:'n',color}, tsq);
+            const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'n',color},tsq);
             const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
             if (!kingInCheck(g2,color,pd,nsm,stunned))
               result.push({type:'frenzy_charge', from:sq, to:tsq, cost:actCost});
@@ -424,7 +378,7 @@ function App() {
       }
     }
 
-    // ── Alchimista (evolved rook) ────────────────────────────────────────
+    // Alchimista (rook)
     if (p.type==='r') {
       const f=FILE(sq), r=RANK(sq);
       for (const [osq,oid] of Object.entries(sm)) {
@@ -435,54 +389,44 @@ function App() {
         if (f!==of_ && r!==or_) continue;
         let clear=true;
         if (f===of_) {
-          for (let rr=Math.min(r,or_)+1;rr<Math.max(r,or_);rr++)
-            if (game.get(SQ(f,rr))) {clear=false;break;}
+          for (let rr=Math.min(r,or_)+1;rr<Math.max(r,or_);rr++) if(game.get(SQ(f,rr))) {clear=false;break;}
         } else {
-          for (let ff=Math.min(f,of_)+1;ff<Math.max(f,of_);ff++)
-            if (game.get(SQ(ff,r))) {clear=false;break;}
+          for (let ff=Math.min(f,of_)+1;ff<Math.max(f,of_);ff++) if(game.get(SQ(ff,r))) {clear=false;break;}
         }
         if (clear) result.push({type:'swap', from:sq, to:osq});
       }
       if (energy>=actCost) {
-        const hasAlly = Object.entries(sm).some(([osq])=>{
-          if (osq===sq) return false;
-          const op=game.get(osq);
-          return op&&op.color===color&&(FILE(osq)===f||RANK(osq)===r);
-        });
-        if (hasAlly)
-          result.push({type:'elixir', from:sq, cost:actCost});
+        const hasAlly = Object.entries(sm).some(([osq])=>osq!==sq&&game.get(osq)?.color===color&&(FILE(osq)===f||RANK(osq)===r));
+        if (hasAlly) result.push({type:'elixir', from:sq, cost:actCost});
       }
     }
 
-    // ── Imperatrice (evolved queen) ──────────────────────────────────────
+    // Imperatrice (queen)
     if (p.type==='q') {
       for (const tsq of knightJumps(sq)) {
         if (result.some(m=>m.to===tsq)) continue;
         const tp=game.get(tsq);
         if (tp&&tp.color===color) continue;
-        const g2=new Chess(game.fen());
-        g2.remove(sq); if(tp) g2.remove(tsq);
-        g2.put({type:'q',color},tsq);
+        const g2=new Chess(game.fen()); g2.remove(sq); if(tp) g2.remove(tsq); g2.put({type:'q',color},tsq);
         const nsm={...sm}; delete nsm[sq]; if(tp) delete nsm[tsq]; nsm[tsq]=id;
         if (!kingInCheck(g2,color,pd,nsm,stunned))
           result.push({type:'std', from:sq, to:tsq});
       }
       if (energy>=cmdCostVal) {
         const hasAlly=Object.entries(sm).some(([osq])=>osq!==sq&&game.get(osq)?.color===color);
-        if (hasAlly)
-          result.push({type:'royal_command', from:sq, cost:cmdCostVal});
+        if (hasAlly) result.push({type:'royal_command', from:sq, cost:cmdCostVal});
       }
     }
 
     return result;
   }, [game,sm,pd,pts,stunned,ghostMarch,pdDiscount,cmdDiscount,inEnemyAura,isImmune,effLevel]);
 
-  // ── Execute a move action ─────────────────────────────────────────────────
+  // ── Execute move ───────────────────────────────────────────────────────────
   const execute = useCallback((action, color) => {
     let ng, energyDelta=0;
     const npd={...pd}, nsm={...sm};
     const newStunned=new Set(stunned);
-    let newImmune=immune, newGhost=ghostMarch;
+    let newImmune=immune, newGhost=ghostMarch, newGhostJust = ghostMarchJustActivated;
 
     const mid = sm[action.from];
     const wasOppInCheck = game.in_check();
@@ -504,28 +448,28 @@ function App() {
         delete npd[nsm[cs]]; delete nsm[cs];
       }
       nsm[action.to]=mid; delete nsm[action.from];
+
+      // Promozione: resetta il livello e aggiorna tipo
+      const pPromo = game.get(action.from);
+      if (pPromo && pPromo.type==='p' && (RANK(action.to)===8 || RANK(action.to)===1)) {
+        const newType = action.promo || 'q';
+        npd[mid] = { type: newType, color: color, level: 1 };
+      }
     }
     else if (action.type==='bishop_jump') {
-      // Jump over first piece, land on target (capture optional)
       ng=new Chess(game.fen());
       const jumped = game.get(action.jumped);
       const tp = game.get(action.to);
       ng.remove(action.from);
-      if (action.capture && tp) {
-        delete npd[nsm[action.to]];
-        delete nsm[action.to];
-        energyDelta+=1;
-      }
+      if (action.capture && tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta+=1; }
       ng.put({type:'b',color},action.to);
       nsm[action.to]=mid; delete nsm[action.from];
-      // stun if enemy jumped, gain energy if ally
       if (jumped) {
         if (jumped.color!==color) newStunned.add(action.jumpedId);
         else energyDelta+=1;
       }
-      energyDelta+=1; // move energy
-      const parts=ng.fen().split(' ');
-      parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
+      energyDelta+=1;
+      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
     }
@@ -544,11 +488,9 @@ function App() {
         }
         cf+=dc; cr+=dr;
       }
-      ng=new Chess(game.fen());
-      ng.remove(action.from); ng.put({type:'b',color},action.to);
+      ng=new Chess(game.fen()); ng.remove(action.from); ng.put({type:'b',color},action.to);
       nsm[action.to]=mid; delete nsm[action.from];
-      const parts=ng.fen().split(' ');
-      parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
+      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
     }
@@ -556,14 +498,13 @@ function App() {
       if (pts[color]<action.cost) return false;
       energyDelta = -action.cost + 1;
       const tp=game.get(action.to);
-      ng=new Chess(game.fen());
-      ng.remove(action.from);
+      ng=new Chess(game.fen()); ng.remove(action.from);
       if(tp){delete npd[nsm[action.to]];delete nsm[action.to];energyDelta+=1;}
       ng.put({type:'p',color},action.to);
       nsm[action.to]=mid; delete nsm[action.from];
       newGhost=color;
-      const parts=ng.fen().split(' ');
-      parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
+      newGhostJust=true;
+      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
     }
@@ -571,40 +512,31 @@ function App() {
       if (pts[color]<action.cost) return false;
       energyDelta = -action.cost + 1;
       const tp=game.get(action.to);
-      ng=new Chess(game.fen());
-      ng.remove(action.from);
+      ng=new Chess(game.fen()); ng.remove(action.from);
       if(tp){delete npd[nsm[action.to]];delete nsm[action.to];energyDelta+=1;}
       ng.put({type:'n',color},action.to);
       nsm[action.to]=mid; delete nsm[action.from];
-      const parts=ng.fen().split(' ');
-      parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
+      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
     }
     else if (action.type==='swap') {
       const p1=game.get(action.from), p2=game.get(action.to);
-      ng=new Chess(game.fen());
-      ng.remove(action.from); ng.remove(action.to);
+      ng=new Chess(game.fen()); ng.remove(action.from); ng.remove(action.to);
       ng.put(p1,action.to); ng.put(p2,action.from);
-      const parts=ng.fen().split(' ');
-      parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
+      const parts=ng.fen().split(' '); parts[1]=color==='w'?'b':'w'; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       nsm[action.from]=sm[action.to]; nsm[action.to]=sm[action.from];
       energyDelta=1;
     }
-    else {
-      return false;
-    }
+    else return false;
 
     if (!ng) return false;
 
-    setGame(ng);
-    setPd(npd);
-    setSm(nsm);
+    setGame(ng); setPd(npd); setSm(nsm);
     setPts(prev => ({...prev, [color]: Math.max(0, prev[color]+energyDelta)}));
-    setStunned(newStunned);
-    setImmune(newImmune);
-    setGhostMarch(newGhost);
+    setStunned(newStunned); setImmune(newImmune);
+    setGhostMarch(newGhost); setGhostMarchJustActivated(newGhostJust);
     setLast({from:action.from, to:action.to});
     setSel(null); setMoves([]);
 
@@ -617,9 +549,9 @@ function App() {
       setPhase('upgrade'); setPhaseColor(color);
     }
     return true;
-  }, [game,pd,sm,pts,stunned,immune,ghostMarch]);
+  }, [game,pd,sm,pts,stunned,immune,ghostMarch,ghostMarchJustActivated]);
 
-  // ── End upgrade phase, pass turn ─────────────────────────────────────────
+  // ── End upgrade phase ──────────────────────────────────────────────────────
   const endUpgrade = useCallback(() => {
     const next = game.turn();
     setStunned(prev => {
@@ -628,7 +560,17 @@ function App() {
       return ns;
     });
     setImmune(null);
-    setGhostMarch(null);
+
+    // Gestione corretta Marcia Fantasma
+    if (ghostMarch === phaseColor) {
+      if (ghostMarchJustActivated) {
+        setGhostMarchJustActivated(false); // lascia attivo per il prossimo turno
+      } else {
+        setGhostMarch(null);
+        setGhostMarchJustActivated(false);
+      }
+    }
+
     if (pdBonusEnergy && calcPrestige(next)>=10) {
       setPts(prev=>({...prev,[next]:prev[next]+1}));
     }
@@ -637,7 +579,7 @@ function App() {
     setCmdMode(false); setCmdSrc(null);
     setElixMode(false); setElixSrc(null);
     setCmdDiscount(false);
-  }, [game,pd,phaseColor,pdBonusEnergy,calcPrestige]);
+  }, [game,pd,phaseColor,pdBonusEnergy,calcPrestige,ghostMarch,ghostMarchJustActivated]);
 
   // ── Main click handler ────────────────────────────────────────────────────
   const click = useCallback((sq) => {
@@ -648,10 +590,9 @@ function App() {
       if (sq && sq!==cmdSrc) {
         const p=game.get(sq);
         if (p&&p.color===color&&p.type!=='q') {
-          setCmdDiscount(true); // discount for the commanded piece's ability
+          setCmdDiscount(true);
           setCmdMode(false); setCmdSrc(null);
           setPhase('move');
-          // The opponent king check status from before the command
           const wasInCheck = kingInCheck(game, color==='w'?'b':'w', pd, sm, stunned);
           setSel(sq); setMoves(getMoves(sq, true, wasInCheck));
         }
@@ -667,10 +608,8 @@ function App() {
       if (sq) {
         const p=game.get(sq);
         const rookSq=elixSrc;
-        if (p&&p.color===color&&sq!==rookSq&&
-            (FILE(sq)===FILE(rookSq)||RANK(sq)===RANK(rookSq))) {
-          const rookId=sm[rookSq];
-          setImmune({sq, rookId});
+        if (p&&p.color===color&&sq!==rookSq&&(FILE(sq)===FILE(rookSq)||RANK(sq)===RANK(rookSq))) {
+          setImmune({sq, rookId:sm[rookSq]});
           setPts(prev=>({...prev,[color]:Math.max(0,prev[color]-elixCost)}));
           setElixMode(false); setElixSrc(null);
           setSel(null); setMoves([]);
@@ -689,7 +628,6 @@ function App() {
       const id=sm[sq], d=pd[id];
       if (!d) return;
       const lv = effLevel(sq, id, color);
-
       if (lv===1) {
         const cost=EVO_COST[p.type]||99;
         if (pts[color]>=cost) {
@@ -700,12 +638,12 @@ function App() {
           lvlTimer.current=setTimeout(()=>setLvlUpSq(null),900);
         }
       } else if (lv===2 && pdCanDevolve) {
-        setSel(sq); // show devolve button in panel
+        setSel(sq);
       }
       return;
     }
 
-    // ── Normal move phase ────────────────────────────────────────────────
+    // Normal move phase
     if (!sel) {
       if (!sq) return;
       const p=game.get(sq);
@@ -716,10 +654,7 @@ function App() {
     }
 
     const move=moves.find(m=>(m.type==='std'||m.type==='swap'||m.type==='bishop_jump'||m.type==='frenzy_charge'||m.type==='ghost_march_move'||m.type==='spectral_step')&&m.to===sq);
-    if (move) {
-      execute(move, color);
-      return;
-    }
+    if (move) { execute(move, color); return; }
 
     if (sq) {
       const p=game.get(sq);
@@ -732,35 +667,32 @@ function App() {
       setSel(null); setMoves([]);
     }
   }, [sel,moves,game,sm,pd,pts,stunned,phase,phaseColor,cmdMode,cmdSrc,cmdCost,
-      elixMode,elixSrc,elixCost,pdCanDevolve,gameOver,getMoves,execute,endUpgrade,effLevel,calcPrestige]);
+      elixMode,elixSrc,elixCost,pdCanDevolve,gameOver,getMoves,execute,endUpgrade,effLevel]);
 
-  // ── Devolve action (available in both phases if prestige>=5) ──────────────
+  // ── Devolve action ─────────────────────────────────────────────────────────
   const devolveSelected = useCallback(() => {
     if (!sel) return;
     const id=sm[sel], d=pd[id];
     if (!d||d.level!==2||!pdCanDevolve) return;
     setPd(prev=>({...prev,[id]:{...d,level:1}}));
-    setPts(prev=>({...prev,[activeColor]:prev[activeColor]+1})); // +1 energy as per rules
+    setPts(prev=>({...prev,[activeColor]:prev[activeColor]+1}));
     setSel(null);
-    if (phase==='upgrade') {
-      // stay in upgrade phase, but deselect
-    }
-  }, [sel,sm,pd,pdCanDevolve,activeColor,phase]);
+  }, [sel,sm,pd,pdCanDevolve,activeColor]);
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
+  // ── Reset ──────────────────────────────────────────────────────────────────
   const reset = () => {
     _id=0;
     const g=new Chess(); const s=buildState(g);
     setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
     setSel(null); setMoves([]); setLast(null);
     setPhase('move'); setPhaseColor(null);
-    setStunned(new Set()); setImmune(null); setGhostMarch(null);
+    setStunned(new Set()); setImmune(null); setGhostMarch(null); setGhostMarchJustActivated(false);
     setCmdMode(false); setCmdSrc(null);
     setElixMode(false); setElixSrc(null);
     setGameOver(null); setLvlUpSq(null);
   };
 
-  // ── Derived render data ───────────────────────────────────────────────────
+  // ── Render data ────────────────────────────────────────────────────────────
   const moveTargets    = useMemo(()=>new Set(moves.filter(m=>m.type==='std'||m.type==='swap'||m.type==='bishop_jump').map(m=>m.to)),[moves]);
   const abilityTargets = useMemo(()=>new Set(moves.filter(m=>m.type==='frenzy_charge'||m.type==='ghost_march_move'||m.type==='spectral_step').map(m=>m.to)),[moves]);
   const panelAbilities = useMemo(()=>moves.filter(m=>m.type==='elixir'||m.type==='royal_command'),[moves]);
@@ -775,7 +707,7 @@ function App() {
 
   const inCheck = phase==='move' && kingInCheck(game, activeColor, pd, sm, stunned);
 
-  // ── Panel content ─────────────────────────────────────────────────────────
+  // ── Panel ──────────────────────────────────────────────────────────────────
   function renderPanel() {
     if (cmdMode) return (
       <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
@@ -800,7 +732,7 @@ function App() {
     );
 
     if (phase==='upgrade') {
-      const canEvo  = Object.entries(sm).some(([sq,id])=>{
+      const canEvo = Object.entries(sm).some(([sq,id])=>{
         const p=game.get(sq); const d=pd[id];
         return p&&p.color===activeColor&&effLevel(sq,id,activeColor)===1&&pts[activeColor]>=(EVO_COST[p.type]||99);
       });
@@ -808,8 +740,8 @@ function App() {
         <div className="phase-banner">
           <div className="phase-title">🔵 Fase di Potenziamento</div>
           <div className="hint-text">
-            Clicca un pezzo {canEvo?<span style={{color:'#22c55e'}}>verde (evolvi)</span>:'base'} 
-            {pdCanDevolve?' o '+<span style={{color:'#ef4444'}}>rosso (de-evolvi +1⚡)</span>:''}.
+            Clicca un pezzo {canEvo ? <span style={{color:'#22c55e'}}>verde (evolvi)</span> : 'base'}
+            {pdCanDevolve && <> o <span style={{color:'#ef4444'}}>rosso (de-evolvi +1⚡)</span></>}.
             Poi premi Fine Turno.
           </div>
           {sel && selEffLevel===2 && pdCanDevolve && (
@@ -881,7 +813,6 @@ function App() {
         {sel && panelAbilities.length===0 && moves.length===0 && selData && (
           <div className="hint-text">Nessuna mossa disponibile per questo pezzo.</div>
         )}
-        {/* Devolve button in move phase (Sovereign) */}
         {phase==='move' && sel && selEffLevel===2 && pdCanDevolve && (
           <button className="phase-btn" style={{background:'#7f1d1d',color:'#fca5a5',marginTop:4}} onClick={devolveSelected}>
             ↩ De-evolvi {EVO_NAMES[selPiece?.type]||''} (+1⚡)
@@ -891,7 +822,7 @@ function App() {
     );
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="app">
       <div className="top-bar">
@@ -919,9 +850,9 @@ function App() {
             const fi=flipped?7-c:c, ri=flipped?r:7-r;
             const sq='abcdefgh'[fi]+(ri+1);
             const light=(fi+ri)%2!==0;
-            const id=sm[sq], d=id?pd[id]:null, rawLv=d?.level??1;
+            const id=sm[sq], d=id?pd[id]:null;
             const pieceColor = game.get(sq)?.color;
-            const displayLv = (id && pieceColor) ? effLevel(sq, id, pieceColor) : rawLv;
+            const displayLv = (id && pieceColor) ? effLevel(sq, id, pieceColor) : d?.level??1;
             const isStunned=stunned.has(id);
             const isImm=immune?.sq===sq;
             const isAura=inEnemyAura(sq,activeColor);
@@ -951,27 +882,19 @@ function App() {
                   isLast?(light?'last-from':'last-to'):'',
                 ].join(' ')}>
 
-                {isMoveTarget&&!cell&&
-                  <div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1,pointerEvents:'none'}}/>}
-                {isAbTarget&&!cell&&
-                  <div style={{position:'absolute',width:'32%',height:'32%',borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 12px #a855f7',zIndex:1,pointerEvents:'none'}}/>}
-                {isMoveTarget&&cell&&
-                  <div style={{position:'absolute',inset:0,border:'3px solid #22c55e',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
-                {isAbTarget&&cell&&
-                  <div style={{position:'absolute',inset:0,border:'3px solid #a855f7',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
+                {isMoveTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1,pointerEvents:'none'}}/>}
+                {isAbTarget&&!cell&&<div style={{position:'absolute',width:'32%',height:'32%',borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 12px #a855f7',zIndex:1,pointerEvents:'none'}}/>}
+                {isMoveTarget&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #22c55e',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
+                {isAbTarget&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #a855f7',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
 
-                {cell&&
-                  <span className={`piece piece-${cell.color}${displayLv===2?' evo2':''}`}
-                    style={{transform:lvlUpSq===sq?'scale(1.5)':'scale(1)',transition:'transform .15s'}}
-                    onAnimationEnd={()=>setLvlUpSq(null)}>
-                    {ICONS[cell.color][cell.type]}
-                  </span>}
+                {cell&&<span className={`piece piece-${cell.color}${displayLv===2?' evo2':''}`}
+                  style={{transform:lvlUpSq===sq?'scale(1.5)':'scale(1)',transition:'transform .15s'}}
+                  onAnimationEnd={()=>setLvlUpSq(null)}>
+                  {ICONS[cell.color][cell.type]}
+                </span>}
 
-                {displayLv===2&&
-                  <div style={{position:'absolute',inset:3,border:'2px solid #a855f7',borderRadius:4,pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,.8)',zIndex:3}}/>}
-
-                {phase==='upgrade'&&sel===sq&&displayLv===2&&
-                  <div style={{position:'absolute',inset:0,background:'rgba(239,68,68,.25)',zIndex:4,pointerEvents:'none'}}/>}
+                {displayLv===2&&<div style={{position:'absolute',inset:3,border:'2px solid #a855f7',borderRadius:4,pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,.8)',zIndex:3}}/>}
+                {phase==='upgrade'&&sel===sq&&displayLv===2&&<div style={{position:'absolute',inset:0,background:'rgba(239,68,68,.25)',zIndex:4,pointerEvents:'none'}}/>}
               </div>
             );
           }))}

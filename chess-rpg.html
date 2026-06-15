@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.2 (Stable Fix)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.3 (Final)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -96,7 +96,7 @@ function applyStd(game, from, to, promotion='q') {
   const g = new Chess(game.fen());
   const mv = g.move({from, to, promotion});
   if (!mv) return null;
-  let cap = null;
+  let cap = null; // FIX: rimosso '@'
   if (mv.captured) cap = mv.flags?.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
   return {game:g, captured:cap, castleK:mv.flags?.includes('k'), castleQ:mv.flags?.includes('q')};
 }
@@ -630,6 +630,15 @@ function App() {
       setFrenzyMode(false); setSpectralMode(false);
       setSel(null); setMoves([]);
       return;
+    }
+
+    // --- INTERCETTAZIONE MOSSE (per Comando Reale) ---
+    if (sel && sq && moves.length > 0) {
+      const move = moves.find(m => m.to === sq && (m.type === 'std' || m.type === 'swap' || m.type === 'bishop_jump'));
+      if (move) {
+        execute(move, color);
+        return;
+      }
     }
 
     if (!hasMoved) {

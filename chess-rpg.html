@@ -477,9 +477,9 @@ function App() {
       nsm[action.to]=mid; delete nsm[action.from];
       if (jumped) {
         if (jumped.color!==color) newStunned.add(action.jumpedId);
-        energyDelta += 1;
+        // L'energia per il salto viene aggiunta solo una volta, insieme a quella base
       }
-      energyDelta+=1;
+      energyDelta += 1; // energia base per la mossa (già conteggia il salto come parte del movimento)
       const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
@@ -533,7 +533,7 @@ function App() {
           for(let dr=-1; dr<=1; dr++) {
              if(df===0 && dr===0) continue;
              const adjSq = SQ(tf+df, tr+dr);
-             if(adjSq && ng.get(adjSq)?.color && ng.get(adjSq).color !== color) return true;
+             if(adjSq && ng.get(adjSq) && ng.get(adjSq).color !== color) return true;
           }
         }
         return false;

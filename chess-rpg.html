@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.5</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.6</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -223,7 +223,7 @@ function App() {
   const [dartCost, setDartCost] = useState(3);
   const [dartRefund, setDartRefund] = useState(0);
 
-  const [knightUsed, setKnightUsed] = useState(false);
+  const [frenzyUsed, setFrenzyUsed] = useState(new Set());
   const [soulDartZone, setSoulDartZone] = useState([]);
   const [soulDartOwner, setSoulDartOwner] = useState(null);
 
@@ -301,18 +301,13 @@ function App() {
     if (!evo2) return result;
 
     if (specialMode === 'frenzyCharge' && p.type==='n') {
-      const visited=new Set([sq]);
-      for (const mid of knightJumps(sq)) {
-        for (const tsq of knightJumps(mid)) {
-          if (visited.has(tsq)) continue;
-          visited.add(tsq);
-          const tp=game.get(tsq);
-          if (tp&&tp.color===color) continue;
-          const g2=new Chess(game.fen()); g2.remove(sq); if(tp)g2.remove(tsq); g2.put({type:'n',color},tsq);
-          const nsm={...sm}; delete nsm[sq]; if(tp)delete nsm[tsq]; nsm[tsq]=id;
-          if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch))
-            result.push({type:'frenzy_charge', from:sq, to:tsq});
-        }
+      for (const tsq of knightJumps(sq)) {
+        const tp=game.get(tsq);
+        if (tp&&tp.color===color) continue;
+        const g2=new Chess(game.fen()); g2.remove(sq); if(tp)g2.remove(tsq); g2.put({type:'n',color},tsq);
+        const nsm={...sm}; delete nsm[sq]; if(tp)delete nsm[tsq]; nsm[tsq]=id;
+        if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch))
+          result.push({type:'frenzy_charge', from:sq, to:tsq});
       }
       return result;
     }
@@ -517,7 +512,9 @@ function App() {
       const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
-      if (action.type==='frenzy_charge') setKnightUsed(true);
+      if (action.type==='frenzy_charge') {
+        setFrenzyUsed(prev => { const ns = new Set(prev); ns.add(mid); return ns; });
+      }
     }
     else if (action.type==='swap') {
       const p1=game.get(action.from), p2=game.get(action.to);
@@ -597,9 +594,13 @@ function App() {
       setPts(prev=>({...prev,[next]:prev[next]+1}));
     }
     setAuraGained({w:0,b:0});
-    setKnightUsed(false);
-    setSoulDartZone([]);
-    setSoulDartOwner(null);
+    setFrenzyUsed(new Set());
+    
+    if (soulDartOwner === next) {
+      setSoulDartZone([]);
+      setSoulDartOwner(null);
+    }
+    
     setHasMoved(false);
     setSel(null); setMoves([]);
     setCmdMode(false); setCmdSrc(null); setCmdDiscount(false);
@@ -612,7 +613,7 @@ function App() {
       fenParts[1] = next;
       return new Chess(fenParts.join(' '));
     });
-  }, [hasMoved, actualTurn, pd, pdBonusEnergy, calcPrestige, ghostMarch]);
+  }, [hasMoved, actualTurn, pd, pdBonusEnergy, calcPrestige, ghostMarch, soulDartOwner]);
 
   const click = useCallback((sq) => {
     if (gameOver) return;
@@ -771,7 +772,7 @@ function App() {
     setElixMode(false); setElixSrc(null);
     setFrenzyMode(false); setSpectralMode(false);
     setDartMode(false); setDartSrc(null); setDartRefund(0);
-    setKnightUsed(false); setSoulDartZone([]); setSoulDartOwner(null);
+    setFrenzyUsed(new Set()); setSoulDartZone([]); setSoulDartOwner(null);
     setGameOver(null); setLvlUpSq(null);
     setAuraGained({w:0,b:0});
   };
@@ -799,7 +800,7 @@ function App() {
     }
     if (selPiece.type === 'n') {
       const cost = getActualCost(ABILITY_BASE_COST.frenzyCharge);
-      ab.push({name:'⚔️ Carica Forsennata', cost, available: energy>=cost && !knightUsed, action:()=>{ setFrenzyMode(true); setMoves(getMoves(sel, false, false, 'frenzyCharge')); }});
+      ab.push({name:'⚔️ Carica Forsennata', cost, available: energy>=cost && !frenzyUsed.has(selId), action:()=>{ setFrenzyMode(true); setMoves(getMoves(sel, false, false, 'frenzyCharge')); }});
     }
     if (selPiece.type === 'b') {
       const costSpec = getActualCost(ABILITY_BASE_COST.spectralStep);
@@ -829,7 +830,7 @@ function App() {
       ab.push({name:'👑 Comando Reale', cost, available: energy>=cost && hasAlly, action:()=>{ setPts(prev=>({...prev,[color]:prev[color]-cost})); setCmdMode(true); setCmdSrc(sel); setCmdCost(cost); setSel(null); }});
     }
     return ab;
-  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn, knightUsed, soulDartZone]);
+  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn, frenzyUsed, soulDartZone, selId]);
 
   function renderPanel() {
     if (cmdMode) return (

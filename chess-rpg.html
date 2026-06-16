@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.3 (Final)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.5</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -28,6 +28,7 @@
     .cell.stunned-piece{box-shadow:inset 0 0 12px rgba(99,102,241,0.8)}
     .cell.immune-highlight{outline:2px solid #fbbf24;outline-offset:-2px}
     .cell.ghost-march-ally{box-shadow:inset 0 0 15px #22c55e;background:rgba(34,197,94,.2)!important}
+    .cell.soul-dart-zone{box-shadow:inset 0 0 12px #ff6b6b;background:rgba(255,107,107,.15)!important}
     .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
     .piece-w{color:#fff;text-shadow:0 0 0 #000,0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.7))}
     .piece-b{color:#000;text-shadow:0 0 0 #fff,0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,0 -1px 0 #fff;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))}
@@ -57,18 +58,16 @@
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
 const Chess = window.Chess;
 
-// ── Icone e costanti ────────────────────────────────────────────────────────
 const ICONS = {w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},
                b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 const EVO_NAMES = {p:'Assaltatore',n:'Destriero',b:'Spettro',r:'Alchimista',q:'Imperatrice',k:'Re'};
 const EVO_COST  = {p:2, n:2, b:2, r:3, q:5};
 const PRESTIGE  = {p:1, n:2, b:2, r:3, q:4};
-const ABILITY_BASE_COST = { ghostMarch:3, frenzyCharge:2, spectralStep:2, elixir:2, royalCommand:4 };
+const ABILITY_BASE_COST = { ghostMarch:3, frenzyCharge:2, spectralStep:2, elixir:2, royalCommand:5, soulDart:3 };
 
 let _id = 0;
 const nextId = () => ++_id;
 
-// ── Utility ─────────────────────────────────────────────────────────────────
 const SQ = (f,r) => f>=0&&f<=7&&r>=1&&r<=8 ? String.fromCharCode(97+f)+r : null;
 const FILE = sq => sq.charCodeAt(0)-97;
 const RANK = sq => parseInt(sq[1]);
@@ -96,12 +95,11 @@ function applyStd(game, from, to, promotion='q') {
   const g = new Chess(game.fen());
   const mv = g.move({from, to, promotion});
   if (!mv) return null;
-  let cap = null; // FIX: rimosso '@'
+  let cap = null;
   if (mv.captured) cap = mv.flags?.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
   return {game:g, captured:cap, castleK:mv.flags?.includes('k'), castleQ:mv.flags?.includes('q')};
 }
 
-// ── Rilevamento scacco esteso (include pezzi evoluti) ─────────────────────
 function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
   const fen = game.fen().split(' ');
   fen[1] = color; fen[3] = '-';
@@ -114,7 +112,6 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
   }));
   if (!kSq) return false;
 
-  // Imperatrice Lv2 (mossa cavallo)
   for (const [sq,id] of Object.entries(sm)) {
     const p = game.get(sq);
     if (!p || p.color !== opp || stunnedSet?.has(id)) continue;
@@ -123,7 +120,6 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
     if (p.type === 'q' && knightJumps(sq).includes(kSq)) return true;
   }
 
-  // Spettro Lv2 (alfiere che salta un pezzo)
   for (const [sq,id] of Object.entries(sm)) {
     const p = game.get(sq);
     if (!p || p.color !== opp || stunnedSet?.has(id) || p.type !== 'b') continue;
@@ -147,7 +143,6 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
     if (jumped) return true;
   }
 
-  // Assaltatore Lv2 (pedone che attacca in tre direzioni frontali)
   for (const [sq,id] of Object.entries(sm)) {
     const p = game.get(sq);
     if (!p || p.color !== opp || stunnedSet?.has(id) || p.type !== 'p') continue;
@@ -161,7 +156,6 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
     }
   }
 
-  // Torri/Regine che sfruttano Marcia Fantasma per attraversare pedoni alleati
   if (ghostMarchColor === opp) {
     for (const [sq,id] of Object.entries(sm)) {
       const p = game.get(sq);
@@ -195,7 +189,6 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
   return false;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 function App() {
   const [game, setGame] = useState(() => new Chess());
   const [pd, setPd] = useState({});
@@ -215,7 +208,7 @@ function App() {
   const [actualTurn, setActualTurn] = useState('w');
 
   const [cmdMode, setCmdMode] = useState(false);
-  const [cmdCost, setCmdCost] = useState(4);
+  const [cmdCost, setCmdCost] = useState(5);
   const [cmdSrc, setCmdSrc] = useState(null);
   const [cmdDiscount, setCmdDiscount] = useState(false);
 
@@ -225,13 +218,20 @@ function App() {
 
   const [frenzyMode, setFrenzyMode] = useState(false);
   const [spectralMode, setSpectralMode] = useState(false);
+  const [dartMode, setDartMode] = useState(false);
+  const [dartSrc, setDartSrc] = useState(null);
+  const [dartCost, setDartCost] = useState(3);
+  const [dartRefund, setDartRefund] = useState(0);
+
+  const [knightUsed, setKnightUsed] = useState(false);
+  const [soulDartZone, setSoulDartZone] = useState([]);
+  const [soulDartOwner, setSoulDartOwner] = useState(null);
 
   const [auraGained, setAuraGained] = useState({w:0,b:0});
   const lvlTimer = useRef(null);
 
   useEffect(() => { const s=buildState(game); setPd(s.pd); setSm(s.sm); }, []);
 
-  // ── Aura e livello effettivo ──────────────────────────────────────────────
   const inEnemyAura = useCallback((sq, myColor) => {
     const opp = myColor==='w'?'b':'w';
     for (const [osq,oid] of Object.entries(sm)) {
@@ -275,7 +275,6 @@ function App() {
   const getActualCost = useCallback((baseCost) => Math.max(1, baseCost - pdDiscount), [pdDiscount]);
   const getEvoCost = useCallback((type) => Math.max(1, (EVO_COST[type]||99) - pdDiscount), [pdDiscount]);
 
-  // ── Generatore mosse ──────────────────────────────────────────────────────
   const getMoves = useCallback((sq, isCommandTurn = false, wasOppInCheck = false, specialMode = null) => {
     const p = game.get(sq);
     if (!p) return [];
@@ -284,7 +283,7 @@ function App() {
     if (!id || stunned.has(id)) return [];
     const d = pd[id];
     const evo2 = effLevel(sq, id, color) === 2;
-    const result = [];
+    let result = [];
 
     if (!specialMode || specialMode==='normal') {
       for (const m of game.moves({square:sq, verbose:true})) {
@@ -392,11 +391,9 @@ function App() {
         const op=game.get(osq);
         if (!op||op.color!==color||op.type==='k') continue;
         const of_=FILE(osq), or_=RANK(osq);
-        if (f!==of_ && r!==or_) continue;
-        let clear=true;
-        if (f===of_) { for (let rr=Math.min(r,or_)+1;rr<Math.max(r,or_);rr++) if(game.get(SQ(f,rr))){clear=false;break;} }
-        else { for (let ff=Math.min(f,of_)+1;ff<Math.max(f,of_);ff++) if(game.get(SQ(ff,r))){clear=false;break;} }
-        if (clear) result.push({type:'swap', from:sq, to:osq});
+        if (f===of_ || r===or_) {
+          result.push({type:'swap', from:sq, to:osq});
+        }
       }
     }
     if (ghostMarch===color && (p.type==='r'||p.type==='q')) {
@@ -419,10 +416,32 @@ function App() {
         }
       }
     }
-    return result;
-  }, [game,sm,pd,pts,stunned,ghostMarch,pdDiscount,cmdDiscount,inEnemyAura,isImmune,effLevel,actualTurn]);
 
-  // ── Esecuzione mossa / abilità ────────────────────────────────────────────
+    if (soulDartOwner && soulDartZone.length > 0 && p.color !== soulDartOwner) {
+      const startsInZone = soulDartZone.includes(sq);
+      result = result.filter(m => {
+        const landsInZone = soulDartZone.includes(m.to);
+        if (startsInZone) {
+          return landsInZone;
+        } else {
+          if (p.type === 'n') return true; 
+          const f0 = FILE(sq), r0 = RANK(sq);
+          const f1 = FILE(m.to), r1 = RANK(m.to);
+          const df = Math.sign(f1 - f0), dr = Math.sign(r1 - r0);
+          let cf = f0 + df, cr = r0 + dr;
+          while (cf !== f1 || cr !== r1) {
+            const pathSq = SQ(cf, cr);
+            if (pathSq && soulDartZone.includes(pathSq)) return false;
+            cf += df; cr += dr;
+          }
+          return true;
+        }
+      });
+    }
+
+    return result;
+  }, [game,sm,pd,pts,stunned,ghostMarch,pdDiscount,cmdDiscount,inEnemyAura,isImmune,effLevel,actualTurn,soulDartZone,soulDartOwner]);
+
   const execute = useCallback((action, color) => {
     let ng, energyDelta=0;
     const npd={...pd}, nsm={...sm};
@@ -436,7 +455,6 @@ function App() {
       const res=applyStd(game,action.from,action.to,action.promo);
       if (!res) return false;
       ng=res.game;
-      // Forza il turno a rimanere al giocatore corrente
       const parts = ng.fen().split(' ');
       parts[1] = color;
       parts[3] = '-';
@@ -464,7 +482,7 @@ function App() {
       nsm[action.to]=mid; delete nsm[action.from];
       if (jumped) {
         if (jumped.color!==color) newStunned.add(action.jumpedId);
-        else energyDelta+=1;
+        energyDelta += 1;
       }
       energyDelta+=1;
       const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
@@ -499,6 +517,7 @@ function App() {
       const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
       if(ng.in_check()) energyDelta+=1;
+      if (action.type==='frenzy_charge') setKnightUsed(true);
     }
     else if (action.type==='swap') {
       const p1=game.get(action.from), p2=game.get(action.to);
@@ -506,13 +525,28 @@ function App() {
       ng.put(p1,action.to); ng.put(p2,action.from);
       const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng=new Chess(parts.join(' '));
-      nsm[action.from]=sm[action.to]; nsm[action.to]=sm[action.from];
+      const tempId = nsm[action.from];
+      nsm[action.from] = nsm[action.to];
+      nsm[action.to] = tempId;
       energyDelta=1;
+
+      const isAdjEnemy = (targetSq) => {
+        const tf = FILE(targetSq), tr = RANK(targetSq);
+        for(let df=-1; df<=1; df++) {
+          for(let dr=-1; dr<=1; dr++) {
+             if(df===0 && dr===0) continue;
+             const adjSq = SQ(tf+df, tr+dr);
+             if(adjSq && ng.get(adjSq)?.color && ng.get(adjSq).color !== color) return true;
+          }
+        }
+        return false;
+      };
+      if (isAdjEnemy(action.from) || isAdjEnemy(action.to)) energyDelta += 1;
+
       setHasMoved(true);
     }
     else return false;
 
-    // Aura guadagno per l'avversario
     const opp = color==='w'?'b':'w';
     let auraExtra=0;
     const oppDestrieri = Object.entries(sm).filter(([sqA,idA])=>pd[idA]?.level===2 && ng.get(sqA)?.type==='n' && ng.get(sqA)?.color===opp);
@@ -541,22 +575,18 @@ function App() {
     setSel(null); setMoves([]);
     setFrenzyMode(false); setSpectralMode(false);
 
-    // --- RILEVAMENTO FINE PARTITA CORRETTO ---
     const evalFen = ng.fen().split(' ');
-    evalFen[1] = opp; // Simuliamo che tocchi all'avversario
+    evalFen[1] = opp;
     const evalGame = new Chess(evalFen.join(' '));
-
     if (evalGame.in_checkmate() || evalGame.in_draw() || evalGame.in_stalemate()) {
       setGameOver({
         winner: evalGame.in_checkmate() ? color : null,
         reason: evalGame.in_checkmate() ? 'Scacco Matto' : 'Patta'
       });
     }
-    
     return true;
   }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained,getActualCost,actualTurn]);
 
-  // ── Passa il turno ────────────────────────────────────────────────────────
   const passTurn = useCallback(() => {
     if (!hasMoved) return;
     const next = actualTurn === 'w' ? 'b' : 'w';
@@ -567,11 +597,15 @@ function App() {
       setPts(prev=>({...prev,[next]:prev[next]+1}));
     }
     setAuraGained({w:0,b:0});
+    setKnightUsed(false);
+    setSoulDartZone([]);
+    setSoulDartOwner(null);
     setHasMoved(false);
     setSel(null); setMoves([]);
     setCmdMode(false); setCmdSrc(null); setCmdDiscount(false);
     setElixMode(false); setElixSrc(null);
     setFrenzyMode(false); setSpectralMode(false);
+    setDartMode(false); setDartSrc(null); setDartRefund(0);
     setActualTurn(next);
     setGame(prev => {
       const fenParts = prev.fen().split(' ');
@@ -580,7 +614,6 @@ function App() {
     });
   }, [hasMoved, actualTurn, pd, pdBonusEnergy, calcPrestige, ghostMarch]);
 
-  // ── Click principale ───────────────────────────────────────────────────────
   const click = useCallback((sq) => {
     if (gameOver) return;
     const color = actualTurn;
@@ -618,6 +651,30 @@ function App() {
       return;
     }
 
+    if (dartMode) {
+      if (sq) {
+        const move = moves.find(m => m.to === sq && m.type === 'dart_dir');
+        if (move) {
+          const dirF = move.df, dirR = move.dr;
+          let cf = FILE(dartSrc) + dirF, cr = RANK(dartSrc) + dirR;
+          const zone = [];
+          while (cf >= 0 && cf <= 7 && cr >= 1 && cr <= 8) {
+            zone.push(SQ(cf, cr));
+            cf += dirF; cr += dirR;
+          }
+          setSoulDartZone(zone);
+          setSoulDartOwner(color);
+          setDartMode(false); setDartSrc(null); setDartRefund(0);
+          setSel(null); setMoves([]);
+          return;
+        }
+      }
+      setPts(prev => ({...prev, [color]: prev[color] + dartRefund}));
+      setDartMode(false); setDartSrc(null); setDartRefund(0);
+      setSel(null); setMoves([]);
+      return;
+    }
+
     if (frenzyMode || spectralMode) {
       const specialMode = frenzyMode ? 'frenzyCharge' : 'spectralStep';
       if (sq) {
@@ -632,7 +689,6 @@ function App() {
       return;
     }
 
-    // --- INTERCETTAZIONE MOSSE (per Comando Reale) ---
     if (sel && sq && moves.length > 0) {
       const move = moves.find(m => m.to === sq && (m.type === 'std' || m.type === 'swap' || m.type === 'bishop_jump'));
       if (move) {
@@ -693,9 +749,8 @@ function App() {
 
     setSel(sq);
     setMoves([]);
-  }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, elixMode, frenzyMode, spectralMode, execute, getMoves, effLevel, getEvoCost, actualTurn]);
+  }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, elixMode, frenzyMode, spectralMode, dartMode, dartSrc, dartRefund, execute, getMoves, effLevel, getEvoCost, actualTurn, soulDartOwner]);
 
-  // ── Devolvi ───────────────────────────────────────────────────────────────
   const devolveSelected = useCallback(() => {
     if (!sel) return;
     const id = sm[sel];
@@ -706,7 +761,6 @@ function App() {
     setSel(null); setMoves([]);
   }, [sel, sm, pd, pdCanDevolve, activeColor]);
 
-  // ── Reset ──────────────────────────────────────────────────────────────────
   const reset = () => {
     _id=0; const g=new Chess(); const s=buildState(g);
     setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
@@ -716,11 +770,12 @@ function App() {
     setCmdMode(false); setCmdSrc(null);
     setElixMode(false); setElixSrc(null);
     setFrenzyMode(false); setSpectralMode(false);
+    setDartMode(false); setDartSrc(null); setDartRefund(0);
+    setKnightUsed(false); setSoulDartZone([]); setSoulDartOwner(null);
     setGameOver(null); setLvlUpSq(null);
     setAuraGained({w:0,b:0});
   };
 
-  // ── Derivati per rendering ─────────────────────────────────────────────────
   const moveTargets = useMemo(()=>new Set(moves.map(m=>m.to)),[moves]);
   const abilityTargets = useMemo(()=>new Set(moves.filter(m=>m.type==='frenzy_charge'||m.type==='spectral_step').map(m=>m.to)),[moves]);
 
@@ -731,7 +786,6 @@ function App() {
   const selId = sel ? sm[sel] : null;
   const selData = selId ? pd[selId] : null;
   const selEffLevel = sel && selId ? effLevel(sel, selId, activeColor) : 0;
-
   const inCheck = kingInCheck(game, activeColor, pd, sm, stunned, ghostMarch);
 
   const pieceAbilities = useMemo(() => {
@@ -745,11 +799,23 @@ function App() {
     }
     if (selPiece.type === 'n') {
       const cost = getActualCost(ABILITY_BASE_COST.frenzyCharge);
-      ab.push({name:'⚔️ Carica Forsennata', cost, available: energy>=cost, action:()=>{ setFrenzyMode(true); setMoves(getMoves(sel, false, false, 'frenzyCharge')); }});
+      ab.push({name:'⚔️ Carica Forsennata', cost, available: energy>=cost && !knightUsed, action:()=>{ setFrenzyMode(true); setMoves(getMoves(sel, false, false, 'frenzyCharge')); }});
     }
     if (selPiece.type === 'b') {
-      const cost = getActualCost(ABILITY_BASE_COST.spectralStep);
-      ab.push({name:'🌫️ Passo Spettrale', cost, available: energy>=cost, action:()=>{ setSpectralMode(true); setMoves(getMoves(sel, false, false, 'spectralStep')); }});
+      const costSpec = getActualCost(ABILITY_BASE_COST.spectralStep);
+      ab.push({name:'🌫️ Passo Spettrale', cost: costSpec, available: energy>=costSpec, action:()=>{ setSpectralMode(true); setMoves(getMoves(sel, false, false, 'spectralStep')); }});
+      const dartCostVal = getActualCost(ABILITY_BASE_COST.soulDart);
+      ab.push({name:'🔥 Dardo dell\'Anima', cost: dartCostVal, available: energy>=dartCostVal && soulDartZone.length === 0, action:()=>{
+        setPts(prev => ({...prev, [color]: prev[color] - dartCostVal}));
+        setDartRefund(dartCostVal);
+        setDartMode(true); setDartSrc(sel); setDartCost(dartCostVal);
+        const dMoves = [];
+        for (const [df, dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
+          const tsq = SQ(FILE(sel) + df, RANK(sel) + dr);
+          if (tsq) dMoves.push({ type: 'dart_dir', from: sel, to: tsq, df, dr });
+        }
+        setMoves(dMoves);
+      }});
     }
     if (selPiece.type === 'r') {
       const f=FILE(sel), r=RANK(sel);
@@ -763,9 +829,8 @@ function App() {
       ab.push({name:'👑 Comando Reale', cost, available: energy>=cost && hasAlly, action:()=>{ setPts(prev=>({...prev,[color]:prev[color]-cost})); setCmdMode(true); setCmdSrc(sel); setCmdCost(cost); setSel(null); }});
     }
     return ab;
-  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn]);
+  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn, knightUsed, soulDartZone]);
 
-  // ── Pannello ──────────────────────────────────────────────────────────────
   function renderPanel() {
     if (cmdMode) return (
       <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
@@ -784,6 +849,16 @@ function App() {
         <button className="pass-btn" style={{background:'#1e293b',color:'#94a3b8'}}
           onClick={()=>{setElixMode(false);setElixSrc(null);setPts(prev=>({...prev,[activeColor]:prev[activeColor]+elixCost}));}}>
           ✕ Annulla (rimborso {elixCost}⚡)
+        </button>
+      </div>
+    );
+    if (dartMode) return (
+      <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
+        <div style={{fontSize:12,fontWeight:800,color:'#ff6b6b'}}>🔥 Dardo dell'Anima</div>
+        <div className="hint-text">Clicca una delle caselle verdi evidenziate per lanciare la traiettoria.</div>
+        <button className="pass-btn" style={{background:'#1e293b',color:'#94a3b8'}}
+          onClick={()=>{setDartMode(false);setDartSrc(null);setPts(prev=>({...prev,[activeColor]:prev[activeColor]+dartRefund}));setDartRefund(0); setSel(null); setMoves([]);}}>
+          ✕ Annulla (rimborso {dartRefund}⚡)
         </button>
       </div>
     );
@@ -838,7 +913,6 @@ function App() {
     );
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="app">
       <div className="top-bar">
@@ -873,10 +947,11 @@ function App() {
             const isAbTarget=abilityTargets.has(sq);
             const isLast=last?.from===sq||last?.to===sq;
             const isGhostAlly = ghostMarch===pieceColor && pieceColor===activeColor && game.get(sq)?.type==='p' && displayLv===2;
+            const isDartZone = soulDartZone.includes(sq);
 
             return (
               <div key={sq} onClick={()=>click(sq)}
-                className={['cell', light?'light':'dark', isSel?'sel':'', isAura?'aura-cell':'', isStunned?'stunned-piece':'', isImm?'immune-highlight':'', isGhostAlly?'ghost-march-ally':'', isLast?(light?'last-from':'last-to'):''].join(' ')}>
+                className={['cell', light?'light':'dark', isSel?'sel':'', isAura?'aura-cell':'', isStunned?'stunned-piece':'', isImm?'immune-highlight':'', isGhostAlly?'ghost-march-ally':'', isDartZone?'soul-dart-zone':'', isLast?(light?'last-from':'last-to'):''].join(' ')}>
                 {isMoveTarget&&!isAbTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1,pointerEvents:'none'}}/>}
                 {isAbTarget&&!cell&&<div style={{position:'absolute',width:'32%',height:'32%',borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 12px #a855f7',zIndex:1,pointerEvents:'none'}}/>}
                 {isMoveTarget&&cell&&!isAbTarget&&<div style={{position:'absolute',inset:0,border:'3px solid #22c55e',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}

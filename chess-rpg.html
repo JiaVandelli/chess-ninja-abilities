@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.7 (mosse speciali fix)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.7 (tutto ok)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -102,14 +102,16 @@ const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
 function buildState(g) {
   var pd={}, sm={};
-  g.board().forEach(function(row) { row.forEach(function(cell) {
-    if (!cell) return;
-    var sq = 'abcdefgh'[cell.col]+(8-cell.row);
-    var id = cell.color + cell.type + '_' + nextId();
-    pd[id] = {type:cell.type, color:cell.color, level:1};
-    sm[sq] = id;
-  }); });
-  return {pd:pd, sm:sm};
+  g.board().forEach(function(row, r) { 
+    row.forEach(function(cell, c) {
+      if (!cell) return;
+      var sq = 'abcdefgh'[c] + (8 - r);
+      var id = cell.color + cell.type + '_' + nextId();
+      pd[id] = {type: cell.type, color: cell.color, level: 1};
+      sm[sq] = id;
+    }); 
+  });
+  return {pd: pd, sm: sm};
 }
 
 function applyStd(game, from, to, promotion) {
@@ -129,9 +131,14 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
 
   var opp = color==='w'?'b':'w';
   var kSq = null;
-  game.board().forEach(function(row) { row.forEach(function(p) {
-    if (p && p.type==='k' && p.color===color) kSq = 'abcdefgh'[p.col]+(8-p.row);
-  }); });
+  
+  game.board().forEach(function(row, r) { 
+    row.forEach(function(p, c) {
+      if (p && p.type==='k' && p.color===color) {
+        kSq = 'abcdefgh'[c] + (8 - r);
+      }
+    }); 
+  });
   if (!kSq) return false;
 
   var entries = Object.entries(sm);
@@ -508,7 +515,6 @@ function App() {
     if (action.type==='std') {
       var res = applyStd(game, action.from, action.to, action.promo);
       
-      // SE CHESS.JS RIFIUTA LA MOSSA (es. Imperatrice a cavallo o Marcia Fantasma), USIAMO IL FALLBACK MANUALE
       if (!res) {
         ng = new Chess(game.fen());
         var p = game.get(action.from);
@@ -541,7 +547,6 @@ function App() {
         }
         setHasMoved(true);
       } else {
-        // MOSSA STANDARD CLASSICA
         ng = res.game;
         var parts = ng.fen().split(' ');
         parts[1] = color;

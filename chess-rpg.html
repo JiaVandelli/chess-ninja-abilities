@@ -80,7 +80,7 @@ if (typeof ReactDOM === 'undefined') throw new Error('ReactDOM non caricato');
 if (typeof window.Chess === 'undefined') throw new Error('Chess.js non caricato');
 
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
-const Chess = window.Chess;
+// RIMOSSO: const Chess = window.Chess; (Chess è già globale, non serve dichiararlo)
 
 const ICONS = {w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},
                b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
@@ -672,12 +672,12 @@ function App() {
     }
     setAuraGained({w:0,b:0});
     setFrenzyUsed(new Set());
-    
+
     if (soulDartOwner === next) {
       setSoulDartZone([]);
       setSoulDartOwner(null);
     }
-    
+
     setHasMoved(false);
     setSel(null); setMoves([]);
     setCmdMode(false); setCmdSrc(null); setCmdDiscount(false);

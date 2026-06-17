@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.6 (stable)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.7</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
     #root{height:100%}
+    #error-overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#0a0a0a;color:#f87171;font-family:monospace;font-size:14px;z-index:9999;display:none;padding:20px}
     .app{height:100%;max-width:560px;margin:0 auto;display:flex;flex-direction:column;padding:8px;gap:6px;color:#f1f5f9;font-family:system-ui,sans-serif}
     .top-bar{flex-shrink:0;height:40px;display:flex;gap:6px;align-items:center;justify-content:flex-end}
     .flip-btn{padding:0 12px;height:100%;background:#1e293b;border:none;color:#94a3b8;border-radius:8px;font-size:13px;cursor:pointer}
@@ -50,11 +51,34 @@
 </head>
 <body>
 <div id="root"></div>
+<div id="error-overlay"></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script>
+  // Mostra un overlay se React/Chess non sono caricati
+  window.addEventListener('error', function(e) {
+    var el = document.getElementById('error-overlay');
+    if (el) {
+      el.style.display = 'flex';
+      el.textContent = 'ERRORE: ' + (e.message || 'caricamento fallito') + ' – apri la console (F12) per i dettagli.';
+    }
+  });
+  setTimeout(function() {
+    if (document.getElementById('root').children.length === 0 && !document.getElementById('error-overlay').style.display.includes('flex')) {
+      var el = document.getElementById('error-overlay');
+      el.style.display = 'flex';
+      el.textContent = 'React non ha renderizzato nulla. Prova a svuotare la cache (Ctrl+Shift+Canc) o usa una finestra anonima.';
+    }
+  }, 4000);
+</script>
 <script type="text/babel" data-presets="react">
+// Verifica caricamento librerie
+if (typeof React === 'undefined') throw new Error('React non caricato');
+if (typeof ReactDOM === 'undefined') throw new Error('ReactDOM non caricato');
+if (typeof window.Chess === 'undefined') throw new Error('Chess.js non caricato');
+
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
 const Chess = window.Chess;
 
@@ -96,45 +120,47 @@ function applyStd(game, from, to, promotion='q') {
   const mv = g.move({from, to, promotion});
   if (!mv) return null;
   let cap = null;
-  if (mv.captured) cap = mv.flags?.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
-  return {game:g, captured:cap, castleK:mv.flags?.includes('k'), castleQ:mv.flags?.includes('q')};
+  if (mv.captured) cap = mv.flags && mv.flags.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
+  return {game:g, captured:cap, castleK: mv.flags && mv.flags.includes('k'), castleQ: mv.flags && mv.flags.includes('q')};
 }
 
 function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
-  const fen = game.fen().split(' ');
+  var fen = game.fen().split(' ');
   fen[1] = color; fen[3] = '-';
   if (new Chess(fen.slice(0,4).join(' ')+' 0 1').in_check()) return true;
 
-  const opp = color==='w'?'b':'w';
-  let kSq = null;
-  game.board().forEach((row,r) => row.forEach((p,c) => {
-    if (p && p.type==='k' && p.color===color) kSq = 'abcdefgh'[c]+(8-r);
-  }));
+  var opp = color==='w'?'b':'w';
+  var kSq = null;
+  game.board().forEach(function(row) { row.forEach(function(p) {
+    if (p && p.type==='k' && p.color===color) kSq = 'abcdefgh'[p.col]+(8-p.row);
+  }); });
   if (!kSq) return false;
 
-  for (const [sq,id] of Object.entries(sm)) {
-    const p = game.get(sq);
-    if (!p || p.color !== opp || stunnedSet?.has(id)) continue;
-    const d = pd[id];
+  var entries = Object.entries(sm);
+  for (var i=0; i<entries.length; i++) {
+    var sq = entries[i][0], id = entries[i][1];
+    var p = game.get(sq);
+    if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id))) continue;
+    var d = pd[id];
     if (!d || d.level < 2) continue;
-    if (p.type === 'q' && knightJumps(sq).includes(kSq)) return true;
+    if (p.type === 'q' && knightJumps(sq).indexOf(kSq) !== -1) return true;
   }
 
-  for (const [sq,id] of Object.entries(sm)) {
-    const p = game.get(sq);
-    if (!p || p.color !== opp || stunnedSet?.has(id) || p.type !== 'b') continue;
-    const d = pd[id];
+  for (var i=0; i<entries.length; i++) {
+    var sq = entries[i][0], id = entries[i][1];
+    var p = game.get(sq);
+    if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id)) || p.type !== 'b') continue;
+    var d = pd[id];
     if (!d || d.level < 2) continue;
-    const df = Math.sign(FILE(kSq) - FILE(sq));
-    const dr = Math.sign(RANK(kSq) - RANK(sq));
-    // CORREZIONE: rimossa parentesi di troppo dopo FILE(sq)
+    var df = Math.sign(FILE(kSq) - FILE(sq));
+    var dr = Math.sign(RANK(kSq) - RANK(sq));
     if (Math.abs(FILE(kSq)-FILE(sq)) !== Math.abs(RANK(kSq)-RANK(sq)) || df===0) continue;
-    let jumped = false;
-    let f = FILE(sq)+df, r = RANK(sq)+dr;
+    var jumped = false;
+    var f = FILE(sq)+df, r = RANK(sq)+dr;
     while (f !== FILE(kSq) || r !== RANK(kSq)) {
-      const midSq = SQ(f,r);
+      var midSq = SQ(f,r);
       if (!midSq) break;
-      const midPiece = game.get(midSq);
+      var midPiece = game.get(midSq);
       if (midPiece) {
         if (jumped) { jumped = false; break; }
         jumped = true;
@@ -144,37 +170,39 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
     if (jumped) return true;
   }
 
-  for (const [sq,id] of Object.entries(sm)) {
-    const p = game.get(sq);
-    if (!p || p.color !== opp || stunnedSet?.has(id) || p.type !== 'p') continue;
-    const d = pd[id];
+  for (var i=0; i<entries.length; i++) {
+    var sq = entries[i][0], id = entries[i][1];
+    var p = game.get(sq);
+    if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id)) || p.type !== 'p') continue;
+    var d = pd[id];
     if (!d || d.level < 2) continue;
-    const dir = opp === 'w' ? 1 : -1;
-    const pf = FILE(sq), pr = RANK(sq);
-    const attacks = [[pf-1, pr+dir], [pf, pr+dir], [pf+1, pr+dir]];
-    for (const [af, ar] of attacks) {
-      if (af === FILE(kSq) && ar === RANK(kSq)) return true;
+    var dir = opp === 'w' ? 1 : -1;
+    var pf = FILE(sq), pr = RANK(sq);
+    var attacks = [[pf-1, pr+dir], [pf, pr+dir], [pf+1, pr+dir]];
+    for (var j=0; j<attacks.length; j++) {
+      if (attacks[j][0] === FILE(kSq) && attacks[j][1] === RANK(kSq)) return true;
     }
   }
 
   if (ghostMarchColor === opp) {
-    for (const [sq,id] of Object.entries(sm)) {
-      const p = game.get(sq);
-      if (!p || p.color !== opp || stunnedSet?.has(id)) continue;
+    for (var i=0; i<entries.length; i++) {
+      var sq = entries[i][0], id = entries[i][1];
+      var p = game.get(sq);
+      if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id))) continue;
       if (p.type !== 'r' && p.type !== 'q') continue;
-      const df = Math.sign(FILE(kSq) - FILE(sq));
-      const dr = Math.sign(RANK(kSq) - RANK(sq));
+      var df = Math.sign(FILE(kSq) - FILE(sq));
+      var dr = Math.sign(RANK(kSq) - RANK(sq));
       if ((p.type === 'r' && df !== 0 && dr !== 0) || (p.type === 'q' && df === 0 && dr === 0)) continue;
       if (p.type === 'q' && Math.abs(FILE(kSq)-FILE(sq)) !== Math.abs(RANK(kSq)-RANK(sq)) && df !== 0 && dr !== 0) continue;
-      let f = FILE(sq)+df, r = RANK(sq)+dr;
-      let blocked = false;
+      var f = FILE(sq)+df, r = RANK(sq)+dr;
+      var blocked = false;
       while (f !== FILE(kSq) || r !== RANK(kSq)) {
-        const midSq = SQ(f,r);
+        var midSq = SQ(f,r);
         if (!midSq) break;
-        const midPiece = game.get(midSq);
+        var midPiece = game.get(midSq);
         if (midPiece) {
-          const midId = sm[midSq];
-          if (midPiece.color === opp && midPiece.type === 'p' && pd[midId]?.level === 2) {
+          var midId = sm[midSq];
+          if (midPiece.color === opp && midPiece.type === 'p' && pd[midId] && pd[midId].level === 2) {
             f += df; r += dr;
             continue;
           }
@@ -191,7 +219,7 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
 }
 
 function App() {
-  const [game, setGame] = useState(() => new Chess());
+  const [game, setGame] = useState(function() { return new Chess(); });
   const [pd, setPd] = useState({});
   const [sm, setSm] = useState({});
   const [sel, setSel] = useState(null);
@@ -231,68 +259,88 @@ function App() {
   const [auraGained, setAuraGained] = useState({w:0,b:0});
   const lvlTimer = useRef(null);
 
-  useEffect(() => { const s=buildState(game); setPd(s.pd); setSm(s.sm); }, []);
+  useEffect(function() {
+    var s = buildState(game);
+    setPd(s.pd);
+    setSm(s.sm);
+  }, []);
 
-  const inEnemyAura = useCallback((sq, myColor) => {
-    const opp = myColor==='w'?'b':'w';
-    for (const [osq,oid] of Object.entries(sm)) {
-      const p=game.get(osq);
-      if (p&&p.color===opp&&p.type==='n'&&pd[oid]?.level===2) {
-        if (knightJumps(osq).includes(sq)) return true;
+  const inEnemyAura = useCallback(function(sq, myColor) {
+    var opp = myColor==='w'?'b':'w';
+    var entries = Object.entries(sm);
+    for (var i=0; i<entries.length; i++) {
+      var osq = entries[i][0], oid = entries[i][1];
+      var p = game.get(osq);
+      if (p && p.color===opp && p.type==='n' && pd[oid] && pd[oid].level===2) {
+        if (knightJumps(osq).indexOf(sq) !== -1) return true;
       }
     }
     return false;
   }, [game,sm,pd]);
 
-  const effLevel = useCallback((sq, id, color) => {
-    const d = pd[id];
+  const effLevel = useCallback(function(sq, id, color) {
+    var d = pd[id];
     if (!d) return 1;
     if (d.level===2 && inEnemyAura(sq, color)) return 1;
     return d.level;
   }, [pd, inEnemyAura]);
 
-  const calcPrestige = useCallback((color) => {
-    let total=0;
-    for (const [sq,id] of Object.entries(sm)) {
-      const p=game.get(sq);
-      if (p&&p.color===color && effLevel(sq,id,color)===2) total+=PRESTIGE[p.type]||0;
+  const calcPrestige = useCallback(function(color) {
+    var total=0;
+    var entries = Object.entries(sm);
+    for (var i=0; i<entries.length; i++) {
+      var sq = entries[i][0], id = entries[i][1];
+      var p = game.get(sq);
+      if (p && p.color===color && effLevel(sq,id,color)===2) total += (PRESTIGE[p.type] || 0);
     }
     return total;
   }, [game,sm,pd,effLevel]);
 
-  const activeColor = actualTurn;
-  const prestige = calcPrestige(activeColor);
-  const pdDiscount = prestige>=15 ? 1 : 0;
-  const pdBonusEnergy = prestige>=10;
-  const pdCanDevolve = prestige>=5;
+  var activeColor = actualTurn;
+  var prestige = calcPrestige(activeColor);
+  var pdDiscount = prestige>=15 ? 1 : 0;
+  var pdBonusEnergy = prestige>=10;
+  var pdCanDevolve = prestige>=5;
 
-  const isImmune = useCallback((sq) => {
-    if (!immune||immune.sq!==sq) return false;
-    const rookSq = Object.entries(sm).find(([,id])=>id===immune.rookId)?.[0];
+  const isImmune = useCallback(function(sq) {
+    if (!immune || immune.sq!==sq) return false;
+    var rookId = immune.rookId;
+    var rookSq = null;
+    var entries = Object.entries(sm);
+    for (var i=0; i<entries.length; i++) {
+      if (entries[i][1] === rookId) { rookSq = entries[i][0]; break; }
+    }
     if (!rookSq) return false;
-    return FILE(rookSq)===FILE(sq)||RANK(rookSq)===RANK(sq);
+    return FILE(rookSq)===FILE(sq) || RANK(rookSq)===RANK(sq);
   }, [immune,sm]);
 
-  const getActualCost = useCallback((baseCost) => Math.max(1, baseCost - pdDiscount), [pdDiscount]);
-  const getEvoCost = useCallback((type) => Math.max(1, (EVO_COST[type]||99) - pdDiscount), [pdDiscount]);
+  const getActualCost = useCallback(function(baseCost) { return Math.max(1, baseCost - pdDiscount); }, [pdDiscount]);
+  const getEvoCost = useCallback(function(type) { return Math.max(1, (EVO_COST[type]||99) - pdDiscount); }, [pdDiscount]);
 
-  const getMoves = useCallback((sq, isCommandTurn = false, wasOppInCheck = false, specialMode = null) => {
-    const p = game.get(sq);
+  const getMoves = useCallback(function(sq, isCommandTurn, wasOppInCheck, specialMode) {
+    var p = game.get(sq);
     if (!p) return [];
-    const color = p.color;
-    const id = sm[sq];
+    var color = p.color;
+    var id = sm[sq];
     if (!id || stunned.has(id)) return [];
-    const d = pd[id];
-    const evo2 = effLevel(sq, id, color) === 2;
-    let result = [];
+    var d = pd[id];
+    var evo2 = effLevel(sq, id, color) === 2;
+    var result = [];
 
     if (!specialMode || specialMode==='normal') {
-      for (const m of game.moves({square:sq, verbose:true})) {
+      var ms = game.moves({square:sq, verbose:true});
+      for (var i=0; i<ms.length; i++) {
+        var m = ms[i];
         if (m.promotion && m.promotion!=='q') continue;
-        const g2 = new Chess(game.fen());
+        var g2 = new Chess(game.fen());
         if (!g2.move({from:m.from, to:m.to, promotion:m.promotion||'q'})) continue;
-        const nsm = {...sm}; nsm[m.to]=nsm[m.from]; delete nsm[m.from];
-        if (m.captured) { const cs=m.flags?.includes('e')?m.to[0]+sq[1]:m.to; if(isImmune(cs)) continue; delete nsm[cs]; }
+        var nsm = Object.assign({}, sm);
+        nsm[m.to] = nsm[m.from]; delete nsm[m.from];
+        if (m.captured) {
+          var cs = (m.flags && m.flags.includes('e')) ? m.to[0]+sq[1] : m.to;
+          if (isImmune(cs)) continue;
+          delete nsm[cs];
+        }
         if (kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) continue;
         if (isCommandTurn && (g2.in_checkmate() || (wasOppInCheck && g2.in_check()))) continue;
         result.push({type:'std', from:sq, to:m.to, promo:m.promotion});
@@ -302,11 +350,13 @@ function App() {
     if (!evo2) return result;
 
     if (specialMode === 'frenzyCharge' && p.type==='n') {
-      for (const tsq of knightJumps(sq)) {
-        const tp=game.get(tsq);
-        if (tp&&tp.color===color) continue;
-        const g2=new Chess(game.fen()); g2.remove(sq); if(tp)g2.remove(tsq); g2.put({type:'n',color},tsq);
-        const nsm={...sm}; delete nsm[sq]; if(tp)delete nsm[tsq]; nsm[tsq]=id;
+      var jumps = knightJumps(sq);
+      for (var j=0; j<jumps.length; j++) {
+        var tsq = jumps[j];
+        var tp = game.get(tsq);
+        if (tp && tp.color===color) continue;
+        var g2 = new Chess(game.fen()); g2.remove(sq); if (tp) g2.remove(tsq); g2.put({type:'n',color:color},tsq);
+        var nsm = Object.assign({}, sm); delete nsm[sq]; if (tp) delete nsm[tsq]; nsm[tsq] = id;
         if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch))
           result.push({type:'frenzy_charge', from:sq, to:tsq});
       }
@@ -314,120 +364,128 @@ function App() {
     }
 
     if (specialMode === 'spectralStep' && p.type==='b') {
-      for (const [df,dr] of DIAG_DIRS) {
-        let cf=FILE(sq)+df, cr=RANK(sq)+dr;
-        while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
-          const tsq=SQ(cf,cr);
+      for (var di=0; di<DIAG_DIRS.length; di++) {
+        var df = DIAG_DIRS[di][0], dr = DIAG_DIRS[di][1];
+        var cf = FILE(sq)+df, cr = RANK(sq)+dr;
+        while (cf>=0 && cf<=7 && cr>=1 && cr<=8) {
+          var tsq = SQ(cf,cr);
           if (!game.get(tsq)) {
-            const g2=new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color},tsq);
-            const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
+            var g2 = new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color:color},tsq);
+            var nsm = Object.assign({}, sm); nsm[tsq] = id; delete nsm[sq];
             if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch))
               result.push({type:'spectral_step', from:sq, to:tsq});
           }
-          cf+=df; cr+=dr;
+          cf += df; cr += dr;
         }
       }
       return result;
     }
 
     if (p.type==='p') {
-      const dir = color==='w'?1:-1;
-      const f=FILE(sq), r=RANK(sq);
-      for (const df of [-1,0,1]) {
-        const tsq=SQ(f+df, r+dir);
-        if (!tsq || result.some(m=>m.to===tsq)) continue;
-        const tp=game.get(tsq);
+      var dir = color==='w'?1:-1;
+      var f = FILE(sq), r = RANK(sq);
+      for (var df=-1; df<=1; df++) {
+        var tsq = SQ(f+df, r+dir);
+        if (!tsq || result.some(function(mm){return mm.to===tsq;})) continue;
+        var tp = game.get(tsq);
         if (df===0 && tp) continue;
         if (df!==0 && tp && tp.color===color) continue;
-        const g2=new Chess(game.fen()); g2.remove(sq); if(tp)g2.remove(tsq); g2.put({type:'p',color},tsq);
-        const nsm={...sm}; delete nsm[sq]; if(tp)delete nsm[tsq]; nsm[tsq]=id;
+        var g2 = new Chess(game.fen()); g2.remove(sq); if (tp) g2.remove(tsq); g2.put({type:'p',color:color},tsq);
+        var nsm = Object.assign({}, sm); delete nsm[sq]; if (tp) delete nsm[tsq]; nsm[tsq] = id;
         if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'std', from:sq, to:tsq});
       }
     }
     if (p.type==='b') {
-      for (const [df,dr] of DIAG_DIRS) {
-        let cf=FILE(sq)+df, cr=RANK(sq)+dr;
-        let first=null, firstSq=null;
-        while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
-          const tsq=SQ(cf,cr); if(!tsq) break;
-          const tp=game.get(tsq);
-          if(!first) { if(tp){first=tp;firstSq=tsq;} }
+      for (var di=0; di<DIAG_DIRS.length; di++) {
+        var df = DIAG_DIRS[di][0], dr = DIAG_DIRS[di][1];
+        var cf = FILE(sq)+df, cr = RANK(sq)+dr;
+        var first=null, firstSq=null;
+        while (cf>=0 && cf<=7 && cr>=1 && cr<=8) {
+          var tsq = SQ(cf,cr); if (!tsq) break;
+          var tp = game.get(tsq);
+          if (!first) { if (tp) { first=tp; firstSq=tsq; } }
           else {
-            if(!tp){
-              const g2=new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color},tsq);
-              const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
-              if(!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:first.color});
+            if (!tp) {
+              var g2 = new Chess(game.fen()); g2.remove(sq); g2.put({type:'b',color:color},tsq);
+              var nsm = Object.assign({}, sm); nsm[tsq] = id; delete nsm[sq];
+              if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:first.color});
             } else {
-              if(tp.color!==color){
-                const g2=new Chess(game.fen()); g2.remove(sq); g2.remove(tsq); g2.put({type:'b',color},tsq);
-                const nsm={...sm}; delete nsm[sq]; delete nsm[tsq]; nsm[tsq]=id;
-                if(!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:first.color, capture:true});
+              if (tp.color!==color) {
+                var g2 = new Chess(game.fen()); g2.remove(sq); g2.remove(tsq); g2.put({type:'b',color:color},tsq);
+                var nsm = Object.assign({}, sm); delete nsm[sq]; delete nsm[tsq]; nsm[tsq] = id;
+                if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'bishop_jump', from:sq, to:tsq, jumped:firstSq, jumpedId:sm[firstSq], jumpedColor:first.color, capture:true});
               }
               break;
             }
           }
-          cf+=df; cr+=dr;
+          cf += df; cr += dr;
         }
       }
     }
     if (p.type==='q') {
-      for (const tsq of knightJumps(sq)) {
-        if (result.some(m=>m.to===tsq)) continue;
-        const tp=game.get(tsq);
-        if (tp&&tp.color===color) continue;
-        const g2=new Chess(game.fen()); g2.remove(sq); if(tp)g2.remove(tsq); g2.put({type:'q',color},tsq);
-        const nsm={...sm}; delete nsm[sq]; if(tp)delete nsm[tsq]; nsm[tsq]=id;
-        if(!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'std', from:sq, to:tsq});
+      var jumps = knightJumps(sq);
+      for (var j=0; j<jumps.length; j++) {
+        var tsq = jumps[j];
+        if (result.some(function(mm){return mm.to===tsq;})) continue;
+        var tp = game.get(tsq);
+        if (tp && tp.color===color) continue;
+        var g2 = new Chess(game.fen()); g2.remove(sq); if (tp) g2.remove(tsq); g2.put({type:'q',color:color},tsq);
+        var nsm = Object.assign({}, sm); delete nsm[sq]; if (tp) delete nsm[tsq]; nsm[tsq] = id;
+        if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'std', from:sq, to:tsq});
       }
     }
     if (p.type==='r') {
-      const f=FILE(sq), r=RANK(sq);
-      for (const [osq,oid] of Object.entries(sm)) {
+      var f = FILE(sq), r = RANK(sq);
+      var entries = Object.entries(sm);
+      for (var i=0; i<entries.length; i++) {
+        var osq = entries[i][0], oid = entries[i][1];
         if (osq===sq) continue;
-        const op=game.get(osq);
-        if (!op||op.color!==color||op.type==='k') continue;
-        const of_=FILE(osq), or_=RANK(osq);
+        var op = game.get(osq);
+        if (!op || op.color!==color || op.type==='k') continue;
+        var of_ = FILE(osq), or_ = RANK(osq);
         if (f===of_ || r===or_) {
           result.push({type:'swap', from:sq, to:osq});
         }
       }
     }
     if (ghostMarch===color && (p.type==='r'||p.type==='q')) {
-      const dirs = STRAIGHT_DIRS.concat(p.type==='q'?DIAG_DIRS:[]);
-      for (const [df,dr] of dirs) {
-        let cf=FILE(sq)+df, cr=RANK(sq)+dr;
-        while (cf>=0&&cf<=7&&cr>=1&&cr<=8) {
-          const tsq=SQ(cf,cr); if(!tsq) break;
-          const tp=game.get(tsq);
+      var dirs = STRAIGHT_DIRS.slice();
+      if (p.type==='q') dirs = dirs.concat(DIAG_DIRS);
+      for (var di=0; di<dirs.length; di++) {
+        var df = dirs[di][0], dr = dirs[di][1];
+        var cf = FILE(sq)+df, cr = RANK(sq)+dr;
+        while (cf>=0 && cf<=7 && cr>=1 && cr<=8) {
+          var tsq = SQ(cf,cr); if (!tsq) break;
+          var tp = game.get(tsq);
           if (!tp) {
-            if (!result.some(m=>m.to===tsq)) {
-              const g2=new Chess(game.fen()); g2.remove(sq); g2.put(p,tsq);
-              const nsm={...sm}; nsm[tsq]=id; delete nsm[sq];
-              if(!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'std', from:sq, to:tsq});
+            if (!result.some(function(mm){return mm.to===tsq;})) {
+              var g2 = new Chess(game.fen()); g2.remove(sq); g2.put({type:p.type,color:color},tsq);
+              var nsm = Object.assign({}, sm); nsm[tsq] = id; delete nsm[sq];
+              if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'std', from:sq, to:tsq});
             }
           } else if (tp.color===color && tp.type==='p' && effLevel(tsq,sm[tsq],color)===2) {
-            cf+=df; cr+=dr; continue;
+            cf += df; cr += dr; continue;
           } else break;
-          cf+=df; cr+=dr;
+          cf += df; cr += dr;
         }
       }
     }
 
     if (soulDartOwner && soulDartZone.length > 0 && p.color !== soulDartOwner) {
-      const startsInZone = soulDartZone.includes(sq);
-      result = result.filter(m => {
-        const landsInZone = soulDartZone.includes(m.to);
+      var startsInZone = soulDartZone.indexOf(sq) !== -1;
+      result = result.filter(function(m) {
+        var landsInZone = soulDartZone.indexOf(m.to) !== -1;
         if (startsInZone) {
           return landsInZone;
         } else {
-          if (p.type === 'n') return true; 
-          const f0 = FILE(sq), r0 = RANK(sq);
-          const f1 = FILE(m.to), r1 = RANK(m.to);
-          const df = Math.sign(f1 - f0), dr = Math.sign(r1 - r0);
-          let cf = f0 + df, cr = r0 + dr;
+          if (p.type === 'n') return true;
+          var f0 = FILE(sq), r0 = RANK(sq);
+          var f1 = FILE(m.to), r1 = RANK(m.to);
+          var df = Math.sign(f1 - f0), dr = Math.sign(r1 - r0);
+          var cf = f0 + df, cr = r0 + dr;
           while (cf !== f1 || cr !== r1) {
-            const pathSq = SQ(cf, cr);
-            if (pathSq && soulDartZone.includes(pathSq)) return false;
+            var pathSq = SQ(cf, cr);
+            if (pathSq && soulDartZone.indexOf(pathSq) !== -1) return false;
             cf += df; cr += dr;
           }
           return true;
@@ -438,102 +496,104 @@ function App() {
     return result;
   }, [game,sm,pd,pts,stunned,ghostMarch,pdDiscount,cmdDiscount,inEnemyAura,isImmune,effLevel,actualTurn,soulDartZone,soulDartOwner]);
 
-  const execute = useCallback((action, color) => {
-    let ng, energyDelta=0;
-    const npd={...pd}, nsm={...sm};
-    const newStunned=new Set(stunned);
-    let newImmune=immune, newGhost=ghostMarch;
+  const execute = useCallback(function(action, color) {
+    var ng, energyDelta=0;
+    var npd = Object.assign({}, pd);
+    var nsm = Object.assign({}, sm);
+    var newStunned = new Set(stunned);
+    var newImmune = immune;
+    var newGhost = ghostMarch;
 
-    const mid = sm[action.from];
-    const wasOppInCheck = game.in_check();
+    var mid = sm[action.from];
+    var wasOppInCheck = game.in_check();
 
     if (action.type==='std') {
-      const res=applyStd(game,action.from,action.to,action.promo);
+      var res = applyStd(game,action.from,action.to,action.promo);
       if (!res) return false;
-      ng=res.game;
-      const parts = ng.fen().split(' ');
+      ng = res.game;
+      var parts = ng.fen().split(' ');
       parts[1] = color;
       parts[3] = '-';
       ng = new Chess(parts.join(' '));
-      energyDelta=1;
-      if (res.captured) energyDelta+=1;
-      if (ng.in_check()) energyDelta+=1;
-      if (npd[mid]?.type==='p'&&npd[mid]?.level===2&&res.captured) energyDelta+=1;
-      if (res.castleK){const rk=color==='w'?'1':'8';nsm['f'+rk]=nsm['h'+rk];delete nsm['h'+rk];}
-      if (res.castleQ){const rk=color==='w'?'1':'8';nsm['d'+rk]=nsm['a'+rk];delete nsm['a'+rk];}
-      if (res.captured){ const cs=res.captured._sq||action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
-      nsm[action.to]=mid; delete nsm[action.from];
-      const promoPiece = game.get(action.from);
+      energyDelta = 1;
+      if (res.captured) energyDelta += 1;
+      if (ng.in_check()) energyDelta += 1;
+      if (npd[mid] && npd[mid].type==='p' && npd[mid].level===2 && res.captured) energyDelta += 1;
+      if (res.castleK) { var rk = color==='w'?'1':'8'; nsm['f'+rk] = nsm['h'+rk]; delete nsm['h'+rk]; }
+      if (res.castleQ) { var rk = color==='w'?'1':'8'; nsm['d'+rk] = nsm['a'+rk]; delete nsm['a'+rk]; }
+      if (res.captured) { var cs = res.captured._sq || action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
+      nsm[action.to] = mid; delete nsm[action.from];
+      var promoPiece = game.get(action.from);
       if (promoPiece && promoPiece.type==='p' && (RANK(action.to)===8 || RANK(action.to)===1)) {
-        npd[mid] = { type: action.promo||'q', color, level:1 };
+        npd[mid] = { type: action.promo||'q', color: color, level: 1 };
       }
       setHasMoved(true);
     }
     else if (action.type==='bishop_jump') {
-      ng=new Chess(game.fen());
-      const jumped=game.get(action.jumped), tp=game.get(action.to);
+      ng = new Chess(game.fen());
+      var jumped = game.get(action.jumped), tp = game.get(action.to);
       ng.remove(action.from);
-      if (action.capture && tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta+=1; }
-      ng.put({type:'b',color},action.to);
-      nsm[action.to]=mid; delete nsm[action.from];
+      if (action.capture && tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta += 1; }
+      ng.put({type:'b',color:color},action.to);
+      nsm[action.to] = mid; delete nsm[action.from];
       if (jumped) {
         if (jumped.color!==color) newStunned.add(action.jumpedId);
       }
       energyDelta += 1;
-      const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
-      ng=new Chess(parts.join(' '));
-      if(ng.in_check()) energyDelta+=1;
+      var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
+      ng = new Chess(parts.join(' '));
+      if (ng.in_check()) energyDelta += 1;
       setHasMoved(true);
     }
     else if (action.type==='frenzy_charge' || action.type==='spectral_step') {
-      const cost = getActualCost(action.type==='frenzy_charge'?ABILITY_BASE_COST.frenzyCharge:ABILITY_BASE_COST.spectralStep);
-      if (pts[color]<cost) return false;
+      var cost = getActualCost(action.type==='frenzy_charge'?ABILITY_BASE_COST.frenzyCharge:ABILITY_BASE_COST.spectralStep);
+      if (pts[color] < cost) return false;
       energyDelta = -cost + 1;
       if (action.type==='spectral_step') {
-        const f0=FILE(action.from),r0=RANK(action.from);
-        const f1=FILE(action.to), r1=RANK(action.to);
-        const dc=f1>f0?1:-1, dr=r1>r0?1:-1;
-        let cf=f0+dc, cr=r0+dr;
-        while(cf!==f1||cr!==r1){
-          const msq=SQ(cf,cr), mp=game.get(msq);
-          if(mp){
-            if(mp.color!==color) newStunned.add(sm[msq]);
-            else energyDelta+=1;
+        var f0 = FILE(action.from), r0 = RANK(action.from);
+        var f1 = FILE(action.to), r1 = RANK(action.to);
+        var dc = f1>f0?1:-1, dr = r1>r0?1:-1;
+        var cf = f0+dc, cr = r0+dr;
+        while (cf!==f1 || cr!==r1) {
+          var msq = SQ(cf,cr), mp = game.get(msq);
+          if (mp) {
+            if (mp.color!==color) newStunned.add(sm[msq]);
+            else energyDelta += 1;
           }
-          cf+=dc; cr+=dr;
+          cf += dc; cr += dr;
         }
       }
-      ng=new Chess(game.fen());
-      const tp=game.get(action.to);
+      ng = new Chess(game.fen());
+      var tp = game.get(action.to);
       ng.remove(action.from);
-      if(tp){delete npd[nsm[action.to]];delete nsm[action.to];energyDelta+=1;}
-      ng.put({type:action.type==='frenzy_charge'?'n':'b',color},action.to);
-      nsm[action.to]=mid; delete nsm[action.from];
-      const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
-      ng=new Chess(parts.join(' '));
-      if(ng.in_check()) energyDelta+=1;
+      if (tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta += 1; }
+      ng.put({type: action.type==='frenzy_charge'?'n':'b', color:color}, action.to);
+      nsm[action.to] = mid; delete nsm[action.from];
+      var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
+      ng = new Chess(parts.join(' '));
+      if (ng.in_check()) energyDelta += 1;
       if (action.type==='frenzy_charge') {
-        setFrenzyUsed(prev => { const ns = new Set(prev); ns.add(mid); return ns; });
+        setFrenzyUsed(function(prev) { var ns = new Set(prev); ns.add(mid); return ns; });
       }
     }
     else if (action.type==='swap') {
-      const p1=game.get(action.from), p2=game.get(action.to);
-      ng=new Chess(game.fen()); ng.remove(action.from); ng.remove(action.to);
-      ng.put(p1,action.to); ng.put(p2,action.from);
-      const parts=ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
-      ng=new Chess(parts.join(' '));
-      const tempId = nsm[action.from];
+      var p1 = game.get(action.from), p2 = game.get(action.to);
+      ng = new Chess(game.fen()); ng.remove(action.from); ng.remove(action.to);
+      ng.put(p1, action.to); ng.put(p2, action.from);
+      var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
+      ng = new Chess(parts.join(' '));
+      var tempId = nsm[action.from];
       nsm[action.from] = nsm[action.to];
       nsm[action.to] = tempId;
-      energyDelta=1;
+      energyDelta = 1;
 
-      const isAdjEnemy = (targetSq) => {
-        const tf = FILE(targetSq), tr = RANK(targetSq);
-        for(let df=-1; df<=1; df++) {
-          for(let dr=-1; dr<=1; dr++) {
-             if(df===0 && dr===0) continue;
-             const adjSq = SQ(tf+df, tr+dr);
-             if(adjSq && ng.get(adjSq) && ng.get(adjSq).color !== color) return true;
+      var isAdjEnemy = function(targetSq) {
+        var tf = FILE(targetSq), tr = RANK(targetSq);
+        for (var df=-1; df<=1; df++) {
+          for (var dr=-1; dr<=1; dr++) {
+            if (df===0 && dr===0) continue;
+            var adjSq = SQ(tf+df, tr+dr);
+            if (adjSq && ng.get(adjSq) && ng.get(adjSq).color !== color) return true;
           }
         }
         return false;
@@ -544,27 +604,37 @@ function App() {
     }
     else return false;
 
-    const opp = color==='w'?'b':'w';
-    let auraExtra=0;
-    const oppDestrieri = Object.entries(sm).filter(([sqA,idA])=>pd[idA]?.level===2 && ng.get(sqA)?.type==='n' && ng.get(sqA)?.color===opp);
-    for (const [sqA,idA] of oppDestrieri) {
-      const zone = knightJumps(sqA);
-      for (const [sqE,idE] of Object.entries(sm)) {
+    var opp = color==='w'?'b':'w';
+    var auraExtra = 0;
+    var entries = Object.entries(sm);
+    var oppDestrieri = [];
+    for (var i=0; i<entries.length; i++) {
+      var sqA = entries[i][0], idA = entries[i][1];
+      if (pd[idA] && pd[idA].level===2 && ng.get(sqA) && ng.get(sqA).type==='n' && ng.get(sqA).color===opp) {
+        oppDestrieri.push([sqA,idA]);
+      }
+    }
+    for (var i=0; i<oppDestrieri.length; i++) {
+      var sqA = oppDestrieri[i][0], idA = oppDestrieri[i][1];
+      var zone = knightJumps(sqA);
+      for (var j=0; j<entries.length; j++) {
+        var sqE = entries[j][0], idE = entries[j][1];
         if (sqE===sqA) continue;
-        const ep=ng.get(sqE);
+        var ep = ng.get(sqE);
         if (ep && ep.color===color) {
-          const wasInZone = game.get(sqE) ? knightJumps(sqA).includes(sqE) : false;
-          const isInZone = zone.includes(sqE);
+          var wasInZone = game.get(sqE) ? knightJumps(sqA).indexOf(sqE) !== -1 : false;
+          var isInZone = zone.indexOf(sqE) !== -1;
           if (!wasInZone && isInZone) auraExtra += 1;
           else if (wasInZone && !isInZone) auraExtra += 1;
         }
       }
     }
     auraExtra = Math.min(auraExtra, 2 - (auraGained[opp]||0));
-    const newAuraGained = {...auraGained, [opp]: (auraGained[opp]||0)+auraExtra};
+    var newAuraGained = Object.assign({}, auraGained);
+    newAuraGained[opp] = (auraGained[opp]||0) + auraExtra;
 
     setGame(ng); setPd(npd); setSm(nsm);
-    setPts(prev => ({...prev, [color]: Math.max(0, prev[color]+energyDelta), [opp]: prev[opp]+auraExtra}));
+    setPts(function(prev) { var np = Object.assign({}, prev); np[color] = Math.max(0, prev[color]+energyDelta); np[opp] = prev[opp]+auraExtra; return np; });
     setStunned(newStunned); setImmune(newImmune);
     setGhostMarch(newGhost);
     setAuraGained(newAuraGained);
@@ -572,9 +642,9 @@ function App() {
     setSel(null); setMoves([]);
     setFrenzyMode(false); setSpectralMode(false);
 
-    const evalFen = ng.fen().split(' ');
+    var evalFen = ng.fen().split(' ');
     evalFen[1] = opp;
-    const evalGame = new Chess(evalFen.join(' '));
+    var evalGame = new Chess(evalFen.join(' '));
     if (evalGame.in_checkmate() || evalGame.in_draw() || evalGame.in_stalemate()) {
       setGameOver({
         winner: evalGame.in_checkmate() ? color : null,
@@ -584,14 +654,21 @@ function App() {
     return true;
   }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained,getActualCost,actualTurn]);
 
-  const passTurn = useCallback(() => {
+  const passTurn = useCallback(function() {
     if (!hasMoved) return;
-    const next = actualTurn === 'w' ? 'b' : 'w';
-    setStunned(prev => { const ns=new Set(prev); for (const id of ns) if(pd[id]?.color===actualTurn) ns.delete(id); return ns; });
+    var next = actualTurn === 'w' ? 'b' : 'w';
+    setStunned(function(prev) {
+      var ns = new Set(prev);
+      var ids = Object.values(pd);
+      for (var i=0; i<ids.length; i++) {
+        if (ids[i].color===actualTurn) ns.delete(ids[i]);
+      }
+      return ns;
+    });
     setImmune(null);
     if (ghostMarch === actualTurn) setGhostMarch(null);
     if (pdBonusEnergy && calcPrestige(next)>=10) {
-      setPts(prev=>({...prev,[next]:prev[next]+1}));
+      setPts(function(prev) { var np = Object.assign({}, prev); np[next] = prev[next]+1; return np; });
     }
     setAuraGained({w:0,b:0});
     setFrenzyUsed(new Set());
@@ -608,29 +685,29 @@ function App() {
     setFrenzyMode(false); setSpectralMode(false);
     setDartMode(false); setDartSrc(null); setDartRefund(0);
     setActualTurn(next);
-    setGame(prev => {
-      const fenParts = prev.fen().split(' ');
+    setGame(function(prev) {
+      var fenParts = prev.fen().split(' ');
       fenParts[1] = next;
       return new Chess(fenParts.join(' '));
     });
   }, [hasMoved, actualTurn, pd, pdBonusEnergy, calcPrestige, ghostMarch, soulDartOwner]);
 
-  const click = useCallback((sq) => {
+  const click = useCallback(function(sq) {
     if (gameOver) return;
-    const color = actualTurn;
+    var color = actualTurn;
 
     if (cmdMode) {
       if (sq && sq!==cmdSrc) {
-        const p=game.get(sq);
-        if (p&&p.color===color&&p.type!=='q') {
+        var p = game.get(sq);
+        if (p && p.color===color && p.type!=='q') {
           setCmdDiscount(true);
           setCmdMode(false); setCmdSrc(null);
-          const oppInCheck = kingInCheck(game, color==='w'?'b':'w', pd, sm, stunned, ghostMarch);
+          var oppInCheck = kingInCheck(game, color==='w'?'b':'w', pd, sm, stunned, ghostMarch);
           setSel(sq); setMoves(getMoves(sq, true, oppInCheck, 'normal'));
         }
       } else {
         setCmdMode(false); setCmdSrc(null);
-        setPts(prev=>({...prev,[color]:prev[color]+cmdCost}));
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]+cmdCost; return np; });
         setCmdDiscount(false);
       }
       return;
@@ -638,15 +715,15 @@ function App() {
 
     if (elixMode) {
       if (sq) {
-        const p=game.get(sq);
-        if (p&&p.color===color&&sq!==elixSrc&&(FILE(sq)===FILE(elixSrc)||RANK(sq)===RANK(elixSrc))) {
-          setImmune({sq, rookId:sm[elixSrc]});
-          setPts(prev=>({...prev,[color]:Math.max(0,prev[color]-elixCost)}));
+        var p = game.get(sq);
+        if (p && p.color===color && sq!==elixSrc && (FILE(sq)===FILE(elixSrc)||RANK(sq)===RANK(elixSrc))) {
+          setImmune({sq: sq, rookId: sm[elixSrc]});
+          setPts(function(prev) { var np = Object.assign({}, prev); np[color] = Math.max(0,prev[color]-elixCost); return np; });
           setElixMode(false); setElixSrc(null);
           setSel(null); setMoves([]);
         }
       } else {
-        setPts(prev=>({...prev,[color]:prev[color]+elixCost}));
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]+elixCost; return np; });
         setElixMode(false); setElixSrc(null);
       }
       return;
@@ -654,11 +731,11 @@ function App() {
 
     if (dartMode) {
       if (sq) {
-        const move = moves.find(m => m.to === sq && m.type === 'dart_dir');
+        var move = moves.find(function(m) { return m.to === sq && m.type === 'dart_dir'; });
         if (move) {
-          const dirF = move.df, dirR = move.dr;
-          let cf = FILE(dartSrc) + dirF, cr = RANK(dartSrc) + dirR;
-          const zone = [];
+          var dirF = move.df, dirR = move.dr;
+          var cf = FILE(dartSrc) + dirF, cr = RANK(dartSrc) + dirR;
+          var zone = [];
           while (cf >= 0 && cf <= 7 && cr >= 1 && cr <= 8) {
             zone.push(SQ(cf, cr));
             cf += dirF; cr += dirR;
@@ -670,16 +747,16 @@ function App() {
           return;
         }
       }
-      setPts(prev => ({...prev, [color]: prev[color] + dartRefund}));
+      setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color] + dartRefund; return np; });
       setDartMode(false); setDartSrc(null); setDartRefund(0);
       setSel(null); setMoves([]);
       return;
     }
 
     if (frenzyMode || spectralMode) {
-      const specialMode = frenzyMode ? 'frenzyCharge' : 'spectralStep';
+      var specialMode = frenzyMode ? 'frenzyCharge' : 'spectralStep';
       if (sq) {
-        const move = moves.find(m=>m.to===sq && (m.type==='frenzy_charge'||m.type==='spectral_step'));
+        var move = moves.find(function(m) { return m.to===sq && (m.type==='frenzy_charge'||m.type==='spectral_step'); });
         if (move) {
           execute(move, color);
           return;
@@ -691,7 +768,7 @@ function App() {
     }
 
     if (sel && sq && moves.length > 0) {
-      const move = moves.find(m => m.to === sq && (m.type === 'std' || m.type === 'swap' || m.type === 'bishop_jump'));
+      var move = moves.find(function(m) { return m.to === sq && (m.type === 'std' || m.type === 'swap' || m.type === 'bishop_jump'); });
       if (move) {
         execute(move, color);
         return;
@@ -700,19 +777,19 @@ function App() {
 
     if (!hasMoved) {
       if (!sq) return;
-      const p = game.get(sq);
+      var p = game.get(sq);
       if (!p || p.color !== color || stunned.has(sm[sq])) return;
       if (!sel) {
         setSel(sq);
         setMoves(getMoves(sq, false, false, 'normal'));
         return;
       }
-      const move = moves.find(m=>m.to===sq && (m.type==='std'||m.type==='swap'||m.type==='bishop_jump'));
+      var move = moves.find(function(m) { return m.to===sq && (m.type==='std'||m.type==='swap'||m.type==='bishop_jump'); });
       if (move) {
         execute(move, color);
         return;
       }
-      const newPiece = game.get(sq);
+      var newPiece = game.get(sq);
       if (newPiece && newPiece.color === color && !stunned.has(sm[sq])) {
         setSel(sq);
         setMoves(getMoves(sq, false, false, 'normal'));
@@ -726,23 +803,23 @@ function App() {
       setSel(null); setMoves([]);
       return;
     }
-    const p = game.get(sq);
+    var p = game.get(sq);
     if (!p || p.color !== color || stunned.has(sm[sq])) {
       setSel(null); setMoves([]);
       return;
     }
-    const id = sm[sq];
-    const d = pd[id];
-    const lv = effLevel(sq, id, color);
+    var id = sm[sq];
+    var d = pd[id];
+    var lv = effLevel(sq, id, color);
 
     if (lv === 1) {
-      const cost = getEvoCost(p.type);
+      var cost = getEvoCost(p.type);
       if (pts[color] >= cost) {
-        setPd(prev=>({...prev,[id]:{...d,level:2}}));
-        setPts(prev=>({...prev,[color]:prev[color]-cost}));
+        setPd(function(prev) { var npd = Object.assign({}, prev); npd[id] = Object.assign({}, d, {level:2}); return npd; });
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
         setLvlUpSq(sq);
-        if(lvlTimer.current)clearTimeout(lvlTimer.current);
-        lvlTimer.current=setTimeout(()=>setLvlUpSq(null),900);
+        if (lvlTimer.current) clearTimeout(lvlTimer.current);
+        lvlTimer.current = setTimeout(function() { setLvlUpSq(null); }, 900);
         setSel(null); setMoves([]);
       }
       return;
@@ -752,18 +829,18 @@ function App() {
     setMoves([]);
   }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, elixMode, frenzyMode, spectralMode, dartMode, dartSrc, dartRefund, execute, getMoves, effLevel, getEvoCost, actualTurn, soulDartOwner]);
 
-  const devolveSelected = useCallback(() => {
+  const devolveSelected = useCallback(function() {
     if (!sel) return;
-    const id = sm[sel];
-    const d = pd[id];
+    var id = sm[sel];
+    var d = pd[id];
     if (!d || d.level !== 2 || !pdCanDevolve) return;
-    setPd(prev=>({...prev,[id]:{...d,level:1}}));
-    setPts(prev=>({...prev,[activeColor]:prev[activeColor]+1}));
+    setPd(function(prev) { var npd = Object.assign({}, prev); npd[id] = Object.assign({}, d, {level:1}); return npd; });
+    setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+1; return np; });
     setSel(null); setMoves([]);
   }, [sel, sm, pd, pdCanDevolve, activeColor]);
 
-  const reset = () => {
-    _id=0; const g=new Chess(); const s=buildState(g);
+  const reset = function() {
+    _id=0; var g = new Chess(); var s = buildState(g);
     setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
     setSel(null); setMoves([]); setLast(null);
     setHasMoved(false); setActualTurn('w');
@@ -777,222 +854,239 @@ function App() {
     setAuraGained({w:0,b:0});
   };
 
-  const moveTargets = useMemo(()=>new Set(moves.map(m=>m.to)),[moves]);
-  const abilityTargets = useMemo(()=>new Set(moves.filter(m=>m.type==='frenzy_charge'||m.type==='spectral_step').map(m=>m.to)),[moves]);
+  var moveTargets = useMemo(function() { return new Set(moves.map(function(m) { return m.to; })); }, [moves]);
+  var abilityTargets = useMemo(function() { return new Set(moves.filter(function(m) { return m.type==='frenzy_charge'||m.type==='spectral_step'; }).map(function(m) { return m.to; })); }, [moves]);
 
-  const raw = game.board();
-  const bd = flipped ? [...raw].reverse().map(r=>[...r].reverse()) : raw;
+  var raw = game.board();
+  var bd = flipped ? raw.slice().reverse().map(function(r) { return r.slice().reverse(); }) : raw;
 
-  const selPiece = sel ? game.get(sel) : null;
-  const selId = sel ? sm[sel] : null;
-  const selData = selId ? pd[selId] : null;
-  const selEffLevel = sel && selId ? effLevel(sel, selId, activeColor) : 0;
-  const inCheck = kingInCheck(game, activeColor, pd, sm, stunned, ghostMarch);
+  var selPiece = sel ? game.get(sel) : null;
+  var selId = sel ? sm[sel] : null;
+  var selData = selId ? pd[selId] : null;
+  var selEffLevel = sel && selId ? effLevel(sel, selId, activeColor) : 0;
+  var inCheck = kingInCheck(game, activeColor, pd, sm, stunned, ghostMarch);
 
-  const pieceAbilities = useMemo(() => {
+  var pieceAbilities = useMemo(function() {
     if (!hasMoved || !selPiece || !selData || selEffLevel !== 2) return [];
-    const color = selPiece.color;
-    const energy = pts[color];
-    const ab = [];
+    var color = selPiece.color;
+    var energy = pts[color];
+    var ab = [];
     if (selPiece.type === 'p') {
-      const cost = getActualCost(ABILITY_BASE_COST.ghostMarch);
-      ab.push({name:'👻 Marcia Fantasma', cost, available: energy>=cost && !ghostMarch, action:()=>{ setPts(prev=>({...prev,[color]:prev[color]-cost})); setGhostMarch(color); setSel(null); }});
+      var cost = getActualCost(ABILITY_BASE_COST.ghostMarch);
+      ab.push({name:'👻 Marcia Fantasma', cost: cost, available: energy>=cost && !ghostMarch, action: function() {
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
+        setGhostMarch(color); setSel(null);
+      }});
     }
     if (selPiece.type === 'n') {
-      const cost = getActualCost(ABILITY_BASE_COST.frenzyCharge);
-      ab.push({name:'⚔️ Carica Forsennata', cost, available: energy>=cost && !frenzyUsed.has(selId), action:()=>{ setFrenzyMode(true); setMoves(getMoves(sel, false, false, 'frenzyCharge')); }});
+      var cost = getActualCost(ABILITY_BASE_COST.frenzyCharge);
+      ab.push({name:'⚔️ Carica Forsennata', cost: cost, available: energy>=cost && !frenzyUsed.has(selId), action: function() {
+        setFrenzyMode(true); setMoves(getMoves(sel, false, false, 'frenzyCharge'));
+      }});
     }
     if (selPiece.type === 'b') {
-      const costSpec = getActualCost(ABILITY_BASE_COST.spectralStep);
-      ab.push({name:'🌫️ Passo Spettrale', cost: costSpec, available: energy>=costSpec, action:()=>{ setSpectralMode(true); setMoves(getMoves(sel, false, false, 'spectralStep')); }});
-      const dartCostVal = getActualCost(ABILITY_BASE_COST.soulDart);
-      ab.push({name:'🔥 Dardo dell\'Anima', cost: dartCostVal, available: energy>=dartCostVal && soulDartZone.length === 0, action:()=>{
-        setPts(prev => ({...prev, [color]: prev[color] - dartCostVal}));
+      var costSpec = getActualCost(ABILITY_BASE_COST.spectralStep);
+      ab.push({name:'🌫️ Passo Spettrale', cost: costSpec, available: energy>=costSpec, action: function() {
+        setSpectralMode(true); setMoves(getMoves(sel, false, false, 'spectralStep'));
+      }});
+      var dartCostVal = getActualCost(ABILITY_BASE_COST.soulDart);
+      ab.push({name:"🔥 Dardo dell'Anima", cost: dartCostVal, available: energy>=dartCostVal && soulDartZone.length === 0, action: function() {
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color] - dartCostVal; return np; });
         setDartRefund(dartCostVal);
         setDartMode(true); setDartSrc(sel); setDartCost(dartCostVal);
-        const dMoves = [];
-        for (const [df, dr] of [[1,1],[1,-1],[-1,1],[-1,-1]]) {
-          const tsq = SQ(FILE(sel) + df, RANK(sel) + dr);
-          if (tsq) dMoves.push({ type: 'dart_dir', from: sel, to: tsq, df, dr });
+        var dMoves = [];
+        var dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
+        for (var i=0; i<dirs.length; i++) {
+          var df = dirs[i][0], dr = dirs[i][1];
+          var tsq = SQ(FILE(sel) + df, RANK(sel) + dr);
+          if (tsq) dMoves.push({ type: 'dart_dir', from: sel, to: tsq, df: df, dr: dr });
         }
         setMoves(dMoves);
       }});
     }
     if (selPiece.type === 'r') {
-      const f=FILE(sel), r=RANK(sel);
-      const hasAlly = Object.entries(sm).some(([osq])=>osq!==sel&&game.get(osq)?.color===color&&(FILE(osq)===f||RANK(osq)===r));
-      const cost = getActualCost(ABILITY_BASE_COST.elixir);
-      ab.push({name:'🧪 Elisir di Protezione', cost, available: energy>=cost && hasAlly, action:()=>{ setPts(prev=>({...prev,[color]:prev[color]-cost})); setElixMode(true); setElixSrc(sel); setElixCost(cost); setSel(null); }});
+      var f = FILE(sel), r = RANK(sel);
+      var hasAlly = Object.entries(sm).some(function(e) {
+        var osq = e[0];
+        if (osq===sel) return false;
+        var op = game.get(osq);
+        return op && op.color===color && (FILE(osq)===f || RANK(osq)===r);
+      });
+      var cost = getActualCost(ABILITY_BASE_COST.elixir);
+      ab.push({name:'🧪 Elisir di Protezione', cost: cost, available: energy>=cost && hasAlly, action: function() {
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
+        setElixMode(true); setElixSrc(sel); setElixCost(cost); setSel(null);
+      }});
     }
     if (selPiece.type === 'q') {
-      const cost = getActualCost(ABILITY_BASE_COST.royalCommand);
-      const hasAlly = Object.entries(sm).some(([osq])=>osq!==sel&&game.get(osq)?.color===color);
-      ab.push({name:'👑 Comando Reale', cost, available: energy>=cost && hasAlly, action:()=>{ setPts(prev=>({...prev,[color]:prev[color]-cost})); setCmdMode(true); setCmdSrc(sel); setCmdCost(cost); setSel(null); }});
+      var cost = getActualCost(ABILITY_BASE_COST.royalCommand);
+      var hasAlly = Object.entries(sm).some(function(e) {
+        var osq = e[0];
+        if (osq===sel) return false;
+        var op = game.get(osq);
+        return op && op.color===color;
+      });
+      ab.push({name:'👑 Comando Reale', cost: cost, available: energy>=cost && hasAlly, action: function() {
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
+        setCmdMode(true); setCmdSrc(sel); setCmdCost(cost); setSel(null);
+      }});
     }
     return ab;
   }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn, frenzyUsed, soulDartZone, selId]);
 
   function renderPanel() {
-    if (cmdMode) return (
-      <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
-        <div style={{fontSize:12,fontWeight:800,color:'#ec4899'}}>👑 Comando Reale</div>
-        <div className="hint-text">Seleziona un pezzo alleato (non Imperatrice) per un turno extra.</div>
-        <button className="pass-btn" style={{background:'#1e293b',color:'#94a3b8'}}
-          onClick={()=>{setCmdMode(false);setCmdSrc(null);setPts(prev=>({...prev,[activeColor]:prev[activeColor]+cmdCost}));setCmdDiscount(false);}}>
-          ✕ Annulla (rimborso {cmdCost}⚡)
-        </button>
-      </div>
+    if (cmdMode) return React.createElement('div', {style:{flex:1,display:'flex',flexDirection:'column',gap:4}},
+      React.createElement('div', {style:{fontSize:12,fontWeight:800,color:'#ec4899'}}, '👑 Comando Reale'),
+      React.createElement('div', {className:'hint-text'}, 'Seleziona un pezzo alleato (non Imperatrice) per un turno extra.'),
+      React.createElement('button', {className:'pass-btn', style:{background:'#1e293b',color:'#94a3b8'}, onClick: function() {
+        setCmdMode(false); setCmdSrc(null);
+        setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+cmdCost; return np; });
+        setCmdDiscount(false);
+      }}, '✕ Annulla (rimborso '+cmdCost+'⚡)')
     );
-    if (elixMode) return (
-      <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
-        <div style={{fontSize:12,fontWeight:800,color:'#fbbf24'}}>🧪 Elisir di Protezione</div>
-        <div className="hint-text">Clicca un pezzo alleato sulla stessa riga/colonna dell'Alchimista.</div>
-        <button className="pass-btn" style={{background:'#1e293b',color:'#94a3b8'}}
-          onClick={()=>{setElixMode(false);setElixSrc(null);setPts(prev=>({...prev,[activeColor]:prev[activeColor]+elixCost}));}}>
-          ✕ Annulla (rimborso {elixCost}⚡)
-        </button>
-      </div>
+    if (elixMode) return React.createElement('div', {style:{flex:1,display:'flex',flexDirection:'column',gap:4}},
+      React.createElement('div', {style:{fontSize:12,fontWeight:800,color:'#fbbf24'}}, '🧪 Elisir di Protezione'),
+      React.createElement('div', {className:'hint-text'}, "Clicca un pezzo alleato sulla stessa riga/colonna dell'Alchimista."),
+      React.createElement('button', {className:'pass-btn', style:{background:'#1e293b',color:'#94a3b8'}, onClick: function() {
+        setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+elixCost; return np; });
+        setElixMode(false); setElixSrc(null);
+      }}, '✕ Annulla (rimborso '+elixCost+'⚡)')
     );
-    if (dartMode) return (
-      <div style={{flex:1,display:'flex',flexDirection:'column',gap:4}}>
-        <div style={{fontSize:12,fontWeight:800,color:'#ff6b6b'}}>🔥 Dardo dell'Anima</div>
-        <div className="hint-text">Clicca una delle caselle verdi evidenziate per lanciare la traiettoria.</div>
-        <button className="pass-btn" style={{background:'#1e293b',color:'#94a3b8'}}
-          onClick={()=>{setDartMode(false);setDartSrc(null);setPts(prev=>({...prev,[activeColor]:prev[activeColor]+dartRefund}));setDartRefund(0); setSel(null); setMoves([]);}}>
-          ✕ Annulla (rimborso {dartRefund}⚡)
-        </button>
-      </div>
+    if (dartMode) return React.createElement('div', {style:{flex:1,display:'flex',flexDirection:'column',gap:4}},
+      React.createElement('div', {style:{fontSize:12,fontWeight:800,color:'#ff6b6b'}}, "🔥 Dardo dell'Anima"),
+      React.createElement('div', {className:'hint-text'}, 'Clicca una delle caselle verdi evidenziate per lanciare la traiettoria.'),
+      React.createElement('button', {className:'pass-btn', style:{background:'#1e293b',color:'#94a3b8'}, onClick: function() {
+        setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+dartRefund; return np; });
+        setDartMode(false); setDartSrc(null); setDartRefund(0); setSel(null); setMoves([]);
+      }}, '✕ Annulla (rimborso '+dartRefund+'⚡)')
     );
 
-    return (
-      <>
-        <div>
-          <div className="charge-row">
-            <span>⚡ {activeColor==='w'?'BIANCO':'NERO'}{pdBonusEnergy?' (+1)':''}{ghostMarch===activeColor?' 👻 Marcia':''}</span>
-            <span style={{color:'#f1f5f9'}}>{pts[activeColor]}⚡</span>
-          </div>
-          <div className="charge-track"><div style={{width:`${Math.min(pts[activeColor]/10*100,100)}%`,height:'100%',background:'#38bdf8',transition:'width .3s'}}/></div>
-        </div>
-        <div className="panel-bottom">
-          <div className="piece-label">
-            {!hasMoved ? (
-              <span className="hint-text">{inCheck?'⚠️ SCACCO!':'Seleziona un pezzo e muovi.'}</span>
-            ) : selData ? (
-              <span style={{fontWeight:700}}>{selPiece&&ICONS[selPiece.color][selPiece.type]}&nbsp;{selEffLevel===2?EVO_NAMES[selPiece?.type]:'Base'} Lv.{selEffLevel}{stunned.has(selId)&&' (Stordito)'}{immune?.sq===sel&&' (Immune)'}</span>
-            ) : (
-              <span className="hint-text">Clicca un pezzo base per evolvere, o un evoluto per le abilità.</span>
-            )}
-          </div>
-          <div className="turn-pill" style={{color:activeColor==='w'?'#38bdf8':'#f43f5e'}}>
-            {inCheck?'⚠️ SCACCO':activeColor==='w'?'⬜ Bianco':'⬛ Nero'}
-          </div>
-        </div>
-
-        {hasMoved && pieceAbilities.length > 0 && (
-          <div className="btn-row">
-            {pieceAbilities.map((ab,i)=>(
-              <button key={i} className="ability-btn"
-                style={{borderColor: ab.available?'#a855f7':'#475569', color: ab.available?'#a855f7':'#64748b'}}
-                disabled={!ab.available}
-                onClick={ab.action}>
-                {ab.name} ({ab.cost}⚡)
-              </button>
-            ))}
-          </div>
-        )}
-
-        {hasMoved && sel && selEffLevel===2 && pdCanDevolve && (
-          <button className="ability-btn" style={{background:'#7f1d1d',color:'#fca5a5',marginTop:4}} onClick={devolveSelected}>
-            ↩ De-evolvi +1⚡
-          </button>
-        )}
-
-        {hasMoved && (
-          <button className="pass-btn" onClick={passTurn}>Passa il turno →</button>
-        )}
-      </>
+    return React.createElement(React.Fragment, null,
+      React.createElement('div', null,
+        React.createElement('div', {className:'charge-row'},
+          React.createElement('span', null, '⚡ ', activeColor==='w'?'BIANCO':'NERO', pdBonusEnergy?' (+1)':'', ghostMarch===activeColor?' 👻 Marcia':''),
+          React.createElement('span', {style:{color:'#f1f5f9'}}, pts[activeColor], '⚡')
+        ),
+        React.createElement('div', {className:'charge-track'},
+          React.createElement('div', {style:{width: Math.min(pts[activeColor]/10*100,100)+'%', height:'100%', background:'#38bdf8', transition:'width .3s'}})
+        )
+      ),
+      React.createElement('div', {className:'panel-bottom'},
+        React.createElement('div', {className:'piece-label'},
+          !hasMoved
+            ? React.createElement('span', {className:'hint-text'}, inCheck?'⚠️ SCACCO!':'Seleziona un pezzo e muovi.')
+            : selData
+              ? React.createElement('span', {style:{fontWeight:700}},
+                  selPiece && ICONS[selPiece.color][selPiece.type], '\u00A0',
+                  selEffLevel===2 ? EVO_NAMES[selPiece && selPiece.type] : 'Base', ' Lv.', selEffLevel,
+                  stunned.has(selId) && React.createElement('span', {style:{color:'#818cf8'}}, ' (Stordito)'),
+                  immune && immune.sq===sel && React.createElement('span', {style:{color:'#fbbf24'}}, ' (Immune)')
+                )
+              : React.createElement('span', {className:'hint-text'}, 'Clicca un pezzo base per evolvere, o un evoluto per le abilità.')
+        ),
+        React.createElement('div', {className:'turn-pill', style:{color: activeColor==='w'?'#38bdf8':'#f43f5e'}},
+          inCheck?'⚠️ SCACCO':activeColor==='w'?'⬜ Bianco':'⬛ Nero'
+        )
+      ),
+      hasMoved && pieceAbilities.length > 0 && React.createElement('div', {className:'btn-row'},
+        pieceAbilities.map(function(ab,i) {
+          return React.createElement('button', {key:i, className:'ability-btn',
+            style:{borderColor: ab.available?'#a855f7':'#475569', color: ab.available?'#a855f7':'#64748b'},
+            disabled: !ab.available, onClick: ab.action
+          }, ab.name, ' (', ab.cost, '⚡)');
+        })
+      ),
+      hasMoved && sel && selEffLevel===2 && pdCanDevolve && React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: devolveSelected},
+        '↩ De-evolvi +1⚡'
+      ),
+      hasMoved && React.createElement('button', {className:'pass-btn', onClick: passTurn}, 'Passa il turno →')
     );
   }
 
-  return (
-    <div className="app">
-      <div className="top-bar">
-        <div className="prestige-badge">⭐{prestige}{prestige>=5&&' 🥉'}{prestige>=10&&' 🥈'}{prestige>=15&&' 🥇'}</div>
-        <button className="flip-btn" onClick={()=>setFlip(f=>!f)}>🔄 Ruota</button>
-      </div>
+  return React.createElement('div', {className:'app'},
+    React.createElement('div', {className:'top-bar'},
+      React.createElement('div', {className:'prestige-badge'}, '⭐', prestige, prestige>=5?' 🥉':'', prestige>=10?' 🥈':'', prestige>=15?' 🥇':''),
+      React.createElement('button', {className:'flip-btn', onClick: function() { setFlip(function(f) { return !f; }); }}, '🔄 Ruota')
+    ),
+    React.createElement('div', {className:'player-row'},
+      React.createElement('div', {className:'player-label', style:{borderLeft:'3px solid #f43f5e'}},
+        React.createElement('div', {className:'player-name'}, '⬛ Nero'),
+        last && React.createElement('div', {className:'last-move-hint'}, last.from, '→', last.to)
+      ),
+      React.createElement('div', {className:'energy-badge', style:{borderLeft:'3px solid #f43f5e', color: pts.b>0?'#22c55e':'#94a3b8'}},
+        React.createElement('span', {style:{fontSize:10}}, '⚡'),
+        React.createElement('span', {style:{fontSize:16}}, pts.b)
+      )
+    ),
+    React.createElement('div', {className:'board-wrap'},
+      React.createElement('div', {className:'board', onClick: function(e) { if (e.target===e.currentTarget) click(null); }},
+        bd.map(function(row,r) {
+          return row.map(function(cell,c) {
+            var fi = flipped ? 7-c : c, ri = flipped ? r : 7-r;
+            var sq = 'abcdefgh'[fi] + (ri+1);
+            var light = (fi+ri)%2 !== 0;
+            var id = sm[sq], d = id ? pd[id] : null;
+            var pieceColor = game.get(sq) && game.get(sq).color;
+            var displayLv = (id && pieceColor) ? effLevel(sq, id, pieceColor) : (d ? d.level : 1);
+            var isStunned = stunned.has(id);
+            var isImm = immune && immune.sq===sq;
+            var isAura = inEnemyAura(sq,activeColor);
+            var isSel = sel===sq;
+            var isMoveTarget = moveTargets.has(sq);
+            var isAbTarget = abilityTargets.has(sq);
+            var isLast = last && (last.from===sq || last.to===sq);
+            var isGhostAlly = ghostMarch===pieceColor && pieceColor===activeColor && game.get(sq) && game.get(sq).type==='p' && displayLv===2;
+            var isDartZone = soulDartZone.indexOf(sq) !== -1;
 
-      <div className="player-row">
-        <div className="player-label" style={{borderLeft:'3px solid #f43f5e'}}>
-          <div className="player-name">⬛ Nero</div>
-          {last&&<div className="last-move-hint">{last.from}→{last.to}</div>}
-        </div>
-        <div className="energy-badge" style={{borderLeft:'3px solid #f43f5e',color:pts.b>0?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:10}}>⚡</span><span style={{fontSize:16}}>{pts.b}</span>
-        </div>
-      </div>
+            var classes = ['cell', light?'light':'dark'];
+            if (isSel) classes.push('sel');
+            if (isAura) classes.push('aura-cell');
+            if (isStunned) classes.push('stunned-piece');
+            if (isImm) classes.push('immune-highlight');
+            if (isGhostAlly) classes.push('ghost-march-ally');
+            if (isDartZone) classes.push('soul-dart-zone');
+            if (isLast) classes.push(light?'last-from':'last-to');
 
-      <div className="board-wrap">
-        <div className="board" onClick={e=>{if(e.target===e.currentTarget)click(null);}}>
-          {bd.map((row,r)=>row.map((cell,c)=>{
-            const fi=flipped?7-c:c, ri=flipped?r:7-r;
-            const sq='abcdefgh'[fi]+(ri+1);
-            const light=(fi+ri)%2!==0;
-            const id=sm[sq], d=id?pd[id]:null;
-            const pieceColor = game.get(sq)?.color;
-            const displayLv = (id && pieceColor) ? effLevel(sq, id, pieceColor) : d?.level??1;
-            const isStunned=stunned.has(id);
-            const isImm=immune?.sq===sq;
-            const isAura=inEnemyAura(sq,activeColor);
-            const isSel=sel===sq;
-            const isMoveTarget=moveTargets.has(sq);
-            const isAbTarget=abilityTargets.has(sq);
-            const isLast=last?.from===sq||last?.to===sq;
-            const isGhostAlly = ghostMarch===pieceColor && pieceColor===activeColor && game.get(sq)?.type==='p' && displayLv===2;
-            const isDartZone = soulDartZone.includes(sq);
-
-            return (
-              <div key={sq} onClick={()=>click(sq)}
-                className={['cell', light?'light':'dark', isSel?'sel':'', isAura?'aura-cell':'', isStunned?'stunned-piece':'', isImm?'immune-highlight':'', isGhostAlly?'ghost-march-ally':'', isDartZone?'soul-dart-zone':'', isLast?(light?'last-from':'last-to'):''].join(' ')}>
-                {isMoveTarget&&!isAbTarget&&!cell&&<div style={{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1,pointerEvents:'none'}}/>}
-                {isAbTarget&&!cell&&<div style={{position:'absolute',width:'32%',height:'32%',borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 12px #a855f7',zIndex:1,pointerEvents:'none'}}/>}
-                {isMoveTarget&&cell&&!isAbTarget&&<div style={{position:'absolute',inset:0,border:'3px solid #22c55e',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
-                {isAbTarget&&cell&&<div style={{position:'absolute',inset:0,border:'3px solid #a855f7',borderRadius:3,zIndex:1,pointerEvents:'none'}}/>}
-                {cell&&<span className={`piece piece-${cell.color}${displayLv===2?' evo2':''}`} style={{transform:lvlUpSq===sq?'scale(1.5)':'scale(1)',transition:'transform .15s'}} onAnimationEnd={()=>setLvlUpSq(null)}>{ICONS[cell.color][cell.type]}</span>}
-                {displayLv===2&&<div style={{position:'absolute',inset:3,border:'2px solid #a855f7',borderRadius:4,pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,.8)',zIndex:3}}/>}
-              </div>
+            return React.createElement('div', {key:sq, className:classes.join(' '), onClick: function() { click(sq); }},
+              isMoveTarget && !isAbTarget && !cell && React.createElement('div', {style:{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1,pointerEvents:'none'}}),
+              isAbTarget && !cell && React.createElement('div', {style:{position:'absolute',width:'32%',height:'32%',borderRadius:'50%',background:'#a855f7',boxShadow:'0 0 12px #a855f7',zIndex:1,pointerEvents:'none'}}),
+              isMoveTarget && cell && !isAbTarget && React.createElement('div', {style:{position:'absolute',inset:0,border:'3px solid #22c55e',borderRadius:3,zIndex:1,pointerEvents:'none'}}),
+              isAbTarget && cell && React.createElement('div', {style:{position:'absolute',inset:0,border:'3px solid #a855f7',borderRadius:3,zIndex:1,pointerEvents:'none'}}),
+              cell && React.createElement('span', {
+                className: 'piece piece-' + cell.color + (displayLv===2?' evo2':''),
+                style: {transform: lvlUpSq===sq?'scale(1.5)':'scale(1)', transition:'transform .15s'},
+                onAnimationEnd: function() { setLvlUpSq(null); }
+              }, ICONS[cell.color][cell.type]),
+              displayLv===2 && React.createElement('div', {style:{position:'absolute',inset:3,border:'2px solid #a855f7',borderRadius:4,pointerEvents:'none',boxShadow:'0 0 10px rgba(168,85,247,.8)',zIndex:3}})
             );
-          }))}
-        </div>
-      </div>
-
-      <div className="player-row">
-        <div className="player-label" style={{borderLeft:'3px solid #f8fafc'}}>
-          <div className="player-name">⬜ Bianco</div>
-          {last&&<div className="last-move-hint">{last.from}→{last.to}</div>}
-        </div>
-        <div className="energy-badge" style={{borderLeft:'3px solid #38bdf8',color:pts.w>0?'#22c55e':'#94a3b8'}}>
-          <span style={{fontSize:10}}>⚡</span><span style={{fontSize:16}}>{pts.w}</span>
-        </div>
-      </div>
-
-      <div className="panel">{renderPanel()}</div>
-
-      <div className="top-bar" style={{justifyContent:'center'}}>
-        <button onClick={reset} style={{padding:'4px 16px',background:'#1e293b',color:'#94a3b8',borderRadius:6,fontSize:12,cursor:'pointer',border:'none'}}>🔄 Nuova Partita</button>
-      </div>
-
-      {gameOver&&(
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.92)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14}}>
-          <div style={{fontSize:26,fontWeight:900,color:'#f1f5f9'}}>{gameOver.winner?`🏆 ${gameOver.winner==='w'?'⬜ Bianco':'⬛ Nero'} vince!`:'🤝 Patta'}</div>
-          <div style={{fontSize:12,color:'#64748b'}}>{gameOver.reason}</div>
-          <button onClick={reset} style={{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer'}}>RIVINCITA</button>
-        </div>
-      )}
-    </div>
+          });
+        })
+      )
+    ),
+    React.createElement('div', {className:'player-row'},
+      React.createElement('div', {className:'player-label', style:{borderLeft:'3px solid #f8fafc'}},
+        React.createElement('div', {className:'player-name'}, '⬜ Bianco'),
+        last && React.createElement('div', {className:'last-move-hint'}, last.from, '→', last.to)
+      ),
+      React.createElement('div', {className:'energy-badge', style:{borderLeft:'3px solid #38bdf8', color: pts.w>0?'#22c55e':'#94a3b8'}},
+        React.createElement('span', {style:{fontSize:10}}, '⚡'),
+        React.createElement('span', {style:{fontSize:16}}, pts.w)
+      )
+    ),
+    React.createElement('div', {className:'panel'}, renderPanel()),
+    React.createElement('div', {className:'top-bar', style:{justifyContent:'center'}},
+      React.createElement('button', {onClick: reset, style:{padding:'4px 16px',background:'#1e293b',color:'#94a3b8',borderRadius:6,fontSize:12,cursor:'pointer',border:'none'}}, '🔄 Nuova Partita')
+    ),
+    gameOver && React.createElement('div', {style:{position:'fixed',inset:0,background:'rgba(0,0,0,.92)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:99,gap:14}},
+      React.createElement('div', {style:{fontSize:26,fontWeight:900,color:'#f1f5f9'}}, gameOver.winner ? '🏆 ' + (gameOver.winner==='w'?'⬜ Bianco':'⬛ Nero') + ' vince!' : '🤝 Patta'),
+      React.createElement('div', {style:{fontSize:12,color:'#64748b'}}, gameOver.reason),
+      React.createElement('button', {onClick: reset, style:{padding:'12px 40px',background:'#38bdf8',border:'none',borderRadius:9,fontWeight:800,fontSize:15,cursor:'pointer'}}, 'RIVINCITA')
+    )
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+// Uso ReactDOM.render invece di createRoot per compatibilità UMD
+ReactDOM.render(React.createElement(App), document.getElementById('root'));
 </script>
 </body>
 </html>

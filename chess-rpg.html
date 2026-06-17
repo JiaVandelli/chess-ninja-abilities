@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.7</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.7 (mosse speciali fix)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -57,7 +57,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script>
-  // Mostra un overlay se React/Chess non sono caricati
   window.addEventListener('error', function(e) {
     var el = document.getElementById('error-overlay');
     if (el) {
@@ -74,13 +73,11 @@
   }, 4000);
 </script>
 <script type="text/babel" data-presets="react">
-// Verifica caricamento librerie
 if (typeof React === 'undefined') throw new Error('React non caricato');
 if (typeof ReactDOM === 'undefined') throw new Error('ReactDOM non caricato');
-if (typeof window.Chess === 'undefined') throw new Error('Chess.js non caricato');
+if (typeof Chess === 'undefined') throw new Error('Chess.js non caricato');
 
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
-// RIMOSSO: const Chess = window.Chess; (Chess è già globale, non serve dichiararlo)
 
 const ICONS = {w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},
                b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
@@ -104,24 +101,25 @@ const DIAG_DIRS = [[1,1],[1,-1],[-1,1],[-1,-1]];
 const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
 function buildState(g) {
-  const pd={}, sm={};
-  g.board().forEach((row,r) => row.forEach((cell,c) => {
+  var pd={}, sm={};
+  g.board().forEach(function(row) { row.forEach(function(cell) {
     if (!cell) return;
-    const sq = 'abcdefgh'[c]+(8-r);
-    const id = `${cell.color}${cell.type}_${nextId()}`;
+    var sq = 'abcdefgh'[cell.col]+(8-cell.row);
+    var id = cell.color + cell.type + '_' + nextId();
     pd[id] = {type:cell.type, color:cell.color, level:1};
     sm[sq] = id;
-  }));
-  return {pd, sm};
+  }); });
+  return {pd:pd, sm:sm};
 }
 
-function applyStd(game, from, to, promotion='q') {
-  const g = new Chess(game.fen());
-  const mv = g.move({from, to, promotion});
+function applyStd(game, from, to, promotion) {
+  if (!promotion) promotion = 'q';
+  var g = new Chess(game.fen());
+  var mv = g.move({from:from, to:to, promotion:promotion});
   if (!mv) return null;
-  let cap = null;
-  if (mv.captured) cap = mv.flags && mv.flags.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
-  return {game:g, captured:cap, castleK: mv.flags && mv.flags.includes('k'), castleQ: mv.flags && mv.flags.includes('q')};
+  var cap = null;
+  if (mv.captured) cap = mv.flags && mv.flags.indexOf('e') !== -1 ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
+  return {game:g, captured:cap, castleK: mv.flags && mv.flags.indexOf('k') !== -1, castleQ: mv.flags && mv.flags.indexOf('q') !== -1};
 }
 
 function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
@@ -219,45 +217,45 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
 }
 
 function App() {
-  const [game, setGame] = useState(function() { return new Chess(); });
-  const [pd, setPd] = useState({});
-  const [sm, setSm] = useState({});
-  const [sel, setSel] = useState(null);
-  const [moves, setMoves] = useState([]);
-  const [pts, setPts] = useState({w:0,b:0});
-  const [last, setLast] = useState(null);
-  const [flipped, setFlip] = useState(false);
-  const [stunned, setStunned] = useState(new Set());
-  const [immune, setImmune] = useState(null);
-  const [ghostMarch, setGhostMarch] = useState(null);
-  const [gameOver, setGameOver] = useState(null);
-  const [lvlUpSq, setLvlUpSq] = useState(null);
+  var [game, setGame] = useState(function() { return new Chess(); });
+  var [pd, setPd] = useState({});
+  var [sm, setSm] = useState({});
+  var [sel, setSel] = useState(null);
+  var [moves, setMoves] = useState([]);
+  var [pts, setPts] = useState({w:0,b:0});
+  var [last, setLast] = useState(null);
+  var [flipped, setFlip] = useState(false);
+  var [stunned, setStunned] = useState(new Set());
+  var [immune, setImmune] = useState(null);
+  var [ghostMarch, setGhostMarch] = useState(null);
+  var [gameOver, setGameOver] = useState(null);
+  var [lvlUpSq, setLvlUpSq] = useState(null);
 
-  const [hasMoved, setHasMoved] = useState(false);
-  const [actualTurn, setActualTurn] = useState('w');
+  var [hasMoved, setHasMoved] = useState(false);
+  var [actualTurn, setActualTurn] = useState('w');
 
-  const [cmdMode, setCmdMode] = useState(false);
-  const [cmdCost, setCmdCost] = useState(5);
-  const [cmdSrc, setCmdSrc] = useState(null);
-  const [cmdDiscount, setCmdDiscount] = useState(false);
+  var [cmdMode, setCmdMode] = useState(false);
+  var [cmdCost, setCmdCost] = useState(5);
+  var [cmdSrc, setCmdSrc] = useState(null);
+  var [cmdDiscount, setCmdDiscount] = useState(false);
 
-  const [elixMode, setElixMode] = useState(false);
-  const [elixCost, setElixCost] = useState(2);
-  const [elixSrc, setElixSrc] = useState(null);
+  var [elixMode, setElixMode] = useState(false);
+  var [elixCost, setElixCost] = useState(2);
+  var [elixSrc, setElixSrc] = useState(null);
 
-  const [frenzyMode, setFrenzyMode] = useState(false);
-  const [spectralMode, setSpectralMode] = useState(false);
-  const [dartMode, setDartMode] = useState(false);
-  const [dartSrc, setDartSrc] = useState(null);
-  const [dartCost, setDartCost] = useState(3);
-  const [dartRefund, setDartRefund] = useState(0);
+  var [frenzyMode, setFrenzyMode] = useState(false);
+  var [spectralMode, setSpectralMode] = useState(false);
+  var [dartMode, setDartMode] = useState(false);
+  var [dartSrc, setDartSrc] = useState(null);
+  var [dartCost, setDartCost] = useState(3);
+  var [dartRefund, setDartRefund] = useState(0);
 
-  const [frenzyUsed, setFrenzyUsed] = useState(new Set());
-  const [soulDartZone, setSoulDartZone] = useState([]);
-  const [soulDartOwner, setSoulDartOwner] = useState(null);
+  var [frenzyUsed, setFrenzyUsed] = useState(new Set());
+  var [soulDartZone, setSoulDartZone] = useState([]);
+  var [soulDartOwner, setSoulDartOwner] = useState(null);
 
-  const [auraGained, setAuraGained] = useState({w:0,b:0});
-  const lvlTimer = useRef(null);
+  var [auraGained, setAuraGained] = useState({w:0,b:0});
+  var lvlTimer = useRef(null);
 
   useEffect(function() {
     var s = buildState(game);
@@ -265,7 +263,7 @@ function App() {
     setSm(s.sm);
   }, []);
 
-  const inEnemyAura = useCallback(function(sq, myColor) {
+  var inEnemyAura = useCallback(function(sq, myColor) {
     var opp = myColor==='w'?'b':'w';
     var entries = Object.entries(sm);
     for (var i=0; i<entries.length; i++) {
@@ -278,14 +276,14 @@ function App() {
     return false;
   }, [game,sm,pd]);
 
-  const effLevel = useCallback(function(sq, id, color) {
+  var effLevel = useCallback(function(sq, id, color) {
     var d = pd[id];
     if (!d) return 1;
     if (d.level===2 && inEnemyAura(sq, color)) return 1;
     return d.level;
   }, [pd, inEnemyAura]);
 
-  const calcPrestige = useCallback(function(color) {
+  var calcPrestige = useCallback(function(color) {
     var total=0;
     var entries = Object.entries(sm);
     for (var i=0; i<entries.length; i++) {
@@ -302,7 +300,7 @@ function App() {
   var pdBonusEnergy = prestige>=10;
   var pdCanDevolve = prestige>=5;
 
-  const isImmune = useCallback(function(sq) {
+  var isImmune = useCallback(function(sq) {
     if (!immune || immune.sq!==sq) return false;
     var rookId = immune.rookId;
     var rookSq = null;
@@ -314,10 +312,10 @@ function App() {
     return FILE(rookSq)===FILE(sq) || RANK(rookSq)===RANK(sq);
   }, [immune,sm]);
 
-  const getActualCost = useCallback(function(baseCost) { return Math.max(1, baseCost - pdDiscount); }, [pdDiscount]);
-  const getEvoCost = useCallback(function(type) { return Math.max(1, (EVO_COST[type]||99) - pdDiscount); }, [pdDiscount]);
+  var getActualCost = useCallback(function(baseCost) { return Math.max(1, baseCost - pdDiscount); }, [pdDiscount]);
+  var getEvoCost = useCallback(function(type) { return Math.max(1, (EVO_COST[type]||99) - pdDiscount); }, [pdDiscount]);
 
-  const getMoves = useCallback(function(sq, isCommandTurn, wasOppInCheck, specialMode) {
+  var getMoves = useCallback(function(sq, isCommandTurn, wasOppInCheck, specialMode) {
     var p = game.get(sq);
     if (!p) return [];
     var color = p.color;
@@ -337,7 +335,7 @@ function App() {
         var nsm = Object.assign({}, sm);
         nsm[m.to] = nsm[m.from]; delete nsm[m.from];
         if (m.captured) {
-          var cs = (m.flags && m.flags.includes('e')) ? m.to[0]+sq[1] : m.to;
+          var cs = (m.flags && m.flags.indexOf('e') !== -1) ? m.to[0]+sq[1] : m.to;
           if (isImmune(cs)) continue;
           delete nsm[cs];
         }
@@ -496,7 +494,7 @@ function App() {
     return result;
   }, [game,sm,pd,pts,stunned,ghostMarch,pdDiscount,cmdDiscount,inEnemyAura,isImmune,effLevel,actualTurn,soulDartZone,soulDartOwner]);
 
-  const execute = useCallback(function(action, color) {
+  var execute = useCallback(function(action, color) {
     var ng, energyDelta=0;
     var npd = Object.assign({}, pd);
     var nsm = Object.assign({}, sm);
@@ -508,26 +506,61 @@ function App() {
     var wasOppInCheck = game.in_check();
 
     if (action.type==='std') {
-      var res = applyStd(game,action.from,action.to,action.promo);
-      if (!res) return false;
-      ng = res.game;
-      var parts = ng.fen().split(' ');
-      parts[1] = color;
-      parts[3] = '-';
-      ng = new Chess(parts.join(' '));
-      energyDelta = 1;
-      if (res.captured) energyDelta += 1;
-      if (ng.in_check()) energyDelta += 1;
-      if (npd[mid] && npd[mid].type==='p' && npd[mid].level===2 && res.captured) energyDelta += 1;
-      if (res.castleK) { var rk = color==='w'?'1':'8'; nsm['f'+rk] = nsm['h'+rk]; delete nsm['h'+rk]; }
-      if (res.castleQ) { var rk = color==='w'?'1':'8'; nsm['d'+rk] = nsm['a'+rk]; delete nsm['a'+rk]; }
-      if (res.captured) { var cs = res.captured._sq || action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
-      nsm[action.to] = mid; delete nsm[action.from];
-      var promoPiece = game.get(action.from);
-      if (promoPiece && promoPiece.type==='p' && (RANK(action.to)===8 || RANK(action.to)===1)) {
-        npd[mid] = { type: action.promo||'q', color: color, level: 1 };
+      var res = applyStd(game, action.from, action.to, action.promo);
+      
+      // SE CHESS.JS RIFIUTA LA MOSSA (es. Imperatrice a cavallo o Marcia Fantasma), USIAMO IL FALLBACK MANUALE
+      if (!res) {
+        ng = new Chess(game.fen());
+        var p = game.get(action.from);
+        var tp = game.get(action.to);
+        ng.remove(action.from);
+        
+        var isPromo = (p.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1));
+        var finalType = isPromo ? (action.promo || 'q') : p.type;
+        
+        if (tp) {
+          delete npd[nsm[action.to]];
+          delete nsm[action.to];
+        }
+        ng.put({type: finalType, color: color}, action.to);
+        
+        var parts = ng.fen().split(' ');
+        parts[1] = color; parts[3] = '-'; parts[4] = '0';
+        ng = new Chess(parts.join(' '));
+        
+        energyDelta = 1;
+        if (tp) energyDelta += 1;
+        if (ng.in_check()) energyDelta += 1;
+        if (npd[mid] && npd[mid].type === 'p' && npd[mid].level === 2 && tp) energyDelta += 1;
+        
+        nsm[action.to] = mid;
+        delete nsm[action.from];
+        
+        if (isPromo) {
+          npd[mid] = { type: finalType, color: color, level: 1 };
+        }
+        setHasMoved(true);
+      } else {
+        // MOSSA STANDARD CLASSICA
+        ng = res.game;
+        var parts = ng.fen().split(' ');
+        parts[1] = color;
+        parts[3] = '-';
+        ng = new Chess(parts.join(' '));
+        energyDelta = 1;
+        if (res.captured) energyDelta += 1;
+        if (ng.in_check()) energyDelta += 1;
+        if (npd[mid] && npd[mid].type === 'p' && npd[mid].level === 2 && res.captured) energyDelta += 1;
+        if (res.castleK) { var rk = color === 'w' ? '1' : '8'; nsm['f'+rk] = nsm['h'+rk]; delete nsm['h'+rk]; }
+        if (res.castleQ) { var rk = color === 'w' ? '1' : '8'; nsm['d'+rk] = nsm['a'+rk]; delete nsm['a'+rk]; }
+        if (res.captured) { var cs = res.captured._sq || action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
+        nsm[action.to] = mid; delete nsm[action.from];
+        var promoPiece = game.get(action.from);
+        if (promoPiece && promoPiece.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1)) {
+          npd[mid] = { type: action.promo || 'q', color: color, level: 1 };
+        }
+        setHasMoved(true);
       }
-      setHasMoved(true);
     }
     else if (action.type==='bishop_jump') {
       ng = new Chess(game.fen());
@@ -654,7 +687,7 @@ function App() {
     return true;
   }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained,getActualCost,actualTurn]);
 
-  const passTurn = useCallback(function() {
+  var passTurn = useCallback(function() {
     if (!hasMoved) return;
     var next = actualTurn === 'w' ? 'b' : 'w';
     setStunned(function(prev) {
@@ -692,7 +725,7 @@ function App() {
     });
   }, [hasMoved, actualTurn, pd, pdBonusEnergy, calcPrestige, ghostMarch, soulDartOwner]);
 
-  const click = useCallback(function(sq) {
+  var click = useCallback(function(sq) {
     if (gameOver) return;
     var color = actualTurn;
 
@@ -829,7 +862,7 @@ function App() {
     setMoves([]);
   }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, elixMode, frenzyMode, spectralMode, dartMode, dartSrc, dartRefund, execute, getMoves, effLevel, getEvoCost, actualTurn, soulDartOwner]);
 
-  const devolveSelected = useCallback(function() {
+  var devolveSelected = useCallback(function() {
     if (!sel) return;
     var id = sm[sel];
     var d = pd[id];
@@ -839,7 +872,7 @@ function App() {
     setSel(null); setMoves([]);
   }, [sel, sm, pd, pdCanDevolve, activeColor]);
 
-  const reset = function() {
+  var reset = function() {
     _id=0; var g = new Chess(); var s = buildState(g);
     setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
     setSel(null); setMoves([]); setLast(null);
@@ -1085,7 +1118,6 @@ function App() {
   );
 }
 
-// Uso ReactDOM.render invece di createRoot per compatibilità UMD
 ReactDOM.render(React.createElement(App), document.getElementById('root'));
 </script>
 </body>

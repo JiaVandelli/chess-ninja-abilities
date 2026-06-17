@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.6 (stable CDN)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.6 (stable)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -50,7 +50,6 @@
 </head>
 <body>
 <div id="root"></div>
-<!-- CDN aggiornati e pinnati per stabilità -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -128,6 +127,7 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
     if (!d || d.level < 2) continue;
     const df = Math.sign(FILE(kSq) - FILE(sq));
     const dr = Math.sign(RANK(kSq) - RANK(sq));
+    // CORREZIONE: rimossa parentesi di troppo dopo FILE(sq)
     if (Math.abs(FILE(kSq)-FILE(sq)) !== Math.abs(RANK(kSq)-RANK(sq)) || df===0) continue;
     let jumped = false;
     let f = FILE(sq)+df, r = RANK(sq)+dr;

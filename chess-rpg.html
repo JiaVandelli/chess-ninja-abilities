@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.6 (fix)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.6 (stable CDN)</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -50,11 +50,12 @@
 </head>
 <body>
 <div id="root"></div>
+<!-- CDN aggiornati e pinnati per stabilità -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script type="text/babel">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script type="text/babel" data-presets="react">
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
 const Chess = window.Chess;
 
@@ -293,7 +294,6 @@ function App() {
         const nsm = {...sm}; nsm[m.to]=nsm[m.from]; delete nsm[m.from];
         if (m.captured) { const cs=m.flags?.includes('e')?m.to[0]+sq[1]:m.to; if(isImmune(cs)) continue; delete nsm[cs]; }
         if (kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) continue;
-        // RIGA CORRETTA – parentesi bilanciate
         if (isCommandTurn && (g2.in_checkmate() || (wasOppInCheck && g2.in_check()))) continue;
         result.push({type:'std', from:sq, to:m.to, promo:m.promotion});
       }

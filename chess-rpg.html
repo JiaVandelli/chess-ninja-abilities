@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.7 (tutto ok)</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.9</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -29,7 +29,7 @@
     .cell.stunned-piece{box-shadow:inset 0 0 12px rgba(99,102,241,0.8)}
     .cell.immune-highlight{outline:2px solid #fbbf24;outline-offset:-2px}
     .cell.ghost-march-ally{box-shadow:inset 0 0 15px #22c55e;background:rgba(34,197,94,.2)!important}
-    .cell.soul-dart-zone{box-shadow:inset 0 0 12px #ff6b6b;background:rgba(255,107,107,.15)!important}
+    .cell.morph-piece{box-shadow:inset 0 0 12px #f59e0b;background:rgba(245,158,11,.15)!important}
     .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
     .piece-w{color:#fff;text-shadow:0 0 0 #000,0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.7))}
     .piece-b{color:#000;text-shadow:0 0 0 #fff,0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,0 -1px 0 #fff;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))}
@@ -55,8 +55,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script>
+  // Babel rimosso – usiamo React.createElement nativo.
   window.addEventListener('error', function(e) {
     var el = document.getElementById('error-overlay');
     if (el) {
@@ -72,7 +72,7 @@
     }
   }, 4000);
 </script>
-<script type="text/babel" data-presets="react">
+<script>
 if (typeof React === 'undefined') throw new Error('React non caricato');
 if (typeof ReactDOM === 'undefined') throw new Error('ReactDOM non caricato');
 if (typeof Chess === 'undefined') throw new Error('Chess.js non caricato');
@@ -84,7 +84,7 @@ const ICONS = {w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},
 const EVO_NAMES = {p:'Assaltatore',n:'Destriero',b:'Spettro',r:'Alchimista',q:'Imperatrice',k:'Re'};
 const EVO_COST  = {p:2, n:2, b:2, r:3, q:5};
 const PRESTIGE  = {p:1, n:2, b:2, r:3, q:4};
-const ABILITY_BASE_COST = { ghostMarch:3, frenzyCharge:2, spectralStep:2, elixir:2, royalCommand:5, soulDart:3 };
+const ABILITY_BASE_COST = { ghostMarch:3, dominate:2, spectralStep:2, elixir:2, royalCommand:5, metamorph:2 };
 
 let _id = 0;
 const nextId = () => ++_id;
@@ -131,12 +131,9 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
 
   var opp = color==='w'?'b':'w';
   var kSq = null;
-  
   game.board().forEach(function(row, r) { 
     row.forEach(function(p, c) {
-      if (p && p.type==='k' && p.color===color) {
-        kSq = 'abcdefgh'[c] + (8 - r);
-      }
+      if (p && p.type==='k' && p.color===color) kSq = 'abcdefgh'[c] + (8 - r);
     }); 
   });
   if (!kSq) return false;
@@ -252,14 +249,9 @@ function App() {
 
   var [frenzyMode, setFrenzyMode] = useState(false);
   var [spectralMode, setSpectralMode] = useState(false);
-  var [dartMode, setDartMode] = useState(false);
-  var [dartSrc, setDartSrc] = useState(null);
-  var [dartCost, setDartCost] = useState(3);
-  var [dartRefund, setDartRefund] = useState(0);
-
-  var [frenzyUsed, setFrenzyUsed] = useState(new Set());
-  var [soulDartZone, setSoulDartZone] = useState([]);
-  var [soulDartOwner, setSoulDartOwner] = useState(null);
+  
+  var [knightAbilityUsed, setKnightAbilityUsed] = useState(false);
+  var [metamorphosis, setMetamorphosis] = useState(null);
 
   var [auraGained, setAuraGained] = useState({w:0,b:0});
   var lvlTimer = useRef(null);
@@ -353,20 +345,6 @@ function App() {
     }
 
     if (!evo2) return result;
-
-    if (specialMode === 'frenzyCharge' && p.type==='n') {
-      var jumps = knightJumps(sq);
-      for (var j=0; j<jumps.length; j++) {
-        var tsq = jumps[j];
-        var tp = game.get(tsq);
-        if (tp && tp.color===color) continue;
-        var g2 = new Chess(game.fen()); g2.remove(sq); if (tp) g2.remove(tsq); g2.put({type:'n',color:color},tsq);
-        var nsm = Object.assign({}, sm); delete nsm[sq]; if (tp) delete nsm[tsq]; nsm[tsq] = id;
-        if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch))
-          result.push({type:'frenzy_charge', from:sq, to:tsq});
-      }
-      return result;
-    }
 
     if (specialMode === 'spectralStep' && p.type==='b') {
       for (var di=0; di<DIAG_DIRS.length; di++) {
@@ -476,30 +454,8 @@ function App() {
       }
     }
 
-    if (soulDartOwner && soulDartZone.length > 0 && p.color !== soulDartOwner) {
-      var startsInZone = soulDartZone.indexOf(sq) !== -1;
-      result = result.filter(function(m) {
-        var landsInZone = soulDartZone.indexOf(m.to) !== -1;
-        if (startsInZone) {
-          return landsInZone;
-        } else {
-          if (p.type === 'n') return true;
-          var f0 = FILE(sq), r0 = RANK(sq);
-          var f1 = FILE(m.to), r1 = RANK(m.to);
-          var df = Math.sign(f1 - f0), dr = Math.sign(r1 - r0);
-          var cf = f0 + df, cr = r0 + dr;
-          while (cf !== f1 || cr !== r1) {
-            var pathSq = SQ(cf, cr);
-            if (pathSq && soulDartZone.indexOf(pathSq) !== -1) return false;
-            cf += df; cr += dr;
-          }
-          return true;
-        }
-      });
-    }
-
     return result;
-  }, [game,sm,pd,pts,stunned,ghostMarch,pdDiscount,cmdDiscount,inEnemyAura,isImmune,effLevel,actualTurn,soulDartZone,soulDartOwner]);
+  }, [game,sm,pd,stunned,ghostMarch,isImmune,effLevel]);
 
   var execute = useCallback(function(action, color) {
     var ng, energyDelta=0;
@@ -514,34 +470,27 @@ function App() {
 
     if (action.type==='std') {
       var res = applyStd(game, action.from, action.to, action.promo);
-      
       if (!res) {
         ng = new Chess(game.fen());
         var p = game.get(action.from);
         var tp = game.get(action.to);
         ng.remove(action.from);
-        
         var isPromo = (p.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1));
         var finalType = isPromo ? (action.promo || 'q') : p.type;
-        
         if (tp) {
           delete npd[nsm[action.to]];
           delete nsm[action.to];
         }
         ng.put({type: finalType, color: color}, action.to);
-        
         var parts = ng.fen().split(' ');
         parts[1] = color; parts[3] = '-'; parts[4] = '0';
         ng = new Chess(parts.join(' '));
-        
         energyDelta = 1;
         if (tp) energyDelta += 1;
         if (ng.in_check()) energyDelta += 1;
         if (npd[mid] && npd[mid].type === 'p' && npd[mid].level === 2 && tp) energyDelta += 1;
-        
         nsm[action.to] = mid;
         delete nsm[action.from];
-        
         if (isPromo) {
           npd[mid] = { type: finalType, color: color, level: 1 };
         }
@@ -583,36 +532,31 @@ function App() {
       if (ng.in_check()) energyDelta += 1;
       setHasMoved(true);
     }
-    else if (action.type==='frenzy_charge' || action.type==='spectral_step') {
-      var cost = getActualCost(action.type==='frenzy_charge'?ABILITY_BASE_COST.frenzyCharge:ABILITY_BASE_COST.spectralStep);
+    else if (action.type==='spectral_step') {
+      var cost = getActualCost(ABILITY_BASE_COST.spectralStep);
       if (pts[color] < cost) return false;
       energyDelta = -cost + 1;
-      if (action.type==='spectral_step') {
-        var f0 = FILE(action.from), r0 = RANK(action.from);
-        var f1 = FILE(action.to), r1 = RANK(action.to);
-        var dc = f1>f0?1:-1, dr = r1>r0?1:-1;
-        var cf = f0+dc, cr = r0+dr;
-        while (cf!==f1 || cr!==r1) {
-          var msq = SQ(cf,cr), mp = game.get(msq);
-          if (mp) {
-            if (mp.color!==color) newStunned.add(sm[msq]);
-            else energyDelta += 1;
-          }
-          cf += dc; cr += dr;
+      var f0 = FILE(action.from), r0 = RANK(action.from);
+      var f1 = FILE(action.to), r1 = RANK(action.to);
+      var dc = f1>f0?1:-1, dr = r1>r0?1:-1;
+      var cf = f0+dc, cr = r0+dr;
+      while (cf!==f1 || cr!==r1) {
+        var msq = SQ(cf,cr), mp = game.get(msq);
+        if (mp) {
+          if (mp.color!==color) newStunned.add(sm[msq]);
+          else energyDelta += 1;
         }
+        cf += dc; cr += dr;
       }
       ng = new Chess(game.fen());
       var tp = game.get(action.to);
       ng.remove(action.from);
       if (tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta += 1; }
-      ng.put({type: action.type==='frenzy_charge'?'n':'b', color:color}, action.to);
+      ng.put({type:'b',color:color}, action.to);
       nsm[action.to] = mid; delete nsm[action.from];
       var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
       if (ng.in_check()) energyDelta += 1;
-      if (action.type==='frenzy_charge') {
-        setFrenzyUsed(function(prev) { var ns = new Set(prev); ns.add(mid); return ns; });
-      }
     }
     else if (action.type==='swap') {
       var p1 = game.get(action.from), p2 = game.get(action.to);
@@ -678,7 +622,7 @@ function App() {
     setAuraGained(newAuraGained);
     setLast({from:action.from, to:action.to});
     setSel(null); setMoves([]);
-    setFrenzyMode(false); setSpectralMode(false);
+    setSpectralMode(false);
 
     var evalFen = ng.fen().split(' ');
     evalFen[1] = opp;
@@ -709,26 +653,45 @@ function App() {
       setPts(function(prev) { var np = Object.assign({}, prev); np[next] = prev[next]+1; return np; });
     }
     setAuraGained({w:0,b:0});
-    setFrenzyUsed(new Set());
+    setKnightAbilityUsed(false);
 
-    if (soulDartOwner === next) {
-      setSoulDartZone([]);
-      setSoulDartOwner(null);
+    var mSqRestore = null, mColRestore = null;
+    if (metamorphosis && metamorphosis.expiresAfterColor === actualTurn) {
+      var mArr = Object.entries(sm);
+      for (var mi=0; mi<mArr.length; mi++) {
+        if (mArr[mi][1] === metamorphosis.id) {
+          mSqRestore = mArr[mi][0];
+          mColRestore = pd[metamorphosis.id] && pd[metamorphosis.id].color;
+          break;
+        }
+      }
+      setPd(function(prev){
+        var npd=Object.assign({},prev);
+        if (npd[metamorphosis.id]) npd[metamorphosis.id]=Object.assign({},npd[metamorphosis.id],{type:'r',morphOriginal:null,morphExpires:null});
+        return npd;
+      });
+      setMetamorphosis(null);
     }
 
     setHasMoved(false);
     setSel(null); setMoves([]);
     setCmdMode(false); setCmdSrc(null); setCmdDiscount(false);
     setElixMode(false); setElixSrc(null);
-    setFrenzyMode(false); setSpectralMode(false);
-    setDartMode(false); setDartSrc(null); setDartRefund(0);
+    setSpectralMode(false);
     setActualTurn(next);
     setGame(function(prev) {
-      var fenParts = prev.fen().split(' ');
+      var ng = prev;
+      if (mSqRestore && mColRestore) {
+        var ng2 = new Chess(ng.fen());
+        ng2.remove(mSqRestore);
+        ng2.put({type:'r', color:mColRestore}, mSqRestore);
+        ng = ng2;
+      }
+      var fenParts = ng.fen().split(' ');
       fenParts[1] = next;
       return new Chess(fenParts.join(' '));
     });
-  }, [hasMoved, actualTurn, pd, pdBonusEnergy, calcPrestige, ghostMarch, soulDartOwner]);
+  }, [hasMoved, actualTurn, pd, sm, pdBonusEnergy, calcPrestige, ghostMarch, metamorphosis]);
 
   var click = useCallback(function(sq) {
     if (gameOver) return;
@@ -767,40 +730,15 @@ function App() {
       return;
     }
 
-    if (dartMode) {
+    if (spectralMode) {
       if (sq) {
-        var move = moves.find(function(m) { return m.to === sq && m.type === 'dart_dir'; });
-        if (move) {
-          var dirF = move.df, dirR = move.dr;
-          var cf = FILE(dartSrc) + dirF, cr = RANK(dartSrc) + dirR;
-          var zone = [];
-          while (cf >= 0 && cf <= 7 && cr >= 1 && cr <= 8) {
-            zone.push(SQ(cf, cr));
-            cf += dirF; cr += dirR;
-          }
-          setSoulDartZone(zone);
-          setSoulDartOwner(color);
-          setDartMode(false); setDartSrc(null); setDartRefund(0);
-          setSel(null); setMoves([]);
-          return;
-        }
-      }
-      setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color] + dartRefund; return np; });
-      setDartMode(false); setDartSrc(null); setDartRefund(0);
-      setSel(null); setMoves([]);
-      return;
-    }
-
-    if (frenzyMode || spectralMode) {
-      var specialMode = frenzyMode ? 'frenzyCharge' : 'spectralStep';
-      if (sq) {
-        var move = moves.find(function(m) { return m.to===sq && (m.type==='frenzy_charge'||m.type==='spectral_step'); });
+        var move = moves.find(function(m) { return m.to===sq && m.type==='spectral_step'; });
         if (move) {
           execute(move, color);
           return;
         }
       }
-      setFrenzyMode(false); setSpectralMode(false);
+      setSpectralMode(false);
       setSel(null); setMoves([]);
       return;
     }
@@ -865,7 +803,7 @@ function App() {
 
     setSel(sq);
     setMoves([]);
-  }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, elixMode, frenzyMode, spectralMode, dartMode, dartSrc, dartRefund, execute, getMoves, effLevel, getEvoCost, actualTurn, soulDartOwner]);
+  }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, elixMode, spectralMode, execute, getMoves, effLevel, getEvoCost, actualTurn]);
 
   var devolveSelected = useCallback(function() {
     if (!sel) return;
@@ -885,15 +823,15 @@ function App() {
     setStunned(new Set()); setImmune(null); setGhostMarch(null);
     setCmdMode(false); setCmdSrc(null);
     setElixMode(false); setElixSrc(null);
-    setFrenzyMode(false); setSpectralMode(false);
-    setDartMode(false); setDartSrc(null); setDartRefund(0);
-    setFrenzyUsed(new Set()); setSoulDartZone([]); setSoulDartOwner(null);
+    setSpectralMode(false);
+    setKnightAbilityUsed(false);
+    setMetamorphosis(null);
     setGameOver(null); setLvlUpSq(null);
     setAuraGained({w:0,b:0});
   };
 
   var moveTargets = useMemo(function() { return new Set(moves.map(function(m) { return m.to; })); }, [moves]);
-  var abilityTargets = useMemo(function() { return new Set(moves.filter(function(m) { return m.type==='frenzy_charge'||m.type==='spectral_step'; }).map(function(m) { return m.to; })); }, [moves]);
+  var abilityTargets = useMemo(function() { return new Set(moves.filter(function(m) { return m.type==='spectral_step'; }).map(function(m) { return m.to; })); }, [moves]);
 
   var raw = game.board();
   var bd = flipped ? raw.slice().reverse().map(function(r) { return r.slice().reverse(); }) : raw;
@@ -916,33 +854,59 @@ function App() {
         setGhostMarch(color); setSel(null);
       }});
     }
-    if (selPiece.type === 'n') {
-      var cost = getActualCost(ABILITY_BASE_COST.frenzyCharge);
-      ab.push({name:'⚔️ Carica Forsennata', cost: cost, available: energy>=cost && !frenzyUsed.has(selId), action: function() {
-        setFrenzyMode(true); setMoves(getMoves(sel, false, false, 'frenzyCharge'));
-      }});
-    }
-    if (selPiece.type === 'b') {
-      var costSpec = getActualCost(ABILITY_BASE_COST.spectralStep);
-      ab.push({name:'🌫️ Passo Spettrale', cost: costSpec, available: energy>=costSpec, action: function() {
-        setSpectralMode(true); setMoves(getMoves(sel, false, false, 'spectralStep'));
-      }});
-      var dartCostVal = getActualCost(ABILITY_BASE_COST.soulDart);
-      ab.push({name:"🔥 Dardo dell'Anima", cost: dartCostVal, available: energy>=dartCostVal && soulDartZone.length === 0, action: function() {
-        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color] - dartCostVal; return np; });
-        setDartRefund(dartCostVal);
-        setDartMode(true); setDartSrc(sel); setDartCost(dartCostVal);
-        var dMoves = [];
-        var dirs = [[1,1],[1,-1],[-1,1],[-1,-1]];
-        for (var i=0; i<dirs.length; i++) {
-          var df = dirs[i][0], dr = dirs[i][1];
-          var tsq = SQ(FILE(sel) + df, RANK(sel) + dr);
-          if (tsq) dMoves.push({ type: 'dart_dir', from: sel, to: tsq, df: df, dr: dr });
+    if (selPiece.type === 'n' && !(pd[selId] && pd[selId].morphOriginal)) {
+      var cost = getActualCost(ABILITY_BASE_COST.dominate);
+      var oppCol = color === 'w' ? 'b' : 'w';
+      var controlled = knightJumps(sel);
+      var targets = controlled.filter(function(sq) {
+        var p = game.get(sq);
+        return p && p.color === oppCol && !stunned.has(sm[sq]);
+      });
+      ab.push({name:'🌑 Dominio del Campo', cost:cost,
+        available: energy >= cost && targets.length > 0 && !knightAbilityUsed,
+        action: function() {
+          setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-cost; return np; });
+          setStunned(function(prev){ var ns=new Set(prev); targets.forEach(function(sq){ if(sm[sq]) ns.add(sm[sq]); }); return ns; });
+          setKnightAbilityUsed(true);
+          setSel(null); setMoves([]);
         }
-        setMoves(dMoves);
-      }});
+      });
     }
-    if (selPiece.type === 'r') {
+    if (selPiece.type === 'b' && !(pd[selId] && pd[selId].morphOriginal)) {
+      var costSpec = getActualCost(ABILITY_BASE_COST.spectralStep);
+      ab.push({name:'🌫️ Passo Spettrale', cost:costSpec,
+        available: energy >= costSpec,
+        action: function() {
+          setSpectralMode(true);
+          setMoves(getMoves(sel, false, false, 'spectralStep'));
+        }
+      });
+    }
+    if (selPiece.type === 'r' && !metamorphosis) {
+      var mCost = getActualCost(ABILITY_BASE_COST.metamorph);
+      var doMorph = function(asType) {
+        return function() {
+          var opp = color === 'w' ? 'b' : 'w';
+          var ng2 = new Chess(game.fen());
+          ng2.remove(sel);
+          ng2.put({type:asType, color:color}, sel);
+          var parts = ng2.fen().split(' ');
+          parts[1]=color; parts[3]='-'; parts[4]='0';
+          setGame(new Chess(parts.join(' ')));
+          setPd(function(prev){
+            var npd=Object.assign({},prev);
+            npd[selId]=Object.assign({},npd[selId],{type:asType,morphOriginal:'r',morphExpires:opp});
+            return npd;
+          });
+          setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-mCost; return np; });
+          setMetamorphosis({id:selId, asType:asType, expiresAfterColor:opp});
+          setSel(null); setMoves([]);
+        };
+      };
+      ab.push({name:'🔄→🐴 Metamorfosi Cavallo', cost:mCost, available:energy>=mCost, action:doMorph('n')});
+      ab.push({name:'🔄→🌫️ Metamorfosi Alfiere', cost:mCost, available:energy>=mCost, action:doMorph('b')});
+    }
+    if (selPiece.type === 'r' && !(pd[selId] && pd[selId].morphOriginal)) {
       var f = FILE(sel), r = RANK(sel);
       var hasAlly = Object.entries(sm).some(function(e) {
         var osq = e[0];
@@ -950,10 +914,10 @@ function App() {
         var op = game.get(osq);
         return op && op.color===color && (FILE(osq)===f || RANK(osq)===r);
       });
-      var cost = getActualCost(ABILITY_BASE_COST.elixir);
-      ab.push({name:'🧪 Elisir di Protezione', cost: cost, available: energy>=cost && hasAlly, action: function() {
-        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
-        setElixMode(true); setElixSrc(sel); setElixCost(cost); setSel(null);
+      var elixCost = getActualCost(ABILITY_BASE_COST.elixir);
+      ab.push({name:'🧪 Elisir di Protezione', cost: elixCost, available: energy>=elixCost && hasAlly, action: function() {
+        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-elixCost; return np; });
+        setElixMode(true); setElixSrc(sel); setElixCost(elixCost); setSel(null);
       }});
     }
     if (selPiece.type === 'q') {
@@ -970,7 +934,7 @@ function App() {
       }});
     }
     return ab;
-  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn, frenzyUsed, soulDartZone, selId]);
+  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, activeTurn, knightAbilityUsed, metamorphosis, selId, pd, stunned]);
 
   function renderPanel() {
     if (cmdMode) return React.createElement('div', {style:{flex:1,display:'flex',flexDirection:'column',gap:4}},
@@ -989,14 +953,6 @@ function App() {
         setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+elixCost; return np; });
         setElixMode(false); setElixSrc(null);
       }}, '✕ Annulla (rimborso '+elixCost+'⚡)')
-    );
-    if (dartMode) return React.createElement('div', {style:{flex:1,display:'flex',flexDirection:'column',gap:4}},
-      React.createElement('div', {style:{fontSize:12,fontWeight:800,color:'#ff6b6b'}}, "🔥 Dardo dell'Anima"),
-      React.createElement('div', {className:'hint-text'}, 'Clicca una delle caselle verdi evidenziate per lanciare la traiettoria.'),
-      React.createElement('button', {className:'pass-btn', style:{background:'#1e293b',color:'#94a3b8'}, onClick: function() {
-        setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+dartRefund; return np; });
-        setDartMode(false); setDartSrc(null); setDartRefund(0); setSel(null); setMoves([]);
-      }}, '✕ Annulla (rimborso '+dartRefund+'⚡)')
     );
 
     return React.createElement(React.Fragment, null,
@@ -1018,7 +974,8 @@ function App() {
                   selPiece && ICONS[selPiece.color][selPiece.type], '\u00A0',
                   selEffLevel===2 ? EVO_NAMES[selPiece && selPiece.type] : 'Base', ' Lv.', selEffLevel,
                   stunned.has(selId) && React.createElement('span', {style:{color:'#818cf8'}}, ' (Stordito)'),
-                  immune && immune.sq===sel && React.createElement('span', {style:{color:'#fbbf24'}}, ' (Immune)')
+                  immune && immune.sq===sel && React.createElement('span', {style:{color:'#fbbf24'}}, ' (Immune)'),
+                  pd[selId] && pd[selId].morphOriginal && React.createElement('span', {style:{color:'#f59e0b'}}, ' (Morph)')
                 )
               : React.createElement('span', {className:'hint-text'}, 'Clicca un pezzo base per evolvere, o un evoluto per le abilità.')
         ),
@@ -1034,8 +991,26 @@ function App() {
           }, ab.name, ' (', ab.cost, '⚡)');
         })
       ),
-      hasMoved && sel && selEffLevel===2 && pdCanDevolve && React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: devolveSelected},
-        '↩ De-evolvi +1⚡'
+      hasMoved && sel && selEffLevel===2 && pdCanDevolve && (
+        pd[selId] && pd[selId].morphOriginal
+          ? React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: function() {
+              setPd(function(prev){
+                var npd=Object.assign({},prev);
+                npd[selId]=Object.assign({},npd[selId],{type:'r',morphOriginal:null,morphExpires:null});
+                return npd;
+              });
+              setMetamorphosis(null);
+              var ng2 = new Chess(game.fen());
+              ng2.remove(sel);
+              ng2.put({type:'r', color:activeColor}, sel);
+              var parts = ng2.fen().split(' ');
+              parts[1]=activeColor; parts[3]='-'; parts[4]='0';
+              setGame(new Chess(parts.join(' ')));
+              setSel(null); setMoves([]);
+            }}, '↩ Revoca Morph')
+          : React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: devolveSelected},
+              '↩ De-evolvi +1⚡'
+            )
       ),
       hasMoved && React.createElement('button', {className:'pass-btn', onClick: passTurn}, 'Passa il turno →')
     );
@@ -1074,7 +1049,7 @@ function App() {
             var isAbTarget = abilityTargets.has(sq);
             var isLast = last && (last.from===sq || last.to===sq);
             var isGhostAlly = ghostMarch===pieceColor && pieceColor===activeColor && game.get(sq) && game.get(sq).type==='p' && displayLv===2;
-            var isDartZone = soulDartZone.indexOf(sq) !== -1;
+            var isMorph = d && d.morphOriginal;
 
             var classes = ['cell', light?'light':'dark'];
             if (isSel) classes.push('sel');
@@ -1082,7 +1057,7 @@ function App() {
             if (isStunned) classes.push('stunned-piece');
             if (isImm) classes.push('immune-highlight');
             if (isGhostAlly) classes.push('ghost-march-ally');
-            if (isDartZone) classes.push('soul-dart-zone');
+            if (isMorph) classes.push('morph-piece');
             if (isLast) classes.push(light?'last-from':'last-to');
 
             return React.createElement('div', {key:sq, className:classes.join(' '), onClick: function() { click(sq); }},
@@ -1123,7 +1098,9 @@ function App() {
   );
 }
 
-ReactDOM.render(React.createElement(App), document.getElementById('root'));
+// React 18 createRoot
+var root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(App));
 </script>
 </body>
 </html>

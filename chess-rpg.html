@@ -3,7 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.9.2</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.9.3</title>
+  <!-- CDN spostati qui con crossorigin per evitare CORS e problemi di traduzione -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -52,10 +56,8 @@
 <body>
 <div id="root"></div>
 <div id="error-overlay"></div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script>
+  // Overlay di errore (con gestione CORS)
   window.addEventListener('error', function(e) {
     var el = document.getElementById('error-overlay');
     if (el) {
@@ -584,7 +586,6 @@ function App() {
     }
     else return false;
 
-    /* ========== CORREZIONE 2: Uso nsm invece di sm per il calcolo dell'aura ========== */
     var opp = color==='w'?'b':'w';
     var auraExtra = 0;
     var entries = Object.entries(nsm);
@@ -635,7 +636,6 @@ function App() {
     return true;
   }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained,getActualCost,actualTurn]);
 
-  /* ========== CORREZIONE 1 & 3: Bonus prestigio indipendente, metamorfosi con level:1/level:2 ========== */
   var passTurn = useCallback(function() {
     if (!hasMoved) return;
     var next = actualTurn === 'w' ? 'b' : 'w';
@@ -650,7 +650,6 @@ function App() {
     });
     setImmune(null);
     if (ghostMarch === actualTurn) setGhostMarch(null);
-    /* FIX 1: usa solo calcPrestige(next), non pdBonusEnergy */
     if (calcPrestige(next) >= 10) {
       setPts(function(prev) { var np = Object.assign({}, prev); np[next] = prev[next]+1; return np; });
     }
@@ -669,7 +668,6 @@ function App() {
       }
       setPd(function(prev){
         var npd=Object.assign({},prev);
-        /* FIX 3: ripristina level:2 quando torna Torre */
         if (npd[metamorphosis.id]) npd[metamorphosis.id]=Object.assign({},npd[metamorphosis.id],{type:'r',level:2,morphOriginal:null,morphExpires:null});
         return npd;
       });
@@ -899,7 +897,6 @@ function App() {
           setGame(new Chess(parts.join(' ')));
           setPd(function(prev){
             var npd=Object.assign({},prev);
-            /* FIX 3: morphata a livello 1 (base, no abilità) */
             npd[selId]=Object.assign({},npd[selId],{type:asType,level:1,morphOriginal:'r',morphExpires:opp});
             return npd;
           });
@@ -939,7 +936,8 @@ function App() {
       }});
     }
     return ab;
-  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, activeTurn, knightAbilityUsed, metamorphosis, selId, pd, stunned]);
+    /* *** CORREZIONE: actualTurn (non activeTurn) *** */
+  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn, knightAbilityUsed, metamorphosis, selId, pd, stunned]);
 
   function renderPanel() {
     if (cmdMode) return React.createElement('div', {style:{flex:1,display:'flex',flexDirection:'column',gap:4}},
@@ -1001,7 +999,6 @@ function App() {
           ? React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: function() {
               setPd(function(prev){
                 var npd=Object.assign({},prev);
-                /* FIX 3: ripristina level:2 quando revocata manualmente */
                 npd[selId]=Object.assign({},npd[selId],{type:'r',level:2,morphOriginal:null,morphExpires:null});
                 return npd;
               });

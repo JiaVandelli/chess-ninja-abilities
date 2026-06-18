@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.9</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.9.2</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -56,7 +56,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script>
-  // Babel rimosso – usiamo React.createElement nativo.
   window.addEventListener('error', function(e) {
     var el = document.getElementById('error-overlay');
     if (el) {
@@ -247,7 +246,6 @@ function App() {
   var [elixCost, setElixCost] = useState(2);
   var [elixSrc, setElixSrc] = useState(null);
 
-  var [frenzyMode, setFrenzyMode] = useState(false);
   var [spectralMode, setSpectralMode] = useState(false);
   
   var [knightAbilityUsed, setKnightAbilityUsed] = useState(false);
@@ -586,9 +584,10 @@ function App() {
     }
     else return false;
 
+    /* ========== CORREZIONE 2: Uso nsm invece di sm per il calcolo dell'aura ========== */
     var opp = color==='w'?'b':'w';
     var auraExtra = 0;
-    var entries = Object.entries(sm);
+    var entries = Object.entries(nsm);
     var oppDestrieri = [];
     for (var i=0; i<entries.length; i++) {
       var sqA = entries[i][0], idA = entries[i][1];
@@ -636,20 +635,23 @@ function App() {
     return true;
   }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained,getActualCost,actualTurn]);
 
+  /* ========== CORREZIONE 1 & 3: Bonus prestigio indipendente, metamorfosi con level:1/level:2 ========== */
   var passTurn = useCallback(function() {
     if (!hasMoved) return;
     var next = actualTurn === 'w' ? 'b' : 'w';
     setStunned(function(prev) {
       var ns = new Set(prev);
-      var ids = Object.values(pd);
-      for (var i=0; i<ids.length; i++) {
-        if (ids[i].color===actualTurn) ns.delete(ids[i]);
+      var smEntries = Object.entries(sm);
+      for (var i=0; i<smEntries.length; i++) {
+        var id = smEntries[i][1];
+        if (pd[id] && pd[id].color === actualTurn) ns.delete(id);
       }
       return ns;
     });
     setImmune(null);
     if (ghostMarch === actualTurn) setGhostMarch(null);
-    if (pdBonusEnergy && calcPrestige(next)>=10) {
+    /* FIX 1: usa solo calcPrestige(next), non pdBonusEnergy */
+    if (calcPrestige(next) >= 10) {
       setPts(function(prev) { var np = Object.assign({}, prev); np[next] = prev[next]+1; return np; });
     }
     setAuraGained({w:0,b:0});
@@ -667,7 +669,8 @@ function App() {
       }
       setPd(function(prev){
         var npd=Object.assign({},prev);
-        if (npd[metamorphosis.id]) npd[metamorphosis.id]=Object.assign({},npd[metamorphosis.id],{type:'r',morphOriginal:null,morphExpires:null});
+        /* FIX 3: ripristina level:2 quando torna Torre */
+        if (npd[metamorphosis.id]) npd[metamorphosis.id]=Object.assign({},npd[metamorphosis.id],{type:'r',level:2,morphOriginal:null,morphExpires:null});
         return npd;
       });
       setMetamorphosis(null);
@@ -691,7 +694,7 @@ function App() {
       fenParts[1] = next;
       return new Chess(fenParts.join(' '));
     });
-  }, [hasMoved, actualTurn, pd, sm, pdBonusEnergy, calcPrestige, ghostMarch, metamorphosis]);
+  }, [hasMoved, actualTurn, pd, sm, calcPrestige, ghostMarch, metamorphosis]);
 
   var click = useCallback(function(sq) {
     if (gameOver) return;
@@ -862,7 +865,8 @@ function App() {
         var p = game.get(sq);
         return p && p.color === oppCol && !stunned.has(sm[sq]);
       });
-      ab.push({name:'🌑 Dominio del Campo', cost:cost,
+      var usedText = knightAbilityUsed ? ' (già usato)' : '';
+      ab.push({name:'🌑 Dominio del Campo' + usedText, cost:cost,
         available: energy >= cost && targets.length > 0 && !knightAbilityUsed,
         action: function() {
           setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-cost; return np; });
@@ -895,7 +899,8 @@ function App() {
           setGame(new Chess(parts.join(' ')));
           setPd(function(prev){
             var npd=Object.assign({},prev);
-            npd[selId]=Object.assign({},npd[selId],{type:asType,morphOriginal:'r',morphExpires:opp});
+            /* FIX 3: morphata a livello 1 (base, no abilità) */
+            npd[selId]=Object.assign({},npd[selId],{type:asType,level:1,morphOriginal:'r',morphExpires:opp});
             return npd;
           });
           setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-mCost; return np; });
@@ -996,7 +1001,8 @@ function App() {
           ? React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: function() {
               setPd(function(prev){
                 var npd=Object.assign({},prev);
-                npd[selId]=Object.assign({},npd[selId],{type:'r',morphOriginal:null,morphExpires:null});
+                /* FIX 3: ripristina level:2 quando revocata manualmente */
+                npd[selId]=Object.assign({},npd[selId],{type:'r',level:2,morphOriginal:null,morphExpires:null});
                 return npd;
               });
               setMetamorphosis(null);
@@ -1098,7 +1104,6 @@ function App() {
   );
 }
 
-// React 18 createRoot
 var root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(React.createElement(App));
 </script>

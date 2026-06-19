@@ -4,10 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <title>Chess RPG – L'Esercito dell'Anima v4.9.3</title>
-  <!-- CDN spostati qui con crossorigin per evitare CORS e problemi di traduzione -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -26,8 +22,8 @@
     .board{--side:min(calc(100vw - 16px),calc(100vh - 280px));width:var(--side);height:var(--side);display:grid;grid-template-columns:repeat(8,1fr);border-radius:4px;overflow:hidden;border:3px solid #4b3220;box-shadow:0 0 0 5px #6b4423,0 6px 24px rgba(0,0,0,.6)}
     .cell{position:relative;display:flex;align-items:center;justify-content:center;font-size:calc(var(--side)/8*.72);cursor:pointer;aspect-ratio:1/1}
     .cell.light{background:#f0d9b5}.cell.dark{background:#b58863}
-    .cell.last-from.light,.cell.last-to.light{background:#f6f669}
-    .cell.last-from.dark,.cell.last-to.dark{background:#c8b400}
+    .cell.last-from{background:#f6f669!important}
+    .cell.last-to{background:#c8b400!important}
     .cell.sel{outline:3px solid #a855f7;outline-offset:-3px;background:#2d1f4e!important}
     .cell.aura-cell{box-shadow:inset 0 0 12px rgba(239,68,68,0.7)}
     .cell.stunned-piece{box-shadow:inset 0 0 12px rgba(99,102,241,0.8)}
@@ -56,8 +52,10 @@
 <body>
 <div id="root"></div>
 <div id="error-overlay"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script>
-  // Overlay di errore (con gestione CORS)
   window.addEventListener('error', function(e) {
     var el = document.getElementById('error-overlay');
     if (el) {
@@ -85,7 +83,7 @@ const ICONS = {w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},
 const EVO_NAMES = {p:'Assaltatore',n:'Destriero',b:'Spettro',r:'Alchimista',q:'Imperatrice',k:'Re'};
 const EVO_COST  = {p:2, n:2, b:2, r:3, q:5};
 const PRESTIGE  = {p:1, n:2, b:2, r:3, q:4};
-const ABILITY_BASE_COST = { ghostMarch:3, dominate:2, spectralStep:2, elixir:2, royalCommand:5, metamorph:2 };
+const ABILITY_BASE_COST = { ghostMarch:3, dominate:2, spectralStep:2, royalCommand:5, metamorph:2 };
 
 let _id = 0;
 const nextId = () => ++_id;
@@ -242,11 +240,6 @@ function App() {
   var [cmdMode, setCmdMode] = useState(false);
   var [cmdCost, setCmdCost] = useState(5);
   var [cmdSrc, setCmdSrc] = useState(null);
-  var [cmdDiscount, setCmdDiscount] = useState(false);
-
-  var [elixMode, setElixMode] = useState(false);
-  var [elixCost, setElixCost] = useState(2);
-  var [elixSrc, setElixSrc] = useState(null);
 
   var [spectralMode, setSpectralMode] = useState(false);
   
@@ -611,7 +604,7 @@ function App() {
         }
       }
     }
-    auraExtra = Math.min(auraExtra, 2 - (auraGained[opp]||0));
+    auraExtra = Math.max(0, Math.min(auraExtra, 2 - (auraGained[opp]||0)));
     var newAuraGained = Object.assign({}, auraGained);
     newAuraGained[opp] = (auraGained[opp]||0) + auraExtra;
 
@@ -676,8 +669,7 @@ function App() {
 
     setHasMoved(false);
     setSel(null); setMoves([]);
-    setCmdMode(false); setCmdSrc(null); setCmdDiscount(false);
-    setElixMode(false); setElixSrc(null);
+    setCmdMode(false); setCmdSrc(null);
     setSpectralMode(false);
     setActualTurn(next);
     setGame(function(prev) {
@@ -702,7 +694,6 @@ function App() {
       if (sq && sq!==cmdSrc) {
         var p = game.get(sq);
         if (p && p.color===color && p.type!=='q') {
-          setCmdDiscount(true);
           setCmdMode(false); setCmdSrc(null);
           var oppInCheck = kingInCheck(game, color==='w'?'b':'w', pd, sm, stunned, ghostMarch);
           setSel(sq); setMoves(getMoves(sq, true, oppInCheck, 'normal'));
@@ -710,23 +701,6 @@ function App() {
       } else {
         setCmdMode(false); setCmdSrc(null);
         setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]+cmdCost; return np; });
-        setCmdDiscount(false);
-      }
-      return;
-    }
-
-    if (elixMode) {
-      if (sq) {
-        var p = game.get(sq);
-        if (p && p.color===color && sq!==elixSrc && (FILE(sq)===FILE(elixSrc)||RANK(sq)===RANK(elixSrc))) {
-          setImmune({sq: sq, rookId: sm[elixSrc]});
-          setPts(function(prev) { var np = Object.assign({}, prev); np[color] = Math.max(0,prev[color]-elixCost); return np; });
-          setElixMode(false); setElixSrc(null);
-          setSel(null); setMoves([]);
-        }
-      } else {
-        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]+elixCost; return np; });
-        setElixMode(false); setElixSrc(null);
       }
       return;
     }
@@ -804,7 +778,7 @@ function App() {
 
     setSel(sq);
     setMoves([]);
-  }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, elixMode, spectralMode, execute, getMoves, effLevel, getEvoCost, actualTurn]);
+  }, [hasMoved, sel, moves, game, sm, pd, pts, stunned, ghostMarch, cmdMode, spectralMode, execute, getMoves, effLevel, getEvoCost, actualTurn]);
 
   var devolveSelected = useCallback(function() {
     if (!sel) return;
@@ -823,7 +797,6 @@ function App() {
     setHasMoved(false); setActualTurn('w');
     setStunned(new Set()); setImmune(null); setGhostMarch(null);
     setCmdMode(false); setCmdSrc(null);
-    setElixMode(false); setElixSrc(null);
     setSpectralMode(false);
     setKnightAbilityUsed(false);
     setMetamorphosis(null);
@@ -908,20 +881,6 @@ function App() {
       ab.push({name:'🔄→🐴 Metamorfosi Cavallo', cost:mCost, available:energy>=mCost, action:doMorph('n')});
       ab.push({name:'🔄→🌫️ Metamorfosi Alfiere', cost:mCost, available:energy>=mCost, action:doMorph('b')});
     }
-    if (selPiece.type === 'r' && !(pd[selId] && pd[selId].morphOriginal)) {
-      var f = FILE(sel), r = RANK(sel);
-      var hasAlly = Object.entries(sm).some(function(e) {
-        var osq = e[0];
-        if (osq===sel) return false;
-        var op = game.get(osq);
-        return op && op.color===color && (FILE(osq)===f || RANK(osq)===r);
-      });
-      var elixCost = getActualCost(ABILITY_BASE_COST.elixir);
-      ab.push({name:'🧪 Elisir di Protezione', cost: elixCost, available: energy>=elixCost && hasAlly, action: function() {
-        setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-elixCost; return np; });
-        setElixMode(true); setElixSrc(sel); setElixCost(elixCost); setSel(null);
-      }});
-    }
     if (selPiece.type === 'q') {
       var cost = getActualCost(ABILITY_BASE_COST.royalCommand);
       var hasAlly = Object.entries(sm).some(function(e) {
@@ -936,7 +895,6 @@ function App() {
       }});
     }
     return ab;
-    /* *** CORREZIONE: actualTurn (non activeTurn) *** */
   }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, actualTurn, knightAbilityUsed, metamorphosis, selId, pd, stunned]);
 
   function renderPanel() {
@@ -946,16 +904,7 @@ function App() {
       React.createElement('button', {className:'pass-btn', style:{background:'#1e293b',color:'#94a3b8'}, onClick: function() {
         setCmdMode(false); setCmdSrc(null);
         setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+cmdCost; return np; });
-        setCmdDiscount(false);
       }}, '✕ Annulla (rimborso '+cmdCost+'⚡)')
-    );
-    if (elixMode) return React.createElement('div', {style:{flex:1,display:'flex',flexDirection:'column',gap:4}},
-      React.createElement('div', {style:{fontSize:12,fontWeight:800,color:'#fbbf24'}}, '🧪 Elisir di Protezione'),
-      React.createElement('div', {className:'hint-text'}, "Clicca un pezzo alleato sulla stessa riga/colonna dell'Alchimista."),
-      React.createElement('button', {className:'pass-btn', style:{background:'#1e293b',color:'#94a3b8'}, onClick: function() {
-        setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+elixCost; return np; });
-        setElixMode(false); setElixSrc(null);
-      }}, '✕ Annulla (rimborso '+elixCost+'⚡)')
     );
 
     return React.createElement(React.Fragment, null,
@@ -994,26 +943,8 @@ function App() {
           }, ab.name, ' (', ab.cost, '⚡)');
         })
       ),
-      hasMoved && sel && selEffLevel===2 && pdCanDevolve && (
-        pd[selId] && pd[selId].morphOriginal
-          ? React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: function() {
-              setPd(function(prev){
-                var npd=Object.assign({},prev);
-                npd[selId]=Object.assign({},npd[selId],{type:'r',level:2,morphOriginal:null,morphExpires:null});
-                return npd;
-              });
-              setMetamorphosis(null);
-              var ng2 = new Chess(game.fen());
-              ng2.remove(sel);
-              ng2.put({type:'r', color:activeColor}, sel);
-              var parts = ng2.fen().split(' ');
-              parts[1]=activeColor; parts[3]='-'; parts[4]='0';
-              setGame(new Chess(parts.join(' ')));
-              setSel(null); setMoves([]);
-            }}, '↩ Revoca Morph')
-          : React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: devolveSelected},
-              '↩ De-evolvi +1⚡'
-            )
+      hasMoved && sel && selEffLevel===2 && pdCanDevolve && !(pd[selId] && pd[selId].morphOriginal) && React.createElement('button', {className:'ability-btn', style:{background:'#7f1d1d',color:'#fca5a5',marginTop:4}, onClick: devolveSelected},
+        '↩ De-evolvi +1⚡'
       ),
       hasMoved && React.createElement('button', {className:'pass-btn', onClick: passTurn}, 'Passa il turno →')
     );
@@ -1050,7 +981,8 @@ function App() {
             var isSel = sel===sq;
             var isMoveTarget = moveTargets.has(sq);
             var isAbTarget = abilityTargets.has(sq);
-            var isLast = last && (last.from===sq || last.to===sq);
+            var isLastFrom = last && last.from===sq;
+            var isLastTo = last && last.to===sq;
             var isGhostAlly = ghostMarch===pieceColor && pieceColor===activeColor && game.get(sq) && game.get(sq).type==='p' && displayLv===2;
             var isMorph = d && d.morphOriginal;
 
@@ -1061,7 +993,8 @@ function App() {
             if (isImm) classes.push('immune-highlight');
             if (isGhostAlly) classes.push('ghost-march-ally');
             if (isMorph) classes.push('morph-piece');
-            if (isLast) classes.push(light?'last-from':'last-to');
+            if (isLastFrom) classes.push('last-from');
+            if (isLastTo) classes.push('last-to');
 
             return React.createElement('div', {key:sq, className:classes.join(' '), onClick: function() { click(sq); }},
               isMoveTarget && !isAbTarget && !cell && React.createElement('div', {style:{position:'absolute',width:'30%',height:'30%',borderRadius:'50%',background:'#22c55e',boxShadow:'0 0 10px #22c55e',zIndex:1,pointerEvents:'none'}}),

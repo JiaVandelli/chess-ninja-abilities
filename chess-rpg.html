@@ -529,18 +529,6 @@ function App() {
       var cost = getActualCost(ABILITY_BASE_COST.spectralStep);
       if (pts[color] < cost) return false;
       energyDelta = -cost + 1;
-      var f0 = FILE(action.from), r0 = RANK(action.from);
-      var f1 = FILE(action.to), r1 = RANK(action.to);
-      var dc = f1>f0?1:-1, dr = r1>r0?1:-1;
-      var cf = f0+dc, cr = r0+dr;
-      while (cf!==f1 || cr!==r1) {
-        var msq = SQ(cf,cr), mp = game.get(msq);
-        if (mp) {
-          if (mp.color!==color) newStunned.add(sm[msq]);
-          else energyDelta += 1;
-        }
-        cf += dc; cr += dr;
-      }
       ng = new Chess(game.fen());
       var tp = game.get(action.to);
       ng.remove(action.from);
@@ -581,24 +569,31 @@ function App() {
 
     var opp = color==='w'?'b':'w';
     var auraExtra = 0;
-    var entries = Object.entries(nsm);
     var oppDestrieri = [];
+    var entries = Object.entries(sm);
     for (var i=0; i<entries.length; i++) {
       var sqA = entries[i][0], idA = entries[i][1];
-      if (pd[idA] && pd[idA].level===2 && ng.get(sqA) && ng.get(sqA).type==='n' && ng.get(sqA).color===opp) {
-        oppDestrieri.push([sqA,idA]);
+      if (pd[idA] && pd[idA].level===2 && game.get(sqA) && game.get(sqA).type==='n' && game.get(sqA).color===opp) {
+        oppDestrieri.push(sqA);
       }
     }
+    entries = Object.entries(nsm);
     for (var i=0; i<oppDestrieri.length; i++) {
-      var sqA = oppDestrieri[i][0], idA = oppDestrieri[i][1];
-      var zone = knightJumps(sqA);
+      var sqA = oppDestrieri[i];
+      var newSqA = null;
+      for (var j=0; j<entries.length; j++) {
+        if (entries[j][1] === sm[sqA]) { newSqA = entries[j][0]; break; }
+      }
+      if (!newSqA) newSqA = sqA;
+      var zoneBefore = knightJumps(sqA);
+      var zoneAfter = knightJumps(newSqA);
       for (var j=0; j<entries.length; j++) {
         var sqE = entries[j][0], idE = entries[j][1];
-        if (sqE===sqA) continue;
+        if (sqE===newSqA) continue;
         var ep = ng.get(sqE);
         if (ep && ep.color===color) {
-          var wasInZone = game.get(sqE) ? knightJumps(sqA).indexOf(sqE) !== -1 : false;
-          var isInZone = zone.indexOf(sqE) !== -1;
+          var wasInZone = game.get(sqE) ? zoneBefore.indexOf(sqE) !== -1 : false;
+          var isInZone = zoneAfter.indexOf(sqE) !== -1;
           if (!wasInZone && isInZone) auraExtra += 1;
           else if (wasInZone && !isInZone) auraExtra += 1;
         }

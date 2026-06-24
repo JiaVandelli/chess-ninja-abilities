@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.9.3</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.9.5</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -78,12 +78,27 @@ if (typeof Chess === 'undefined') throw new Error('Chess.js non caricato');
 
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
 
+// ---------- COSTANTI E UTILITÀ ----------
 const ICONS = {w:{k:'♔',q:'♕',r:'♖',b:'♗',n:'♘',p:'♙'},
                b:{k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'}};
 const EVO_NAMES = {p:'Assaltatore',n:'Destriero',b:'Spettro',r:'Alchimista',q:'Imperatrice',k:'Re'};
 const EVO_COST  = {p:2, n:2, b:2, r:3, q:5};
 const PRESTIGE  = {p:1, n:2, b:2, r:3, q:4};
 const ABILITY_BASE_COST = { ghostMarch:3, dominate:2, spectralStep:2, royalCommand:5, metamorph:2 };
+
+const ENERGY = {
+  MOVE: 1,
+  CAPTURE: 1,
+  CHECK: 1,
+  ASSALTATORE_CAPTURE: 1,
+  ADJACENT_ENEMY: 1
+};
+
+const PRESTIGE_TIERS = {
+  BRONZE: 5,
+  SILVER: 10,
+  GOLD: 15
+};
 
 let _id = 0;
 const nextId = () => ++_id;
@@ -99,6 +114,7 @@ const knightJumps = sq => {
 const DIAG_DIRS = [[1,1],[1,-1],[-1,1],[-1,-1]];
 const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
+// ---------- FUNZIONI DI UTILITÀ ----------
 function buildState(g) {
   var pd={}, sm={};
   g.board().forEach(function(row, r) { 
@@ -123,6 +139,14 @@ function applyStd(game, from, to, promotion) {
   return {game:g, captured:cap, castleK: mv.flags && mv.flags.indexOf('k') !== -1, castleQ: mv.flags && mv.flags.indexOf('q') !== -1};
 }
 
+// =====================================================================
+// ATTENZIONE:
+// kingInCheck() è il motore di controllo scacco CUSTOM.
+// Ogni nuova abilità che modifica le linee di attacco (es. saltare pezzi,
+// muoversi attraverso i pedoni alleati, nuovi tipi di movimento)
+// deve aggiornare questa funzione, altrimenti il controllo scacco
+// potrebbe non rilevare correttamente le minacce.
+// =====================================================================
 function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
   var fen = game.fen().split(' ');
   fen[1] = color; fen[3] = '-';
@@ -219,6 +243,59 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
   return false;
 }
 
+// Funzione di debug per verificare la sincronizzazione game/sm
+function validateBoard(game, sm) {
+  var countGame = 0;
+  game.board().forEach(function(row) {
+    row.forEach(function(p) {
+      if (p) countGame++;
+    });
+  });
+  var countSm = Object.keys(sm).length;
+  if (countGame !== countSm) {
+    console.error('⚠️ SYNC ERROR: board pieces=' + countGame + ' sm entries=' + countSm);
+  }
+}
+
+// Nuova funzione separata per il calcolo dell'energia da Aura Destriero
+function calculateAuraEnergy(oldGame, newGame, oldSm, newSm, pd, color, auraGained) {
+  var opp = color === 'w' ? 'b' : 'w';
+  var auraExtra = 0;
+  var oppDestrieri = [];
+  var entries = Object.entries(oldSm);
+  for (var i = 0; i < entries.length; i++) {
+    var sqA = entries[i][0], idA = entries[i][1];
+    if (pd[idA] && pd[idA].level === 2 && oldGame.get(sqA) && oldGame.get(sqA).type === 'n' && oldGame.get(sqA).color === opp) {
+      oppDestrieri.push(sqA);
+    }
+  }
+  entries = Object.entries(newSm);
+  for (var i = 0; i < oppDestrieri.length; i++) {
+    var sqA = oppDestrieri[i];
+    var newSqA = null;
+    for (var j = 0; j < entries.length; j++) {
+      if (entries[j][1] === oldSm[sqA]) { newSqA = entries[j][0]; break; }
+    }
+    // Se il Destriero è stato catturato, non genera aura
+    if (!newSqA) continue;
+    var zoneBefore = knightJumps(sqA);
+    var zoneAfter = knightJumps(newSqA);
+    for (var j = 0; j < entries.length; j++) {
+      var sqE = entries[j][0];
+      if (sqE === newSqA) continue;
+      var ep = newGame.get(sqE);
+      if (ep && ep.color === color) {
+        var wasInZone = oldGame.get(sqE) ? zoneBefore.indexOf(sqE) !== -1 : false;
+        var isInZone = zoneAfter.indexOf(sqE) !== -1;
+        if (!wasInZone && isInZone) auraExtra += 1;
+        else if (wasInZone && !isInZone) auraExtra += 1;
+      }
+    }
+  }
+  auraExtra = Math.max(0, Math.min(auraExtra, 2 - (auraGained[opp] || 0)));
+  return auraExtra;
+}
+
 function App() {
   var [game, setGame] = useState(function() { return new Chess(); });
   var [pd, setPd] = useState({});
@@ -242,7 +319,7 @@ function App() {
   var [cmdSrc, setCmdSrc] = useState(null);
 
   var [spectralMode, setSpectralMode] = useState(false);
-  
+
   var [knightAbilityUsed, setKnightAbilityUsed] = useState(false);
   var [metamorphosis, setMetamorphosis] = useState(null);
 
@@ -288,9 +365,9 @@ function App() {
 
   var activeColor = actualTurn;
   var prestige = calcPrestige(activeColor);
-  var pdDiscount = prestige>=15 ? 1 : 0;
-  var pdBonusEnergy = prestige>=10;
-  var pdCanDevolve = prestige>=5;
+  var pdDiscount = prestige >= PRESTIGE_TIERS.GOLD ? 1 : 0;
+  var pdBonusEnergy = prestige >= PRESTIGE_TIERS.SILVER;
+  var pdCanDevolve = prestige >= PRESTIGE_TIERS.BRONZE;
 
   var isImmune = useCallback(function(sq) {
     if (!immune || immune.sq!==sq) return false;
@@ -451,7 +528,7 @@ function App() {
   }, [game,sm,pd,stunned,ghostMarch,isImmune,effLevel]);
 
   var execute = useCallback(function(action, color) {
-    var ng, energyDelta=0;
+    var ng, energyDelta = 0;
     var npd = Object.assign({}, pd);
     var nsm = Object.assign({}, sm);
     var newStunned = new Set(stunned);
@@ -461,7 +538,7 @@ function App() {
     var mid = sm[action.from];
     var wasOppInCheck = game.in_check();
 
-    if (action.type==='std') {
+    if (action.type === 'std') {
       var res = applyStd(game, action.from, action.to, action.promo);
       if (!res) {
         ng = new Chess(game.fen());
@@ -471,6 +548,8 @@ function App() {
         var isPromo = (p.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1));
         var finalType = isPromo ? (action.promo || 'q') : p.type;
         if (tp) {
+          // Controllo sicurezza: non si può catturare il re con mosse custom
+          if (tp.type === 'k') return false;
           delete npd[nsm[action.to]];
           delete nsm[action.to];
         }
@@ -478,14 +557,14 @@ function App() {
         var parts = ng.fen().split(' ');
         parts[1] = color; parts[3] = '-'; parts[4] = '0';
         ng = new Chess(parts.join(' '));
-        energyDelta = 1;
-        if (tp) energyDelta += 1;
-        if (ng.in_check()) energyDelta += 1;
-        if (npd[mid] && npd[mid].type === 'p' && npd[mid].level === 2 && tp) energyDelta += 1;
+        energyDelta = ENERGY.MOVE;
+        if (tp) energyDelta += ENERGY.CAPTURE;
+        if (ng.in_check()) energyDelta += ENERGY.CHECK;
+        if (npd[mid] && npd[mid].type === 'p' && npd[mid].level === 2 && tp) energyDelta += ENERGY.ASSALTATORE_CAPTURE;
         nsm[action.to] = mid;
         delete nsm[action.from];
         if (isPromo) {
-          npd[mid] = { type: finalType, color: color, level: 1 };
+          npd[mid] = { ...npd[mid], type: finalType, level: 1 };
         }
         setHasMoved(true);
       } else {
@@ -494,52 +573,59 @@ function App() {
         parts[1] = color;
         parts[3] = '-';
         ng = new Chess(parts.join(' '));
-        energyDelta = 1;
-        if (res.captured) energyDelta += 1;
-        if (ng.in_check()) energyDelta += 1;
-        if (npd[mid] && npd[mid].type === 'p' && npd[mid].level === 2 && res.captured) energyDelta += 1;
+        energyDelta = ENERGY.MOVE;
+        if (res.captured) energyDelta += ENERGY.CAPTURE;
+        if (ng.in_check()) energyDelta += ENERGY.CHECK;
+        if (npd[mid] && npd[mid].type === 'p' && npd[mid].level === 2 && res.captured) energyDelta += ENERGY.ASSALTATORE_CAPTURE;
         if (res.castleK) { var rk = color === 'w' ? '1' : '8'; nsm['f'+rk] = nsm['h'+rk]; delete nsm['h'+rk]; }
         if (res.castleQ) { var rk = color === 'w' ? '1' : '8'; nsm['d'+rk] = nsm['a'+rk]; delete nsm['a'+rk]; }
         if (res.captured) { var cs = res.captured._sq || action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
         nsm[action.to] = mid; delete nsm[action.from];
         var promoPiece = game.get(action.from);
         if (promoPiece && promoPiece.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1)) {
-          npd[mid] = { type: action.promo || 'q', color: color, level: 1 };
+          npd[mid] = { ...npd[mid], type: action.promo || 'q', level: 1 };
         }
         setHasMoved(true);
       }
     }
-    else if (action.type==='bishop_jump') {
-      ng = new Chess(game.fen());
-      var jumped = game.get(action.jumped), tp = game.get(action.to);
-      ng.remove(action.from);
-      if (action.capture && tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta += 1; }
-      ng.put({type:'b',color:color},action.to);
-      nsm[action.to] = mid; delete nsm[action.from];
-      if (jumped) {
-        if (jumped.color!==color) newStunned.add(action.jumpedId);
-      }
-      energyDelta += 1;
-      var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
-      ng = new Chess(parts.join(' '));
-      if (ng.in_check()) energyDelta += 1;
-      setHasMoved(true);
-    }
-    else if (action.type==='spectral_step') {
-      var cost = getActualCost(ABILITY_BASE_COST.spectralStep);
-      if (pts[color] < cost) return false;
-      energyDelta = -cost + 1;
+    else if (action.type === 'bishop_jump') {
       ng = new Chess(game.fen());
       var tp = game.get(action.to);
       ng.remove(action.from);
-      if (tp) { delete npd[nsm[action.to]]; delete nsm[action.to]; energyDelta += 1; }
+      if (action.capture && tp) {
+        if (tp.type === 'k') return false;
+        delete npd[nsm[action.to]];
+        delete nsm[action.to];
+        energyDelta += ENERGY.CAPTURE;
+      }
+      ng.put({type:'b',color:color}, action.to);
+      nsm[action.to] = mid; delete nsm[action.from];
+      energyDelta += ENERGY.MOVE;
+      var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
+      ng = new Chess(parts.join(' '));
+      if (ng.in_check()) energyDelta += ENERGY.CHECK;
+      setHasMoved(true);
+    }
+    else if (action.type === 'spectral_step') {
+      var cost = getActualCost(ABILITY_BASE_COST.spectralStep);
+      if (pts[color] < cost) return false;
+      energyDelta = -cost + ENERGY.MOVE;
+      ng = new Chess(game.fen());
+      var tp = game.get(action.to);
+      ng.remove(action.from);
+      if (tp) {
+        if (tp.type === 'k') return false;
+        delete npd[nsm[action.to]];
+        delete nsm[action.to];
+        energyDelta += ENERGY.CAPTURE;
+      }
       ng.put({type:'b',color:color}, action.to);
       nsm[action.to] = mid; delete nsm[action.from];
       var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
-      if (ng.in_check()) energyDelta += 1;
+      if (ng.in_check()) energyDelta += ENERGY.CHECK;
     }
-    else if (action.type==='swap') {
+    else if (action.type === 'swap') {
       var p1 = game.get(action.from), p2 = game.get(action.to);
       ng = new Chess(game.fen()); ng.remove(action.from); ng.remove(action.to);
       ng.put(p1, action.to); ng.put(p2, action.from);
@@ -548,7 +634,7 @@ function App() {
       var tempId = nsm[action.from];
       nsm[action.from] = nsm[action.to];
       nsm[action.to] = tempId;
-      energyDelta = 1;
+      energyDelta = ENERGY.MOVE;
 
       var isAdjEnemy = function(targetSq) {
         var tf = FILE(targetSq), tr = RANK(targetSq);
@@ -561,50 +647,23 @@ function App() {
         }
         return false;
       };
-      if (isAdjEnemy(action.from) || isAdjEnemy(action.to)) energyDelta += 1;
+      if (isAdjEnemy(action.from) || isAdjEnemy(action.to)) energyDelta += ENERGY.ADJACENT_ENEMY;
 
       setHasMoved(true);
     }
     else return false;
 
-    var opp = color==='w'?'b':'w';
-    var auraExtra = 0;
-    var oppDestrieri = [];
-    var entries = Object.entries(sm);
-    for (var i=0; i<entries.length; i++) {
-      var sqA = entries[i][0], idA = entries[i][1];
-      if (pd[idA] && pd[idA].level===2 && game.get(sqA) && game.get(sqA).type==='n' && game.get(sqA).color===opp) {
-        oppDestrieri.push(sqA);
-      }
-    }
-    entries = Object.entries(nsm);
-    for (var i=0; i<oppDestrieri.length; i++) {
-      var sqA = oppDestrieri[i];
-      var newSqA = null;
-      for (var j=0; j<entries.length; j++) {
-        if (entries[j][1] === sm[sqA]) { newSqA = entries[j][0]; break; }
-      }
-      if (!newSqA) newSqA = sqA;
-      var zoneBefore = knightJumps(sqA);
-      var zoneAfter = knightJumps(newSqA);
-      for (var j=0; j<entries.length; j++) {
-        var sqE = entries[j][0], idE = entries[j][1];
-        if (sqE===newSqA) continue;
-        var ep = ng.get(sqE);
-        if (ep && ep.color===color) {
-          var wasInZone = game.get(sqE) ? zoneBefore.indexOf(sqE) !== -1 : false;
-          var isInZone = zoneAfter.indexOf(sqE) !== -1;
-          if (!wasInZone && isInZone) auraExtra += 1;
-          else if (wasInZone && !isInZone) auraExtra += 1;
-        }
-      }
-    }
-    auraExtra = Math.max(0, Math.min(auraExtra, 2 - (auraGained[opp]||0)));
+    // Validazione sincronizzazione game/sm
+    validateBoard(ng, nsm);
+
+    // Calcolo Aura usando la funzione separata
+    var auraExtra = calculateAuraEnergy(game, ng, sm, nsm, pd, color, auraGained);
     var newAuraGained = Object.assign({}, auraGained);
-    newAuraGained[opp] = (auraGained[opp]||0) + auraExtra;
+    var opp = color === 'w' ? 'b' : 'w';
+    newAuraGained[opp] = (auraGained[opp] || 0) + auraExtra;
 
     setGame(ng); setPd(npd); setSm(nsm);
-    setPts(function(prev) { var np = Object.assign({}, prev); np[color] = Math.max(0, prev[color]+energyDelta); np[opp] = prev[opp]+auraExtra; return np; });
+    setPts(function(prev) { var np = Object.assign({}, prev); np[color] = Math.max(0, prev[color] + energyDelta); np[opp] = prev[opp] + auraExtra; return np; });
     setStunned(newStunned); setImmune(newImmune);
     setGhostMarch(newGhost);
     setAuraGained(newAuraGained);
@@ -622,7 +681,7 @@ function App() {
       });
     }
     return true;
-  }, [game,pd,sm,pts,stunned,immune,ghostMarch,auraGained,getActualCost,actualTurn]);
+  }, [game, pd, sm, pts, stunned, immune, ghostMarch, auraGained, getActualCost, actualTurn]);
 
   var passTurn = useCallback(function() {
     if (!hasMoved) return;
@@ -638,8 +697,8 @@ function App() {
     });
     setImmune(null);
     if (ghostMarch === actualTurn) setGhostMarch(null);
-    if (calcPrestige(next) >= 10) {
-      setPts(function(prev) { var np = Object.assign({}, prev); np[next] = prev[next]+1; return np; });
+    if (calcPrestige(next) >= PRESTIGE_TIERS.SILVER) {
+      setPts(function(prev) { var np = Object.assign({}, prev); np[next] = prev[next] + 1; return np; });
     }
     setAuraGained({w:0,b:0});
     setKnightAbilityUsed(false);
@@ -655,8 +714,13 @@ function App() {
         }
       }
       setPd(function(prev){
-        var npd=Object.assign({},prev);
-        if (npd[metamorphosis.id]) npd[metamorphosis.id]=Object.assign({},npd[metamorphosis.id],{type:'r',level:2,morphOriginal:null,morphExpires:null});
+        var npd = Object.assign({}, prev);
+        if (npd[metamorphosis.id]) {
+          var restored = Object.assign({}, npd[metamorphosis.id]);
+          delete restored.morphOriginal;
+          delete restored.morphExpires;
+          npd[metamorphosis.id] = restored;
+        }
         return npd;
       });
       setMetamorphosis(null);
@@ -781,7 +845,7 @@ function App() {
     var d = pd[id];
     if (!d || d.level !== 2 || !pdCanDevolve) return;
     setPd(function(prev) { var npd = Object.assign({}, prev); npd[id] = Object.assign({}, d, {level:1}); return npd; });
-    setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor]+1; return np; });
+    setPts(function(prev) { var np = Object.assign({}, prev); np[activeColor] = prev[activeColor] + 1; return np; });
     setSel(null); setMoves([]);
   }, [sel, sm, pd, pdCanDevolve, activeColor]);
 
@@ -825,18 +889,30 @@ function App() {
     }
     if (selPiece.type === 'n' && !(pd[selId] && pd[selId].morphOriginal)) {
       var cost = getActualCost(ABILITY_BASE_COST.dominate);
-      var oppCol = color === 'w' ? 'b' : 'w';
-      var controlled = knightJumps(sel);
-      var targets = controlled.filter(function(sq) {
-        var p = game.get(sq);
-        return p && p.color === oppCol && !stunned.has(sm[sq]);
-      });
       var usedText = knightAbilityUsed ? ' (già usato)' : '';
       ab.push({name:'🌑 Dominio del Campo' + usedText, cost:cost,
-        available: energy >= cost && targets.length > 0 && !knightAbilityUsed,
+        available: energy >= cost && !knightAbilityUsed,
         action: function() {
+          var currentGame = game;
+          var currentSm = sm;
+          var currentStunned = stunned;
+          var oppCol = color === 'w' ? 'b' : 'w';
+          var controlled = knightJumps(sel);
+          // Calcoliamo subito gli ID da stordire
+          var targetIds = controlled.reduce(function(ids, sq) {
+            var p = currentGame.get(sq);
+            if (p && p.color === oppCol && !currentStunned.has(currentSm[sq])) {
+              if (currentSm[sq]) ids.push(currentSm[sq]);
+            }
+            return ids;
+          }, []);
+          if (targetIds.length === 0) return;
           setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-cost; return np; });
-          setStunned(function(prev){ var ns=new Set(prev); targets.forEach(function(sq){ if(sm[sq]) ns.add(sm[sq]); }); return ns; });
+          setStunned(function(prev){
+            var ns = new Set(prev);
+            targetIds.forEach(function(id) { ns.add(id); });
+            return ns;
+          });
           setKnightAbilityUsed(true);
           setSel(null); setMoves([]);
         }
@@ -864,13 +940,16 @@ function App() {
           parts[1]=color; parts[3]='-'; parts[4]='0';
           setGame(new Chess(parts.join(' ')));
           setPd(function(prev){
-            var npd=Object.assign({},prev);
-            npd[selId]=Object.assign({},npd[selId],{type:asType,level:1,morphOriginal:'r',morphExpires:opp});
+            var npd = Object.assign({}, prev);
+            npd[selId] = Object.assign({}, npd[selId], { morphOriginal: 'r', morphExpires: opp, level: 1 });
             return npd;
           });
           setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-mCost; return np; });
           setMetamorphosis({id:selId, asType:asType, expiresAfterColor:opp});
-          setSel(null); setMoves([]);
+          // Pulizia totale per evitare selezioni residue
+          setSel(null);
+          setMoves([]);
+          setSpectralMode(false);
         };
       };
       ab.push({name:'🔄→🐴 Metamorfosi Cavallo', cost:mCost, available:energy>=mCost, action:doMorph('n')});
@@ -947,7 +1026,7 @@ function App() {
 
   return React.createElement('div', {className:'app'},
     React.createElement('div', {className:'top-bar'},
-      React.createElement('div', {className:'prestige-badge'}, '⭐', prestige, prestige>=5?' 🥉':'', prestige>=10?' 🥈':'', prestige>=15?' 🥇':''),
+      React.createElement('div', {className:'prestige-badge'}, '⭐', prestige, prestige>=PRESTIGE_TIERS.BRONZE?' 🥉':'', prestige>=PRESTIGE_TIERS.SILVER?' 🥈':'', prestige>=PRESTIGE_TIERS.GOLD?' 🥇':''),
       React.createElement('button', {className:'flip-btn', onClick: function() { setFlip(function(f) { return !f; }); }}, '🔄 Ruota')
     ),
     React.createElement('div', {className:'player-row'},

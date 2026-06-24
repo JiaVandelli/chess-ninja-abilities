@@ -52,9 +52,13 @@
 <body>
 <div id="root"></div>
 <div id="error-overlay"></div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+
+<script src="audioManager.js"></script>
+
 <script>
   window.addEventListener('error', function(e) {
     var el = document.getElementById('error-overlay');
@@ -75,35 +79,6 @@
 if (typeof React === 'undefined') throw new Error('React non caricato');
 if (typeof ReactDOM === 'undefined') throw new Error('ReactDOM non caricato');
 if (typeof Chess === 'undefined') throw new Error('Chess.js non caricato');
-
-// ==========================================
-// GESTORE AUDIO INCORPORATO
-// ==========================================
-const AudioManager = {
-  sounds: {
-    move: new Audio('sounds/move.mp3'),
-    capture: new Audio('sounds/capture.mp3'),
-    evolve: new Audio('sounds/evolve.mp3'),
-    ability: new Audio('sounds/ability.mp3'),
-    error: new Audio('sounds/error.mp3')
-  },
-  volume: 0.5,
-  init: function() {
-    for (let key in this.sounds) {
-      this.sounds[key].volume = this.volume;
-    }
-  },
-  play: function(soundName) {
-    const sfx = this.sounds[soundName];
-    if (sfx) {
-      sfx.currentTime = 0;
-      sfx.play().catch(e => console.warn('Audio non riprodotto (interazione utente richiesta):', e));
-    } else {
-      console.error('Suono non trovato:', soundName);
-    }
-  }
-};
-AudioManager.init();
 
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
 

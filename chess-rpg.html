@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.9.5</title>
+  <title>Chess RPG – L'Esercito dell'Anima v4.9.6</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -76,6 +76,35 @@ if (typeof React === 'undefined') throw new Error('React non caricato');
 if (typeof ReactDOM === 'undefined') throw new Error('ReactDOM non caricato');
 if (typeof Chess === 'undefined') throw new Error('Chess.js non caricato');
 
+// ==========================================
+// GESTORE AUDIO INCORPORATO
+// ==========================================
+const AudioManager = {
+  sounds: {
+    move: new Audio('sounds/move.mp3'),
+    capture: new Audio('sounds/capture.mp3'),
+    evolve: new Audio('sounds/evolve.mp3'),
+    ability: new Audio('sounds/ability.mp3'),
+    error: new Audio('sounds/error.mp3')
+  },
+  volume: 0.5,
+  init: function() {
+    for (let key in this.sounds) {
+      this.sounds[key].volume = this.volume;
+    }
+  },
+  play: function(soundName) {
+    const sfx = this.sounds[soundName];
+    if (sfx) {
+      sfx.currentTime = 0;
+      sfx.play().catch(e => console.warn('Audio non riprodotto (interazione utente richiesta):', e));
+    } else {
+      console.error('Suono non trovato:', soundName);
+    }
+  }
+};
+AudioManager.init();
+
 const {useState,useEffect,useCallback,useRef,useMemo} = React;
 
 // ---------- COSTANTI E UTILITÀ ----------
@@ -114,7 +143,6 @@ const knightJumps = sq => {
 const DIAG_DIRS = [[1,1],[1,-1],[-1,1],[-1,-1]];
 const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
-// ---------- FUNZIONI DI UTILITÀ ----------
 function buildState(g) {
   var pd={}, sm={};
   g.board().forEach(function(row, r) { 
@@ -243,7 +271,6 @@ function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
   return false;
 }
 
-// Funzione di debug per verificare la sincronizzazione game/sm
 function validateBoard(game, sm) {
   var countGame = 0;
   game.board().forEach(function(row) {
@@ -257,7 +284,6 @@ function validateBoard(game, sm) {
   }
 }
 
-// Nuova funzione separata per il calcolo dell'energia da Aura Destriero
 function calculateAuraEnergy(oldGame, newGame, oldSm, newSm, pd, color, auraGained) {
   var opp = color === 'w' ? 'b' : 'w';
   var auraExtra = 0;
@@ -276,7 +302,6 @@ function calculateAuraEnergy(oldGame, newGame, oldSm, newSm, pd, color, auraGain
     for (var j = 0; j < entries.length; j++) {
       if (entries[j][1] === oldSm[sqA]) { newSqA = entries[j][0]; break; }
     }
-    // Se il Destriero è stato catturato, non genera aura
     if (!newSqA) continue;
     var zoneBefore = knightJumps(sqA);
     var zoneAfter = knightJumps(newSqA);
@@ -548,7 +573,6 @@ function App() {
         var isPromo = (p.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1));
         var finalType = isPromo ? (action.promo || 'q') : p.type;
         if (tp) {
-          // Controllo sicurezza: non si può catturare il re con mosse custom
           if (tp.type === 'k') return false;
           delete npd[nsm[action.to]];
           delete nsm[action.to];
@@ -587,6 +611,12 @@ function App() {
         }
         setHasMoved(true);
       }
+      // 🎵 Suono movimento/cattura
+      if (energyDelta >= ENERGY.CAPTURE + ENERGY.MOVE) {
+        AudioManager.play('capture');
+      } else {
+        AudioManager.play('move');
+      }
     }
     else if (action.type === 'bishop_jump') {
       ng = new Chess(game.fen());
@@ -605,10 +635,19 @@ function App() {
       ng = new Chess(parts.join(' '));
       if (ng.in_check()) energyDelta += ENERGY.CHECK;
       setHasMoved(true);
+      // 🎵 Suono (cattura o movimento)
+      if (tp) {
+        AudioManager.play('capture');
+      } else {
+        AudioManager.play('move');
+      }
     }
     else if (action.type === 'spectral_step') {
       var cost = getActualCost(ABILITY_BASE_COST.spectralStep);
-      if (pts[color] < cost) return false;
+      if (pts[color] < cost) {
+        AudioManager.play('error');
+        return false;
+      }
       energyDelta = -cost + ENERGY.MOVE;
       ng = new Chess(game.fen());
       var tp = game.get(action.to);
@@ -624,6 +663,8 @@ function App() {
       var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
       if (ng.in_check()) energyDelta += ENERGY.CHECK;
+      // 🎵 Suono abilità
+      AudioManager.play('ability');
     }
     else if (action.type === 'swap') {
       var p1 = game.get(action.from), p2 = game.get(action.to);
@@ -650,13 +691,13 @@ function App() {
       if (isAdjEnemy(action.from) || isAdjEnemy(action.to)) energyDelta += ENERGY.ADJACENT_ENEMY;
 
       setHasMoved(true);
+      // 🎵 Suono movimento
+      AudioManager.play('move');
     }
     else return false;
 
-    // Validazione sincronizzazione game/sm
     validateBoard(ng, nsm);
 
-    // Calcolo Aura usando la funzione separata
     var auraExtra = calculateAuraEnergy(game, ng, sm, nsm, pd, color, auraGained);
     var newAuraGained = Object.assign({}, auraGained);
     var opp = color === 'w' ? 'b' : 'w';
@@ -825,12 +866,17 @@ function App() {
     if (lv === 1) {
       var cost = getEvoCost(p.type);
       if (pts[color] >= cost) {
+        // 🎵 Suono evoluzione
+        AudioManager.play('evolve');
         setPd(function(prev) { var npd = Object.assign({}, prev); npd[id] = Object.assign({}, d, {level:2}); return npd; });
         setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
         setLvlUpSq(sq);
         if (lvlTimer.current) clearTimeout(lvlTimer.current);
         lvlTimer.current = setTimeout(function() { setLvlUpSq(null); }, 900);
         setSel(null); setMoves([]);
+      } else {
+        // 🎵 Suono errore (energia insufficiente)
+        AudioManager.play('error');
       }
       return;
     }
@@ -883,6 +929,7 @@ function App() {
     if (selPiece.type === 'p') {
       var cost = getActualCost(ABILITY_BASE_COST.ghostMarch);
       ab.push({name:'👻 Marcia Fantasma', cost: cost, available: energy>=cost && !ghostMarch, action: function() {
+        AudioManager.play('ability');
         setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
         setGhostMarch(color); setSel(null);
       }});
@@ -898,7 +945,6 @@ function App() {
           var currentStunned = stunned;
           var oppCol = color === 'w' ? 'b' : 'w';
           var controlled = knightJumps(sel);
-          // Calcoliamo subito gli ID da stordire
           var targetIds = controlled.reduce(function(ids, sq) {
             var p = currentGame.get(sq);
             if (p && p.color === oppCol && !currentStunned.has(currentSm[sq])) {
@@ -907,6 +953,7 @@ function App() {
             return ids;
           }, []);
           if (targetIds.length === 0) return;
+          AudioManager.play('ability');
           setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-cost; return np; });
           setStunned(function(prev){
             var ns = new Set(prev);
@@ -923,6 +970,7 @@ function App() {
       ab.push({name:'🌫️ Passo Spettrale', cost:costSpec,
         available: energy >= costSpec,
         action: function() {
+          AudioManager.play('ability');
           setSpectralMode(true);
           setMoves(getMoves(sel, false, false, 'spectralStep'));
         }
@@ -932,6 +980,7 @@ function App() {
       var mCost = getActualCost(ABILITY_BASE_COST.metamorph);
       var doMorph = function(asType) {
         return function() {
+          AudioManager.play('ability');
           var opp = color === 'w' ? 'b' : 'w';
           var ng2 = new Chess(game.fen());
           ng2.remove(sel);
@@ -946,7 +995,6 @@ function App() {
           });
           setPts(function(prev){ var np=Object.assign({},prev); np[color]=prev[color]-mCost; return np; });
           setMetamorphosis({id:selId, asType:asType, expiresAfterColor:opp});
-          // Pulizia totale per evitare selezioni residue
           setSel(null);
           setMoves([]);
           setSpectralMode(false);
@@ -964,6 +1012,7 @@ function App() {
         return op && op.color===color;
       });
       ab.push({name:'👑 Comando Reale', cost: cost, available: energy>=cost && hasAlly, action: function() {
+        AudioManager.play('ability');
         setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
         setCmdMode(true); setCmdSrc(sel); setCmdCost(cost); setSel(null);
       }});

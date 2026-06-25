@@ -298,31 +298,8 @@ function App() {
     var result = [];
 
     if (!specialMode || specialMode==='normal') {
-      // --- TRUCCO SCACCHIERA FITTIZIA (FEN manipolata) ---
-      // Modifichiamo la FEN sostituendo i Re (K/k) con Regine (Q/q)
-      // in modo che chess.js non veda alcun Re e non applichi il controllo scacco,
-      // ma tutte le collisioni rimangono intatte.
-      var fen = game.fen();
-      var parts = fen.split(' ');
-      var boardPart = parts[0];
-      var newBoard = boardPart.replace(/K/g, 'Q').replace(/k/g, 'q');
-      parts[0] = newBoard;
-      var fenNoKings = parts.join(' ');
-      var tempG = new Chess(fenNoKings);
-
-      var ms = tempG.moves({square:sq, verbose:true});
-
-      // Per il Re, limitiamo le mosse a quelle adiacenti (escluso l'arrocco simulato)
-      if (p.type === 'k') {
-        ms = ms.filter(function(m) {
-          return Math.abs(FILE(m.from)-FILE(m.to)) <= 1 && Math.abs(RANK(m.from)-RANK(m.to)) <= 1;
-        });
-        // Recupero arrocco originale dalla partita vera
-        var stdMs = game.moves({square:sq, verbose:true});
-        for (var k=0; k<stdMs.length; k++) {
-          if (stdMs[k].flags.indexOf('k') !== -1 || stdMs[k].flags.indexOf('q') !== -1) ms.push(stdMs[k]);
-        }
-      }
+      // Usiamo direttamente il gioco corrente per generare le mosse base stabili
+      var ms = game.moves({square:sq, verbose:true});
 
       for (var i=0; i<ms.length; i++) {
         var m = ms[i];
@@ -335,7 +312,6 @@ function App() {
           if (isImmune(cs)) continue;
           delete nsm[cs];
         }
-        // Nessun blocco scacco qui!
         result.push({type:'std', from:sq, to:m.to, promo:m.promotion});
       }
     }
@@ -733,24 +709,29 @@ function App() {
     }
 
     if (!hasMoved) {
-      if (!sq) return;
+      if (!sq) {
+        setSel(null); setMoves([]);
+        return;
+      }
+
+      // 1. Se c'è già un pezzo selezionato, controlla PRIMA se il click è una destinazione valida
+      if (sel && moves.length > 0) {
+        var move = moves.find(function(m) { 
+          return m.to === sq && (m.type === 'std' || m.type === 'swap' || m.type === 'bishop_jump'); 
+        });
+        if (move) {
+          execute(move, color);
+          return;
+        }
+      }
+
+      // 2. Altrimenti (o se il click non era una mossa valida), gestisci la selezione di un proprio pezzo
       var p = game.get(sq);
-      if (!p || p.color !== color || stunned.has(sm[sq])) return;
-      if (!sel) {
-        setSel(sq);
-        setMoves(getMoves(sq, false, false, 'normal'));
-        return;
-      }
-      var move = moves.find(function(m) { return m.to===sq && (m.type==='std'||m.type==='swap'||m.type==='bishop_jump'); });
-      if (move) {
-        execute(move, color);
-        return;
-      }
-      var newPiece = game.get(sq);
-      if (newPiece && newPiece.color === color && !stunned.has(sm[sq])) {
+      if (p && p.color === color && !stunned.has(sm[sq])) {
         setSel(sq);
         setMoves(getMoves(sq, false, false, 'normal'));
       } else {
+        // Cliccato sul vuoto o su un nemico senza che fosse una mossa: pulisci la selezione
         setSel(null); setMoves([]);
       }
       return;

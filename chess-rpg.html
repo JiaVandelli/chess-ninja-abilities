@@ -143,106 +143,9 @@ function applyStd(game, from, to, promotion) {
 }
 
 // =====================================================================
-// ATTENZIONE:
-// kingInCheck() è il motore di controllo scacco CUSTOM.
-// Ogni nuova abilità che modifica le linee di attacco (es. saltare pezzi,
-// muoversi attraverso i pedoni alleati, nuovi tipi di movimento)
-// deve aggiornare questa funzione, altrimenti il controllo scacco
-// potrebbe non rilevare correttamente le minacce.
+// MOTORE DI CONTROLLO SCACCO DISATTIVATO (Libertà totale)
 // =====================================================================
 function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
-  var fen = game.fen().split(' ');
-  fen[1] = color; fen[3] = '-';
-  if (new Chess(fen.slice(0,4).join(' ')+' 0 1').in_check()) return true;
-
-  var opp = color==='w'?'b':'w';
-  var kSq = null;
-  game.board().forEach(function(row, r) { 
-    row.forEach(function(p, c) {
-      if (p && p.type==='k' && p.color===color) kSq = 'abcdefgh'[c] + (8 - r);
-    }); 
-  });
-  if (!kSq) return false;
-
-  var entries = Object.entries(sm);
-  for (var i=0; i<entries.length; i++) {
-    var sq = entries[i][0], id = entries[i][1];
-    var p = game.get(sq);
-    if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id))) continue;
-    var d = pd[id];
-    if (!d || d.level < 2) continue;
-    if (p.type === 'q' && knightJumps(sq).indexOf(kSq) !== -1) return true;
-  }
-
-  for (var i=0; i<entries.length; i++) {
-    var sq = entries[i][0], id = entries[i][1];
-    var p = game.get(sq);
-    if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id)) || p.type !== 'b') continue;
-    var d = pd[id];
-    if (!d || d.level < 2) continue;
-    var df = Math.sign(FILE(kSq) - FILE(sq));
-    var dr = Math.sign(RANK(kSq) - RANK(sq));
-    if (Math.abs(FILE(kSq)-FILE(sq)) !== Math.abs(RANK(kSq)-RANK(sq)) || df===0) continue;
-    var jumped = false;
-    var f = FILE(sq)+df, r = RANK(sq)+dr;
-    while (f !== FILE(kSq) || r !== RANK(kSq)) {
-      var midSq = SQ(f,r);
-      if (!midSq) break;
-      var midPiece = game.get(midSq);
-      if (midPiece) {
-        if (jumped) { jumped = false; break; }
-        jumped = true;
-      }
-      f += df; r += dr;
-    }
-    if (jumped) return true;
-  }
-
-  for (var i=0; i<entries.length; i++) {
-    var sq = entries[i][0], id = entries[i][1];
-    var p = game.get(sq);
-    if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id)) || p.type !== 'p') continue;
-    var d = pd[id];
-    if (!d || d.level < 2) continue;
-    var dir = opp === 'w' ? 1 : -1;
-    var pf = FILE(sq), pr = RANK(sq);
-    var attacks = [[pf-1, pr+dir], [pf, pr+dir], [pf+1, pr+dir]];
-    for (var j=0; j<attacks.length; j++) {
-      if (attacks[j][0] === FILE(kSq) && attacks[j][1] === RANK(kSq)) return true;
-    }
-  }
-
-  if (ghostMarchColor === opp) {
-    for (var i=0; i<entries.length; i++) {
-      var sq = entries[i][0], id = entries[i][1];
-      var p = game.get(sq);
-      if (!p || p.color !== opp || (stunnedSet && stunnedSet.has(id))) continue;
-      if (p.type !== 'r' && p.type !== 'q') continue;
-      var df = Math.sign(FILE(kSq) - FILE(sq));
-      var dr = Math.sign(RANK(kSq) - RANK(sq));
-      if ((p.type === 'r' && df !== 0 && dr !== 0) || (p.type === 'q' && df === 0 && dr === 0)) continue;
-      if (p.type === 'q' && Math.abs(FILE(kSq)-FILE(sq)) !== Math.abs(RANK(kSq)-RANK(sq)) && df !== 0 && dr !== 0) continue;
-      var f = FILE(sq)+df, r = RANK(sq)+dr;
-      var blocked = false;
-      while (f !== FILE(kSq) || r !== RANK(kSq)) {
-        var midSq = SQ(f,r);
-        if (!midSq) break;
-        var midPiece = game.get(midSq);
-        if (midPiece) {
-          var midId = sm[midSq];
-          if (midPiece.color === opp && midPiece.type === 'p' && pd[midId] && pd[midId].level === 2) {
-            f += df; r += dr;
-            continue;
-          }
-          blocked = true;
-          break;
-        }
-        f += df; r += dr;
-      }
-      if (!blocked) return true;
-    }
-  }
-
   return false;
 }
 
@@ -395,12 +298,34 @@ function App() {
     var result = [];
 
     if (!specialMode || specialMode==='normal') {
-      var ms = game.moves({square:sq, verbose:true});
+      // --- TRUCCO SCACCHIERA FITTIZIA ---
+      var tempG = new Chess(game.fen());
+      var kSqs = [];
+      tempG.board().forEach(function(r, ri) {
+        r.forEach(function(pc, ci) {
+          if (pc && pc.type === 'k') kSqs.push(SQ(ci, 8 - ri));
+        });
+      });
+      // Rimuoviamo i re dalla finta scacchiera per non avere blocchi
+      kSqs.forEach(function(k) { if (k !== sq) tempG.remove(k); });
+      if (p.type === 'k') { tempG.remove(sq); tempG.put({type:'q', color:color}, sq); }
+      
+      var ms = tempG.moves({square:sq, verbose:true});
+      if (p.type === 'k') {
+        ms = ms.filter(function(m) {
+          return Math.abs(FILE(m.from)-FILE(m.to)) <= 1 && Math.abs(RANK(m.from)-RANK(m.to)) <= 1;
+        });
+        // Recupero arrocco originale
+        var stdMs = game.moves({square:sq, verbose:true});
+        for (var k=0; k<stdMs.length; k++) {
+          if (stdMs[k].flags.indexOf('k') !== -1 || stdMs[k].flags.indexOf('q') !== -1) ms.push(stdMs[k]);
+        }
+      }
+
       for (var i=0; i<ms.length; i++) {
         var m = ms[i];
         if (m.promotion && m.promotion!=='q') continue;
-        var g2 = new Chess(game.fen());
-        if (!g2.move({from:m.from, to:m.to, promotion:m.promotion||'q'})) continue;
+        
         var nsm = Object.assign({}, sm);
         nsm[m.to] = nsm[m.from]; delete nsm[m.from];
         if (m.captured) {
@@ -408,8 +333,7 @@ function App() {
           if (isImmune(cs)) continue;
           delete nsm[cs];
         }
-        if (kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) continue;
-        if (isCommandTurn && (g2.in_checkmate() || (wasOppInCheck && g2.in_check()))) continue;
+        // Nessun blocco scacco qui!
         result.push({type:'std', from:sq, to:m.to, promo:m.promotion});
       }
     }
@@ -517,7 +441,7 @@ function App() {
               if (!kingInCheck(g2,color,pd,nsm,stunned,ghostMarch)) result.push({type:'std', from:sq, to:tsq});
             }
           } else if (tp.color===color && tp.type==='p' && effLevel(tsq,sm[tsq],color)===2) {
-            cf += df; cr += dr; continue;
+            cf += df; dr += dr; continue;
           } else break;
           cf += df; cr += dr;
         }
@@ -548,7 +472,11 @@ function App() {
         var isPromo = (p.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1));
         var finalType = isPromo ? (action.promo || 'q') : p.type;
         if (tp) {
-          if (tp.type === 'k') return false;
+          if (tp.type === 'k') { 
+            setGameOver({ winner: color, reason: '🏆 Hai annientato il Re avversario!' }); 
+            AudioManager.play('capture'); 
+            return true; 
+          }
           delete npd[nsm[action.to]];
           delete nsm[action.to];
         }
@@ -598,7 +526,11 @@ function App() {
       var tp = game.get(action.to);
       ng.remove(action.from);
       if (action.capture && tp) {
-        if (tp.type === 'k') return false;
+        if (tp.type === 'k') { 
+          setGameOver({ winner: color, reason: '🏆 Hai annientato il Re avversario!' }); 
+          AudioManager.play('capture'); 
+          return true; 
+        }
         delete npd[nsm[action.to]];
         delete nsm[action.to];
         energyDelta += ENERGY.CAPTURE;
@@ -628,7 +560,11 @@ function App() {
       var tp = game.get(action.to);
       ng.remove(action.from);
       if (tp) {
-        if (tp.type === 'k') return false;
+        if (tp.type === 'k') { 
+          setGameOver({ winner: color, reason: '🏆 Hai annientato il Re avversario!' }); 
+          AudioManager.play('capture'); 
+          return true; 
+        }
         delete npd[nsm[action.to]];
         delete nsm[action.to];
         energyDelta += ENERGY.CAPTURE;
@@ -690,11 +626,8 @@ function App() {
     var evalFen = ng.fen().split(' ');
     evalFen[1] = opp;
     var evalGame = new Chess(evalFen.join(' '));
-    if (evalGame.in_checkmate() || evalGame.in_draw() || evalGame.in_stalemate()) {
-      setGameOver({
-        winner: evalGame.in_checkmate() ? color : null,
-        reason: evalGame.in_checkmate() ? 'Scacco Matto' : 'Patta'
-      });
+    if (evalGame.in_draw() || evalGame.in_stalemate()) {
+      setGameOver({ winner: null, reason: 'Nessun vincitore (Patta)' });
     }
     return true;
   }, [game, pd, sm, pts, stunned, immune, ghostMarch, auraGained, getActualCost, actualTurn]);

@@ -137,9 +137,9 @@ function applyStd(game, from, to, promotion) {
   var g = new Chess(game.fen());
   var mv = g.move({from:from, to:to, promotion:promotion});
   if (!mv) return null;
-  var cap = null;
-  if (mv.captured) cap = mv.flags && mv.flags.indexOf('e') !== -1 ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
-  return {game:g, captured:cap, castleK: mv.flags && mv.flags.indexOf('k') !== -1, castleQ: mv.flags && mv.flags.indexOf('q') !== -1};
+  var p = null;
+  if (mv.captured) p = mv.flags && mv.flags.indexOf('e') !== -1 ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
+  return {game:g, captured:p, castleK: mv.flags && mv.flags.indexOf('k') !== -1, castleQ: mv.flags && mv.flags.indexOf('q') !== -1};
 }
 
 // =====================================================================
@@ -298,19 +298,23 @@ function App() {
     var result = [];
 
     if (!specialMode || specialMode==='normal') {
-      // --- TRUCCO SCACCHIERA FITTIZIA ---
+      // --- TRUCCO SCACCHIERA FITTIZIA AGGIORNATO (Trasformazione totale) ---
       var tempG = new Chess(game.fen());
-      var kSqs = [];
+      
+      // Invece di rimuovere i Re (che romperebbe le linee di tiro e le catture dei pedoni),
+      // trasformiamo tutti i Re in Regine nella simulazione. Zero blocchi da scacco, collisioni perfeette!
       tempG.board().forEach(function(r, ri) {
         r.forEach(function(pc, ci) {
-          if (pc && pc.type === 'k') kSqs.push(SQ(ci, 8 - ri));
+          if (pc && pc.type === 'k') {
+            var kSq = SQ(ci, 8 - ri);
+            tempG.remove(kSq);
+            tempG.put({type: 'q', color: pc.color}, kSq);
+          }
         });
       });
-      // Rimuoviamo i re dalla finta scacchiera per non avere blocchi
-      kSqs.forEach(function(k) { if (k !== sq) tempG.remove(k); });
-      if (p.type === 'k') { tempG.remove(sq); tempG.put({type:'q', color:color}, sq); }
       
       var ms = tempG.moves({square:sq, verbose:true});
+
       if (p.type === 'k') {
         ms = ms.filter(function(m) {
           return Math.abs(FILE(m.from)-FILE(m.to)) <= 1 && Math.abs(RANK(m.from)-RANK(m.to)) <= 1;
@@ -325,7 +329,7 @@ function App() {
       for (var i=0; i<ms.length; i++) {
         var m = ms[i];
         if (m.promotion && m.promotion!=='q') continue;
-        
+
         var nsm = Object.assign({}, sm);
         nsm[m.to] = nsm[m.from]; delete nsm[m.from];
         if (m.captured) {
@@ -514,7 +518,6 @@ function App() {
         }
         setHasMoved(true);
       }
-      // 🎵 Suono movimento/cattura
       if (energyDelta >= ENERGY.CAPTURE + ENERGY.MOVE) {
         AudioManager.play('capture');
       } else {
@@ -542,7 +545,6 @@ function App() {
       ng = new Chess(parts.join(' '));
       if (ng.in_check()) energyDelta += ENERGY.CHECK;
       setHasMoved(true);
-      // 🎵 Suono (cattura o movimento)
       if (tp) {
         AudioManager.play('capture');
       } else {
@@ -574,7 +576,6 @@ function App() {
       var parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
       if (ng.in_check()) energyDelta += ENERGY.CHECK;
-      // 🎵 Suono abilità
       AudioManager.play('ability');
     }
     else if (action.type === 'swap') {
@@ -602,7 +603,6 @@ function App() {
       if (isAdjEnemy(action.from) || isAdjEnemy(action.to)) energyDelta += ENERGY.ADJACENT_ENEMY;
 
       setHasMoved(true);
-      // 🎵 Suono movimento
       AudioManager.play('move');
     }
     else return false;
@@ -774,7 +774,6 @@ function App() {
     if (lv === 1) {
       var cost = getEvoCost(p.type);
       if (pts[color] >= cost) {
-        // 🎵 Suono evoluzione
         AudioManager.play('evolve');
         setPd(function(prev) { var npd = Object.assign({}, prev); npd[id] = Object.assign({}, d, {level:2}); return npd; });
         setPts(function(prev) { var np = Object.assign({}, prev); np[color] = prev[color]-cost; return np; });
@@ -783,7 +782,6 @@ function App() {
         lvlTimer.current = setTimeout(function() { setLvlUpSq(null); }, 900);
         setSel(null); setMoves([]);
       } else {
-        // 🎵 Suono errore (energia insufficiente)
         AudioManager.play('error');
       }
       return;

@@ -298,28 +298,26 @@ function App() {
     var result = [];
 
     if (!specialMode || specialMode==='normal') {
-      // --- TRUCCO SCACCHIERA FITTIZIA AGGIORNATO (Trasformazione totale) ---
-      var tempG = new Chess(game.fen());
-      
-      // Invece di rimuovere i Re (che romperebbe le linee di tiro e le catture dei pedoni),
-      // trasformiamo tutti i Re in Regine nella simulazione. Zero blocchi da scacco, collisioni perfeette!
-      tempG.board().forEach(function(r, ri) {
-        r.forEach(function(pc, ci) {
-          if (pc && pc.type === 'k') {
-            var kSq = SQ(ci, 8 - ri);
-            tempG.remove(kSq);
-            tempG.put({type: 'q', color: pc.color}, kSq);
-          }
-        });
-      });
-      
+      // --- TRUCCO SCACCHIERA FITTIZIA (FEN manipolata) ---
+      // Modifichiamo la FEN sostituendo i Re (K/k) con Regine (Q/q)
+      // in modo che chess.js non veda alcun Re e non applichi il controllo scacco,
+      // ma tutte le collisioni rimangono intatte.
+      var fen = game.fen();
+      var parts = fen.split(' ');
+      var boardPart = parts[0];
+      var newBoard = boardPart.replace(/K/g, 'Q').replace(/k/g, 'q');
+      parts[0] = newBoard;
+      var fenNoKings = parts.join(' ');
+      var tempG = new Chess(fenNoKings);
+
       var ms = tempG.moves({square:sq, verbose:true});
 
+      // Per il Re, limitiamo le mosse a quelle adiacenti (escluso l'arrocco simulato)
       if (p.type === 'k') {
         ms = ms.filter(function(m) {
           return Math.abs(FILE(m.from)-FILE(m.to)) <= 1 && Math.abs(RANK(m.from)-RANK(m.to)) <= 1;
         });
-        // Recupero arrocco originale
+        // Recupero arrocco originale dalla partita vera
         var stdMs = game.moves({square:sq, verbose:true});
         for (var k=0; k<stdMs.length; k++) {
           if (stdMs[k].flags.indexOf('k') !== -1 || stdMs[k].flags.indexOf('q') !== -1) ms.push(stdMs[k]);

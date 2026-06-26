@@ -2,7 +2,6 @@ const AudioManager = {
   sounds: {},
   volume: 0.5,
   init() {
-    // Precarica ma non riproduce
     ['move','capture','evolve','ability','error'].forEach(name => {
       const audio = new Audio(`sounds/${name}.mp3`);
       audio.volume = this.volume;

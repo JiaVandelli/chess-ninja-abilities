@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v5.0.0</title>
+  <title>Chess RPG – L'Esercito dell'Anima v5.1.0</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -30,6 +30,18 @@
     .cell.immune-highlight{outline:2px solid #fbbf24;outline-offset:-2px}
     .cell.ghost-march-ally{box-shadow:inset 0 0 15px #22c55e;background:rgba(34,197,94,.2)!important}
     .cell.morph-piece{box-shadow:inset 0 0 12px #f59e0b;background:rgba(245,158,11,.15)!important}
+    
+    /* Nuovo Stile Re Minacciato */
+    .cell.king-threatened {
+      box-shadow: inset 0 0 18px 4px rgba(239, 68, 68, 0.85) !important;
+      animation: pulse-danger 1.5s infinite;
+    }
+    @keyframes pulse-danger {
+      0% { box-shadow: inset 0 0 18px 4px rgba(239, 68, 68, 0.85); }
+      50% { box-shadow: inset 0 0 25px 8px rgba(239, 68, 68, 1); }
+      100% { box-shadow: inset 0 0 18px 4px rgba(239, 68, 68, 0.85); }
+    }
+
     .piece{font-family:"Segoe UI Symbol","Noto Sans Symbols",sans-serif;line-height:1;user-select:none;z-index:2}
     .piece-w{color:#fff;text-shadow:0 0 0 #000,0 1px 0 #000,1px 0 0 #000,-1px 0 0 #000,0 -1px 0 #000;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.7))}
     .piece-b{color:#000;text-shadow:0 0 0 #fff,0 1px 0 #fff,1px 0 0 #fff,-1px 0 0 #fff,0 -1px 0 #fff;filter:drop-shadow(0 2px 3px rgba(0,0,0,0.5))}
@@ -218,6 +230,19 @@ const knightJumps = sq => {
 const DIAG_DIRS = [[1,1],[1,-1],[-1,1],[-1,-1]];
 const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
 
+const updateFenCastling = (fen, sq) => {
+  const parts = fen.split(' ');
+  let cr = parts[2];
+  if (sq === 'e1') cr = cr.replace(/[KQ]/g, '');
+  if (sq === 'h1') cr = cr.replace('K', '');
+  if (sq === 'a1') cr = cr.replace('Q', '');
+  if (sq === 'e8') cr = cr.replace(/[kq]/g, '');
+  if (sq === 'h8') cr = cr.replace('k', '');
+  if (sq === 'a8') cr = cr.replace('q', '');
+  parts[2] = cr || '-';
+  return parts.join(' ');
+};
+
 const getStandardMoves = (sq, game) => {
   const piece = game.get(sq);
   if (!piece) return [];
@@ -236,16 +261,13 @@ const getStandardMoves = (sq, game) => {
   if (type === 'p') {
     const dir = color === 'w' ? 1 : -1;
     const startRank = color === 'w' ? 2 : 7;
-    // avanti di una casa
     const oneStep = SQ(f, r + dir);
     if (oneStep && !game.get(oneStep)) {
       moves.push(oneStep);
-      // doppio passo iniziale
       const twoSteps = SQ(f, r + 2*dir);
       if (r === startRank && twoSteps && !game.get(twoSteps))
         moves.push(twoSteps);
     }
-    // catture diagonali
     for (let df = -1; df <= 1; df += 2) {
       const capSq = SQ(f + df, r + dir);
       if (capSq) {
@@ -294,6 +316,7 @@ const getStandardMoves = (sq, game) => {
     });
   }
   else if (type === 'k') {
+    // Standard 1-step moves
     for (let df = -1; df <= 1; df++) {
       for (let dr = -1; dr <= 1; dr++) {
         if (df === 0 && dr === 0) continue;
@@ -302,6 +325,15 @@ const getStandardMoves = (sq, game) => {
         const tp = game.get(tsq);
         if (!tp || tp.color !== color) moves.push(tsq);
       }
+    }
+    // Arrocco RPG: Solo per diritti e case vuote, ignora completamente lo scacco.
+    const castlingRights = game.fen().split(' ')[2];
+    if (color === 'w' && sq === 'e1') {
+      if (castlingRights.includes('K') && !game.get('f1') && !game.get('g1')) moves.push('g1');
+      if (castlingRights.includes('Q') && !game.get('d1') && !game.get('c1') && !game.get('b1')) moves.push('c1');
+    } else if (color === 'b' && sq === 'e8') {
+      if (castlingRights.includes('k') && !game.get('f8') && !game.get('g8')) moves.push('g8');
+      if (castlingRights.includes('q') && !game.get('d8') && !game.get('c8') && !game.get('b8')) moves.push('c8');
     }
   }
   return moves;
@@ -327,14 +359,7 @@ function applyStd(game, from, to, promotion = 'q') {
   if (!mv) return null;
   let p = null;
   if (mv.captured) p = mv.flags && mv.flags.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
-  return {game:g, captured:p, castleK: mv.flags && mv.flags.includes('k'), castleQ: mv.flags && mv.flags.includes('q')};
-}
-
-function validateBoard(game, sm) {
-  let countGame = 0;
-  game.board().forEach(row => { row.forEach(p => { if (p) countGame++; }); });
-  const countSm = Object.keys(sm).length;
-  if (countGame !== countSm) console.error(`⚠️ SYNC ERROR: board pieces=${countGame} sm entries=${countSm}`);
+  return {game:g, captured:p};
 }
 
 function calculateAuraEnergy(oldGame, newGame, oldSm, newSm, pd, color, auraGained) {
@@ -448,6 +473,39 @@ function App() {
   const getActualCost = useCallback((baseCost) => Math.max(1, baseCost - pdDiscount), [pdDiscount]);
   const getEvoCost = useCallback((type) => Math.max(1, (EVO_COST[type] || 99) - pdDiscount), [pdDiscount]);
 
+  // Calcola quali case del re sono attualmente minacciate
+  const threatenedKings = useMemo(() => {
+    const threatened = new Set();
+    const attackedByW = new Set();
+    const attackedByB = new Set();
+    const board = game.board();
+    
+    for(let r=0; r<8; r++) {
+      for(let c=0; c<8; c++) {
+        const p = board[r][c];
+        if(!p) continue;
+        const sq = SQ(c, 8-r);
+        const moves = getStandardMoves(sq, game);
+        moves.forEach(to => {
+          if(p.color === 'w') attackedByW.add(to);
+          else attackedByB.add(to);
+        });
+      }
+    }
+    
+    for(let r=0; r<8; r++) {
+      for(let c=0; c<8; c++) {
+        const p = board[r][c];
+        if(p && p.type === 'k') {
+          const sq = SQ(c, 8-r);
+          if(p.color === 'w' && attackedByB.has(sq)) threatened.add(sq);
+          if(p.color === 'b' && attackedByW.has(sq)) threatened.add(sq);
+        }
+      }
+    }
+    return threatened;
+  }, [game]);
+
   const getMoves = useCallback((sq, isCommandTurn, specialMode) => {
     const p = game.get(sq);
     if (!p) return [];
@@ -463,7 +521,14 @@ function App() {
         const targetPiece = game.get(to);
         if (targetPiece && isImmune(to)) return;
         const promo = (p.type === 'p' && (RANK(to) === 8 || RANK(to) === 1)) ? 'q' : undefined;
-        result.push({ type: 'std', from: sq, to, promo });
+        let moveType = 'std';
+        
+        // Identifica l'arrocco per indirizzarlo alla gestione manuale in execute
+        if (p.type === 'k' && Math.abs(FILE(sq) - FILE(to)) === 2) {
+          moveType = 'castle';
+        }
+        
+        result.push({ type: moveType, from: sq, to, promo });
       });
     }
 
@@ -570,7 +635,7 @@ function App() {
     if (action.type === 'std') {
       const res = applyStd(game, action.from, action.to, action.promo);
       if (!res) {
-        // Fallback manuale per le mosse illegali secondo gli scacchi normali ma valide per l'RPG
+        // Fallback manuale per mosse "illecite" nel gioco classico (es: muovere mentre il re è sotto scacco)
         ng = new Chess(game.fen());
         const p = game.get(action.from);
         const tp = game.get(action.to);
@@ -588,7 +653,9 @@ function App() {
         }
         
         ng.put({type: finalType, color}, action.to);
-        const parts = ng.fen().split(' ');
+        let tempFen = updateFenCastling(ng.fen(), action.from); // Aggiorna i diritti arrocco per il fallback
+        tempFen = updateFenCastling(tempFen, action.to);
+        const parts = tempFen.split(' ');
         parts[1] = color; parts[3] = '-'; parts[4] = '0';
         ng = new Chess(parts.join(' '));
         
@@ -608,8 +675,6 @@ function App() {
         energyDelta = ENERGY.MOVE + (res.captured ? ENERGY.CAPTURE : 0);
         if (npd[mid]?.type === 'p' && npd[mid].level === 2 && res.captured) energyDelta += ENERGY.ASSALTATORE_CAPTURE;
         
-        if (res.castleK) { const rk = color === 'w' ? '1' : '8'; nsm['f'+rk] = nsm['h'+rk]; delete nsm['h'+rk]; }
-        if (res.castleQ) { const rk = color === 'w' ? '1' : '8'; nsm['d'+rk] = nsm['a'+rk]; delete nsm['a'+rk]; }
         if (res.captured) {
             const cs = res.captured._sq || action.to; 
             if(res.captured.type === 'k') {
@@ -628,6 +693,31 @@ function App() {
       }
       energyDelta >= ENERGY.CAPTURE + ENERGY.MOVE ? AudioManager.play('capture') : AudioManager.play('move');
     }
+    else if (action.type === 'castle') {
+      ng = new Chess(game.fen());
+      ng.remove(action.from);
+      ng.put({type: 'k', color}, action.to);
+      let rookFrom, rookTo;
+      if (action.to === 'g1') { rookFrom = 'h1'; rookTo = 'f1'; }
+      else if (action.to === 'c1') { rookFrom = 'a1'; rookTo = 'd1'; }
+      else if (action.to === 'g8') { rookFrom = 'h8'; rookTo = 'f8'; }
+      else if (action.to === 'c8') { rookFrom = 'a8'; rookTo = 'd8'; }
+
+      ng.remove(rookFrom);
+      ng.put({type: 'r', color}, rookTo);
+
+      nsm[action.to] = mid; delete nsm[action.from];
+      nsm[rookTo] = nsm[rookFrom]; delete nsm[rookFrom];
+
+      energyDelta = ENERGY.MOVE;
+      let fen = updateFenCastling(ng.fen(), action.from); // revocherà i diritti del re
+      const parts = fen.split(' ');
+      parts[1] = color; parts[3] = '-'; parts[4] = '0';
+      ng = new Chess(parts.join(' '));
+      
+      setHasMoved(true);
+      AudioManager.play('move');
+    }
     else if (action.type === 'bishop_jump') {
       ng = new Chess(game.fen());
       const tp = game.get(action.to);
@@ -644,7 +734,8 @@ function App() {
       ng.put({type: 'b', color}, action.to);
       nsm[action.to] = mid; delete nsm[action.from];
       energyDelta += ENERGY.MOVE;
-      const parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
+      let tempFen = updateFenCastling(ng.fen(), action.to);
+      const parts = tempFen.split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
       setHasMoved(true);
       tp ? AudioManager.play('capture') : AudioManager.play('move');
@@ -667,7 +758,8 @@ function App() {
       }
       ng.put({type: 'b', color}, action.to);
       nsm[action.to] = mid; delete nsm[action.from];
-      const parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
+      let tempFen = updateFenCastling(ng.fen(), action.to);
+      const parts = tempFen.split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
       AudioManager.play('ability');
     }
@@ -675,8 +767,12 @@ function App() {
       const p1 = game.get(action.from), p2 = game.get(action.to);
       ng = new Chess(game.fen()); ng.remove(action.from); ng.remove(action.to);
       ng.put(p1, action.to); ng.put(p2, action.from);
-      const parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
+      
+      let tempFen = updateFenCastling(ng.fen(), action.from);
+      tempFen = updateFenCastling(tempFen, action.to);
+      const parts = tempFen.split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
+      
       const tempId = nsm[action.from];
       nsm[action.from] = nsm[action.to];
       nsm[action.to] = tempId;
@@ -699,8 +795,6 @@ function App() {
       AudioManager.play('move');
     }
     else return false;
-
-    validateBoard(ng, nsm);
 
     const auraExtra = calculateAuraEnergy(game, ng, sm, nsm, pd, color, auraGained);
     const opp = color === 'w' ? 'b' : 'w';
@@ -800,7 +894,7 @@ function App() {
     }
 
     if (sel && sq && moves.length > 0) {
-      const move = moves.find(m => m.to === sq && ['std', 'swap', 'bishop_jump'].includes(m.type));
+      const move = moves.find(m => m.to === sq && ['std', 'swap', 'bishop_jump', 'castle'].includes(m.type));
       if (move) { execute(move, color); return; }
     }
 
@@ -1052,6 +1146,7 @@ function App() {
             const isLastTo = last?.to === sq;
             const isGhostAlly = ghostMarch === pieceColor && pieceColor === activeColor && game.get(sq)?.type === 'p' && displayLv === 2;
             const isMorph = d?.morphOriginal;
+            const isThreatenedKing = threatenedKings.has(sq); // Controlla se è un re in pericolo
 
             const classes = ['cell', light ? 'light' : 'dark'];
             if (isSel) classes.push('sel');
@@ -1062,6 +1157,7 @@ function App() {
             if (isMorph) classes.push('morph-piece');
             if (isLastFrom) classes.push('last-from');
             if (isLastTo) classes.push('last-to');
+            if (isThreatenedKing) classes.push('king-threatened');
 
             return (
               <div key={sq} className={classes.join(' ')} onClick={() => click(sq)}>

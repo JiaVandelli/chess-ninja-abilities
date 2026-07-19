@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v4.9.6</title>
+  <title>Chess RPG – L'Esercito dell'Anima v5.0.0</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -57,7 +57,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<!-- Aggiunto Babel per compilare il JSX al volo nel browser -->
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
 <script>
@@ -113,10 +112,6 @@ const AudioManager = {
         this._noise(0.08, 0.35);
         this._tone(180, 0.10, 'square', 0.18);
         setTimeout(() => this._tone(120, 0.06, 'square', 0.10), 40);
-        break;
-      case 'check':
-        this._tone(720, 0.08, 'sawtooth', 0.18);
-        setTimeout(() => this._tone(520, 0.10, 'sawtooth', 0.16), 70);
         break;
       case 'evolve':
         this._toneSweep(250, 900, 0.18, 'triangle', 0.18);
@@ -204,7 +199,7 @@ const PRESTIGE  = {p:1, n:2, b:2, r:3, q:4};
 const ABILITY_BASE_COST = { ghostMarch:3, dominate:2, spectralStep:2, royalCommand:5, metamorph:2 };
 
 const ENERGY = {
-  MOVE: 1, CAPTURE: 1, CHECK: 1, ASSALTATORE_CAPTURE: 1, ADJACENT_ENEMY: 1
+  MOVE: 1, CAPTURE: 1, ASSALTATORE_CAPTURE: 1, ADJACENT_ENEMY: 1
 };
 
 const PRESTIGE_TIERS = { BRONZE: 5, SILVER: 10, GOLD: 15 };
@@ -222,6 +217,95 @@ const knightJumps = sq => {
 };
 const DIAG_DIRS = [[1,1],[1,-1],[-1,1],[-1,-1]];
 const STRAIGHT_DIRS = [[1,0],[-1,0],[0,1],[0,-1]];
+
+const getStandardMoves = (sq, game) => {
+  const piece = game.get(sq);
+  if (!piece) return [];
+  const type = piece.type;
+  const color = piece.color;
+  const f = FILE(sq), r = RANK(sq);
+  const moves = [];
+
+  const addIfEmptyOrCapturable = (targetSq) => {
+    const target = game.get(targetSq);
+    if (!target) moves.push(targetSq);
+    else if (target.color !== color) moves.push(targetSq); // cattura consentita
+    return !!target; // true = cella occupata, ferma lo scorrimento
+  };
+
+  if (type === 'p') {
+    const dir = color === 'w' ? 1 : -1;
+    const startRank = color === 'w' ? 2 : 7;
+    // avanti di una casa
+    const oneStep = SQ(f, r + dir);
+    if (oneStep && !game.get(oneStep)) {
+      moves.push(oneStep);
+      // doppio passo iniziale
+      const twoSteps = SQ(f, r + 2*dir);
+      if (r === startRank && twoSteps && !game.get(twoSteps))
+        moves.push(twoSteps);
+    }
+    // catture diagonali
+    for (let df = -1; df <= 1; df += 2) {
+      const capSq = SQ(f + df, r + dir);
+      if (capSq) {
+        const capPiece = game.get(capSq);
+        if (capPiece && capPiece.color !== color) moves.push(capSq);
+      }
+    }
+  }
+  else if (type === 'n') {
+    knightJumps(sq).forEach(tsq => {
+      const tp = game.get(tsq);
+      if (!tp || tp.color !== color) moves.push(tsq);
+    });
+  }
+  else if (type === 'b') {
+    DIAG_DIRS.forEach(([df,dr]) => {
+      let cf = f + df, cr = r + dr;
+      while (cf>=0 && cf<=7 && cr>=1 && cr<=8) {
+        const tsq = SQ(cf, cr);
+        if (!tsq) break;
+        if (addIfEmptyOrCapturable(tsq)) break;
+        cf += df; cr += dr;
+      }
+    });
+  }
+  else if (type === 'r') {
+    STRAIGHT_DIRS.forEach(([df,dr]) => {
+      let cf = f + df, cr = r + dr;
+      while (cf>=0 && cf<=7 && cr>=1 && cr<=8) {
+        const tsq = SQ(cf, cr);
+        if (!tsq) break;
+        if (addIfEmptyOrCapturable(tsq)) break;
+        cf += df; cr += dr;
+      }
+    });
+  }
+  else if (type === 'q') {
+    [...DIAG_DIRS, ...STRAIGHT_DIRS].forEach(([df,dr]) => {
+      let cf = f + df, cr = r + dr;
+      while (cf>=0 && cf<=7 && cr>=1 && cr<=8) {
+        const tsq = SQ(cf, cr);
+        if (!tsq) break;
+        if (addIfEmptyOrCapturable(tsq)) break;
+        cf += df; cr += dr;
+      }
+    });
+  }
+  else if (type === 'k') {
+    for (let df = -1; df <= 1; df++) {
+      for (let dr = -1; dr <= 1; dr++) {
+        if (df === 0 && dr === 0) continue;
+        const tsq = SQ(f + df, r + dr);
+        if (!tsq) continue;
+        const tp = game.get(tsq);
+        if (!tp || tp.color !== color) moves.push(tsq);
+      }
+    }
+  }
+  return moves;
+};
 
 function buildState(g) {
   const pd={}, sm={};
@@ -244,13 +328,6 @@ function applyStd(game, from, to, promotion = 'q') {
   let p = null;
   if (mv.captured) p = mv.flags && mv.flags.includes('e') ? {type:mv.captured, _sq: to[0]+from[1]} : {type:mv.captured};
   return {game:g, captured:p, castleK: mv.flags && mv.flags.includes('k'), castleQ: mv.flags && mv.flags.includes('q')};
-}
-
-// =====================================================================
-// MOTORE DI CONTROLLO SCACCO DISATTIVATO (Libertà totale)
-// =====================================================================
-function kingInCheck(game, color, pd, sm, stunnedSet, ghostMarchColor) {
-  return false;
 }
 
 function validateBoard(game, sm) {
@@ -371,7 +448,7 @@ function App() {
   const getActualCost = useCallback((baseCost) => Math.max(1, baseCost - pdDiscount), [pdDiscount]);
   const getEvoCost = useCallback((type) => Math.max(1, (EVO_COST[type] || 99) - pdDiscount), [pdDiscount]);
 
-  const getMoves = useCallback((sq, isCommandTurn, wasOppInCheck, specialMode) => {
+  const getMoves = useCallback((sq, isCommandTurn, specialMode) => {
     const p = game.get(sq);
     if (!p) return [];
     const color = p.color;
@@ -381,17 +458,12 @@ function App() {
     const result = [];
 
     if (!specialMode || specialMode === 'normal') {
-      const ms = game.moves({square: sq, verbose: true});
-      ms.forEach(m => {
-        if (m.promotion && m.promotion !== 'q') return;
-        const nsm = { ...sm };
-        nsm[m.to] = nsm[m.from]; delete nsm[m.from];
-        if (m.captured) {
-          const cs = (m.flags && m.flags.includes('e')) ? m.to[0] + sq[1] : m.to;
-          if (isImmune(cs)) return;
-          delete nsm[cs];
-        }
-        result.push({type: 'std', from: sq, to: m.to, promo: m.promotion});
+      const targetSqs = getStandardMoves(sq, game);
+      targetSqs.forEach(to => {
+        const targetPiece = game.get(to);
+        if (targetPiece && isImmune(to)) return;
+        const promo = (p.type === 'p' && (RANK(to) === 8 || RANK(to) === 1)) ? 'q' : undefined;
+        result.push({ type: 'std', from: sq, to, promo });
       });
     }
 
@@ -403,10 +475,7 @@ function App() {
         while (cf >= 0 && cf <= 7 && cr >= 1 && cr <= 8) {
           const tsq = SQ(cf, cr);
           if (!game.get(tsq)) {
-            const g2 = new Chess(game.fen()); g2.remove(sq); g2.put({type: 'b', color: color}, tsq);
-            const nsm = { ...sm }; nsm[tsq] = id; delete nsm[sq];
-            if (!kingInCheck(g2, color, pd, nsm, stunned, ghostMarch))
-              result.push({type: 'spectral_step', from: sq, to: tsq});
+            result.push({type: 'spectral_step', from: sq, to: tsq});
           }
           cf += df; cr += dr;
         }
@@ -423,9 +492,7 @@ function App() {
         const tp = game.get(tsq);
         if (df === 0 && tp) continue;
         if (df !== 0 && tp && tp.color === color) continue;
-        const g2 = new Chess(game.fen()); g2.remove(sq); if (tp) g2.remove(tsq); g2.put({type: 'p', color: color}, tsq);
-        const nsm = { ...sm }; delete nsm[sq]; if (tp) delete nsm[tsq]; nsm[tsq] = id;
-        if (!kingInCheck(g2, color, pd, nsm, stunned, ghostMarch)) result.push({type: 'std', from: sq, to: tsq});
+        result.push({type: 'std', from: sq, to: tsq});
       }
     }
     if (p.type === 'b') {
@@ -439,14 +506,10 @@ function App() {
             if (tp) { first = tp; firstSq = tsq; }
           } else {
             if (!tp) {
-              const g2 = new Chess(game.fen()); g2.remove(sq); g2.put({type: 'b', color: color}, tsq);
-              const nsm = { ...sm }; nsm[tsq] = id; delete nsm[sq];
-              if (!kingInCheck(g2, color, pd, nsm, stunned, ghostMarch)) result.push({type: 'bishop_jump', from: sq, to: tsq, jumped: firstSq, jumpedId: sm[firstSq], jumpedColor: first.color});
+              result.push({type: 'bishop_jump', from: sq, to: tsq, jumped: firstSq, jumpedId: sm[firstSq], jumpedColor: first.color});
             } else {
               if (tp.color !== color) {
-                const g2 = new Chess(game.fen()); g2.remove(sq); g2.remove(tsq); g2.put({type: 'b', color: color}, tsq);
-                const nsm = { ...sm }; delete nsm[sq]; delete nsm[tsq]; nsm[tsq] = id;
-                if (!kingInCheck(g2, color, pd, nsm, stunned, ghostMarch)) result.push({type: 'bishop_jump', from: sq, to: tsq, jumped: firstSq, jumpedId: sm[firstSq], jumpedColor: first.color, capture: true});
+                result.push({type: 'bishop_jump', from: sq, to: tsq, jumped: firstSq, jumpedId: sm[firstSq], jumpedColor: first.color, capture: true});
               }
               break;
             }
@@ -460,9 +523,7 @@ function App() {
         if (result.some(mm => mm.to === tsq)) return;
         const tp = game.get(tsq);
         if (tp && tp.color === color) return;
-        const g2 = new Chess(game.fen()); g2.remove(sq); if (tp) g2.remove(tsq); g2.put({type: 'q', color: color}, tsq);
-        const nsm = { ...sm }; delete nsm[sq]; if (tp) delete nsm[tsq]; nsm[tsq] = id;
-        if (!kingInCheck(g2, color, pd, nsm, stunned, ghostMarch)) result.push({type: 'std', from: sq, to: tsq});
+        result.push({type: 'std', from: sq, to: tsq});
       });
     }
     if (p.type === 'r') {
@@ -486,9 +547,7 @@ function App() {
           const tp = game.get(tsq);
           if (!tp) {
             if (!result.some(mm => mm.to === tsq)) {
-              const g2 = new Chess(game.fen()); g2.remove(sq); g2.put({type: p.type, color: color}, tsq);
-              const nsm = { ...sm }; nsm[tsq] = id; delete nsm[sq];
-              if (!kingInCheck(g2, color, pd, nsm, stunned, ghostMarch)) result.push({type: 'std', from: sq, to: tsq});
+              result.push({type: 'std', from: sq, to: tsq});
             }
           } else if (tp.color === color && tp.type === 'p' && effLevel(tsq, sm[tsq], color) === 2) {
             cf += df; cr += dr; continue;
@@ -511,6 +570,7 @@ function App() {
     if (action.type === 'std') {
       const res = applyStd(game, action.from, action.to, action.promo);
       if (!res) {
+        // Fallback manuale per le mosse illegali secondo gli scacchi normali ma valide per l'RPG
         ng = new Chess(game.fen());
         const p = game.get(action.from);
         const tp = game.get(action.to);
@@ -521,7 +581,7 @@ function App() {
         if (tp) {
           if (tp.type === 'k') { 
             setGameOver({ winner: color, reason: '🏆 Hai annientato il Re avversario!' }); 
-            AudioManager.play('capture'); return true; 
+            AudioManager.play('victory'); return true; 
           }
           delete npd[nsm[action.to]];
           delete nsm[action.to];
@@ -532,7 +592,7 @@ function App() {
         parts[1] = color; parts[3] = '-'; parts[4] = '0';
         ng = new Chess(parts.join(' '));
         
-        energyDelta = ENERGY.MOVE + (tp ? ENERGY.CAPTURE : 0) + (ng.in_check() ? ENERGY.CHECK : 0);
+        energyDelta = ENERGY.MOVE + (tp ? ENERGY.CAPTURE : 0);
         if (npd[mid]?.type === 'p' && npd[mid].level === 2 && tp) energyDelta += ENERGY.ASSALTATORE_CAPTURE;
         
         nsm[action.to] = mid;
@@ -545,12 +605,19 @@ function App() {
         parts[1] = color; parts[3] = '-';
         ng = new Chess(parts.join(' '));
         
-        energyDelta = ENERGY.MOVE + (res.captured ? ENERGY.CAPTURE : 0) + (ng.in_check() ? ENERGY.CHECK : 0);
+        energyDelta = ENERGY.MOVE + (res.captured ? ENERGY.CAPTURE : 0);
         if (npd[mid]?.type === 'p' && npd[mid].level === 2 && res.captured) energyDelta += ENERGY.ASSALTATORE_CAPTURE;
         
         if (res.castleK) { const rk = color === 'w' ? '1' : '8'; nsm['f'+rk] = nsm['h'+rk]; delete nsm['h'+rk]; }
         if (res.castleQ) { const rk = color === 'w' ? '1' : '8'; nsm['d'+rk] = nsm['a'+rk]; delete nsm['a'+rk]; }
-        if (res.captured) { const cs = res.captured._sq || action.to; delete npd[nsm[cs]]; delete nsm[cs]; }
+        if (res.captured) {
+            const cs = res.captured._sq || action.to; 
+            if(res.captured.type === 'k') {
+                setGameOver({ winner: color, reason: '🏆 Hai annientato il Re avversario!' }); 
+                AudioManager.play('victory'); return true; 
+            }
+            delete npd[nsm[cs]]; delete nsm[cs]; 
+        }
         
         nsm[action.to] = mid; delete nsm[action.from];
         const promoPiece = game.get(action.from);
@@ -568,7 +635,7 @@ function App() {
       if (action.capture && tp) {
         if (tp.type === 'k') { 
           setGameOver({ winner: color, reason: '🏆 Hai annientato il Re avversario!' }); 
-          AudioManager.play('capture'); return true; 
+          AudioManager.play('victory'); return true; 
         }
         delete npd[nsm[action.to]];
         delete nsm[action.to];
@@ -579,7 +646,6 @@ function App() {
       energyDelta += ENERGY.MOVE;
       const parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
-      if (ng.in_check()) energyDelta += ENERGY.CHECK;
       setHasMoved(true);
       tp ? AudioManager.play('capture') : AudioManager.play('move');
     }
@@ -593,7 +659,7 @@ function App() {
       if (tp) {
         if (tp.type === 'k') { 
           setGameOver({ winner: color, reason: '🏆 Hai annientato il Re avversario!' }); 
-          AudioManager.play('capture'); return true; 
+          AudioManager.play('victory'); return true; 
         }
         delete npd[nsm[action.to]];
         delete nsm[action.to];
@@ -603,7 +669,6 @@ function App() {
       nsm[action.to] = mid; delete nsm[action.from];
       const parts = ng.fen().split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
-      if (ng.in_check()) energyDelta += ENERGY.CHECK;
       AudioManager.play('ability');
     }
     else if (action.type === 'swap') {
@@ -647,13 +712,8 @@ function App() {
     setLast({from: action.from, to: action.to});
     setSel(null); setMoves([]); setSpectralMode(false);
 
-    const evalFen = ng.fen().split(' ');
-    evalFen[1] = opp;
-    if (new Chess(evalFen.join(' ')).in_draw()) {
-      setGameOver({ winner: null, reason: 'Nessun vincitore (Patta)' });
-    }
     return true;
-  }, [game, pd, sm, pts, stunned, immune, ghostMarch, auraGained, getActualCost, actualTurn]);
+  }, [game, pd, sm, pts, stunned, immune, ghostMarch, auraGained, getActualCost]);
 
   const passTurn = useCallback(() => {
     if (!hasMoved) return;
@@ -721,7 +781,7 @@ function App() {
         const p = game.get(sq);
         if (p?.color === color && p.type !== 'q') {
           setCmdMode(false); setCmdSrc(null);
-          setSel(sq); setMoves(getMoves(sq, true, false, 'normal'));
+          setSel(sq); setMoves(getMoves(sq, true, 'normal'));
         }
       } else {
         setCmdMode(false); setCmdSrc(null);
@@ -750,7 +810,7 @@ function App() {
       const p = game.get(sq);
       if (p?.color === color && !stunned.has(sm[sq])) {
         setSel(sq);
-        setMoves(getMoves(sq, false, false, 'normal'));
+        setMoves(getMoves(sq, false, 'normal'));
       } else {
         setSel(null); setMoves([]);
       }
@@ -817,7 +877,6 @@ function App() {
   const selId = sel ? sm[sel] : null;
   const selData = selId ? pd[selId] : null;
   const selEffLevel = sel && selId ? effLevel(sel, selId, activeColor) : 0;
-  const inCheck = kingInCheck(game, activeColor, pd, sm, stunned, ghostMarch);
 
   const pieceAbilities = useMemo(() => {
     if (!hasMoved || !selPiece || !selData || selEffLevel !== 2) return [];
@@ -855,7 +914,7 @@ function App() {
       ab.push({name: '🌫️ Passo Spettrale', cost: costSpec, available: energy >= costSpec, action: () => {
         AudioManager.play('ability');
         setSpectralMode(true);
-        setMoves(getMoves(sel, false, false, 'spectralStep'));
+        setMoves(getMoves(sel, false, 'spectralStep'));
       }});
     }
     if (selPiece.type === 'r' && !metamorphosis) {
@@ -914,7 +973,7 @@ function App() {
         <div className="panel-bottom">
           <div className="piece-label">
             {!hasMoved ? (
-              <span className="hint-text">{inCheck ? '⚠️ SCACCO!' : 'Seleziona un pezzo e muovi.'}</span>
+              <span className="hint-text">Seleziona un pezzo e muovi.</span>
             ) : selData ? (
               <span style={{fontWeight: 700}}>
                 {selPiece && ICONS[selPiece.color][selPiece.type]} 
@@ -928,7 +987,7 @@ function App() {
             )}
           </div>
           <div className="turn-pill" style={{color: activeColor === 'w' ? '#38bdf8' : '#f43f5e'}}>
-            {inCheck ? '⚠️ SCACCO' : activeColor === 'w' ? '⬜ Bianco' : '⬛ Nero'}
+            {activeColor === 'w' ? '⬜ Bianco' : '⬛ Nero'}
           </div>
         </div>
         {hasMoved && pieceAbilities.length > 0 && (

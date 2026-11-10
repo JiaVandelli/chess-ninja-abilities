@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <title>Chess RPG – L'Esercito dell'Anima v5.2.0</title>
+  <title>Chess RPG – L'Esercito dell'Anima v5.2.1</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
     html,body{height:100%;margin:0;overflow:hidden;background:#060913}
@@ -28,7 +28,7 @@
     .cell.aura-cell{box-shadow:inset 0 0 12px rgba(239,68,68,0.7)}
     .cell.stunned-piece{box-shadow:inset 0 0 12px rgba(99,102,241,0.8)}
     .cell.immune-highlight{outline:3px solid #fbbf24;outline-offset:-3px;box-shadow:inset 0 0 15px rgba(251,191,36,0.75)!important}
-    .cell.ghost-march-ally{box-shadow:inset 0 0 15px #22c55e;background:rgba(34,197,94,.2)!important}
+    .cell.ghost-march-ally{box-shadow:inset 0 0 15px #22c55e;background:rgba(34,197,94,.22)!important}
     
     /* Re Minacciato */
     .cell.king-threatened {
@@ -405,12 +405,12 @@ function App() {
   const [flipped, setFlip] = useState(false);
   const [stunned, setStunned] = useState(new Set());
   const [immune, setImmune] = useState(null); // { sq, targetId, rookId }
-  const [ghostMarch, setGhostMarch] = useState(null);
+  const [ghostMarch, setGhostMarch] = useState({w:0, b:0}); // Turni residui per colore (2 = turno corrente + prossimo proprio turno)
   const [gameOver, setGameOver] = useState(null);
   const [lvlUpSq, setLvlUpSq] = useState(null);
 
   const [hasMoved, setHasMoved] = useState(false);
-  const [movedPieceId, setMovedPieceId] = useState(null); // Traccia chi si è mosso nel turno corrente
+  const [movedPieceIds, setMovedPieceIds] = useState(new Set()); // Traccia tutti i pezzi mossi nel turno corrente
   const [actualTurn, setActualTurn] = useState('w');
 
   // Modalità selezione abilità attive
@@ -475,7 +475,7 @@ function App() {
     const rookSq = rookEntry[0];
     const rookPiece = game.get(rookSq);
     if (!rookPiece) return false;
-    // Se l'Alchimista viene stordito o riportato a Lv.1 dall'aura del Destriero, lo scudo svanisce!
+    // Se l'Alchimista viene stordito o riportato a Lv.1 dall'aura del Destriero, lo scudo svanisce
     if (stunned.has(immune.rookId) || effLevel(rookSq, immune.rookId, rookPiece.color) !== 2) return false;
     return FILE(rookSq) === FILE(sq) || RANK(rookSq) === RANK(sq);
   }, [immune, sm, game, stunned, effLevel]);
@@ -483,7 +483,7 @@ function App() {
   const getActualCost = useCallback((baseCost) => Math.max(1, baseCost - pdDiscount), [pdDiscount]);
   const getEvoCost = useCallback((type) => Math.max(1, (EVO_COST[type] || 99) - pdDiscount), [pdDiscount]);
 
-  const getMoves = useCallback((sq, isCommandTurn, specialMode) => {
+  const getMoves = useCallback((sq, specialMode) => {
     const p = game.get(sq);
     if (!p) return [];
     const color = p.color;
@@ -503,6 +503,32 @@ function App() {
           moveType = 'castle';
         }
         result.push({ type: moveType, from: sq, to, promo });
+      });
+    }
+
+    // EFFETTO MARCIA FANTASMA: Torri e Regine (anche Lv.1!) attraversano gli Assaltatori alleati quando il buff è attivo
+    if ((!specialMode || specialMode === 'normal') && ghostMarch[color] > 0 && (p.type === 'r' || p.type === 'q')) {
+      let dirs = [...STRAIGHT_DIRS];
+      if (p.type === 'q') dirs = [...dirs, ...DIAG_DIRS];
+      dirs.forEach(([df, dr]) => {
+        let cf = FILE(sq) + df, cr = RANK(sq) + dr;
+        while (cf >= 0 && cf <= 7 && cr >= 1 && cr <= 8) {
+          const tsq = SQ(cf, cr); if (!tsq) break;
+          const tp = game.get(tsq);
+          if (!tp) {
+            if (!result.some(mm => mm.to === tsq)) {
+              result.push({type: 'std', from: sq, to: tsq});
+            }
+          } else if (tp.color === color && tp.type === 'p' && effLevel(tsq, sm[tsq], color) === 2) {
+            cf += df; cr += dr; continue;
+          } else {
+            if (tp.color !== color && !isImmune(tsq) && !result.some(mm => mm.to === tsq)) {
+              result.push({type: 'std', from: sq, to: tsq});
+            }
+            break;
+          }
+          cf += df; cr += dr;
+        }
       });
     }
 
@@ -531,8 +557,8 @@ function App() {
         const tsq = SQ(f + df, r + dir);
         if (!tsq || result.some(mm => mm.to === tsq)) continue;
         const tp = game.get(tsq);
-        if (df === 0 && tp) continue; // Dritto solo se vuoto
-        if (df !== 0 && tp && (tp.color === color || isImmune(tsq))) continue; // Diagonale su vuoto o nemico non immune
+        if (df === 0 && tp) continue;
+        if (df !== 0 && tp && (tp.color === color || isImmune(tsq))) continue;
         const promo = (RANK(tsq) === 8 || RANK(tsq) === 1) ? 'q' : undefined;
         result.push({type: 'std', from: sq, to: tsq, promo});
       }
@@ -586,36 +612,10 @@ function App() {
       });
     }
 
-    // EFFETTO MARCIA FANTASMA: Torri e Regine attraversano gli Assaltatori alleati
-    if (ghostMarch === color && (p.type === 'r' || p.type === 'q')) {
-      let dirs = [...STRAIGHT_DIRS];
-      if (p.type === 'q') dirs = [...dirs, ...DIAG_DIRS];
-      dirs.forEach(([df, dr]) => {
-        let cf = FILE(sq) + df, cr = RANK(sq) + dr;
-        while (cf >= 0 && cf <= 7 && cr >= 1 && cr <= 8) {
-          const tsq = SQ(cf, cr); if (!tsq) break;
-          const tp = game.get(tsq);
-          if (!tp) {
-            if (!result.some(mm => mm.to === tsq)) {
-              result.push({type: 'std', from: sq, to: tsq});
-            }
-          } else if (tp.color === color && tp.type === 'p' && effLevel(tsq, sm[tsq], color) === 2) {
-            cf += df; cr += dr; continue;
-          } else {
-            if (tp.color !== color && !isImmune(tsq) && !result.some(mm => mm.to === tsq)) {
-              result.push({type: 'std', from: sq, to: tsq});
-            }
-            break;
-          }
-          cf += df; cr += dr;
-        }
-      });
-    }
-
     return result;
   }, [game, sm, stunned, ghostMarch, isImmune, effLevel]);
 
-  // Calcola quali case del Re sono realmente minacciate (includendo mosse RPG e immunità Egida)
+  // Calcola quali case del Re sono realmente minacciate (includendo mosse RPG, Marcia Fantasma e immunità Egida)
   const threatenedKings = useMemo(() => {
     const threatened = new Set();
     const attackedByW = new Set();
@@ -627,7 +627,7 @@ function App() {
         const p = board[r][c];
         if (!p) continue;
         const sq = SQ(c, 8 - r);
-        const pMoves = getMoves(sq, false, 'normal');
+        const pMoves = getMoves(sq, 'normal');
         pMoves.forEach(m => {
           if (m.type === 'swap' || m.type === 'castle') return;
           if (p.color === 'w') attackedByW.add(m.to);
@@ -641,7 +641,7 @@ function App() {
         const p = board[r][c];
         if (p && p.type === 'k') {
           const sq = SQ(c, 8 - r);
-          if (isImmune(sq)) continue; // Se il Re è protetto dall'Egida non rischia la cattura
+          if (isImmune(sq)) continue;
           if (p.color === 'w' && attackedByB.has(sq)) threatened.add(sq);
           if (p.color === 'b' && attackedByW.has(sq)) threatened.add(sq);
         }
@@ -657,15 +657,21 @@ function App() {
     const newStunned = new Set(stunned);
     const mid = sm[action.from];
 
+    const recordMoved = (...ids) => {
+      setMovedPieceIds(prev => {
+        const next = new Set(prev);
+        ids.forEach(id => { if (id) next.add(id); });
+        return next;
+      });
+    };
+
     if (action.type === 'std') {
       const movingPiece = game.get(action.from);
       const isPromo = (movingPiece?.type === 'p' && (RANK(action.to) === 8 || RANK(action.to) === 1));
-      // Se il pedone era un Assaltatore (Lv.2), promuove direttamente a Imperatrice Lv.2!
       const promotedLevel = npd[mid]?.level === 2 ? 2 : 1;
 
       const res = applyStd(game, action.from, action.to, action.promo);
       if (!res) {
-        // Fallback per mosse RPG (es: Assaltatore che va in diagonale su casa vuota, salto Imperatrice, o Re sotto scacco)
         ng = new Chess(game.fen());
         const tp = game.get(action.to);
         ng.remove(action.from);
@@ -691,7 +697,7 @@ function App() {
         nsm[action.to] = mid;
         delete nsm[action.from];
         if (isPromo) npd[mid] = { ...npd[mid], type: finalType, level: promotedLevel };
-        if (!hasMoved) setMovedPieceId(mid);
+        recordMoved(mid);
         setHasMoved(true);
       } else {
         ng = res.game;
@@ -714,7 +720,7 @@ function App() {
         if (isPromo) {
           npd[mid] = { ...npd[mid], type: action.promo || 'q', level: promotedLevel };
         }
-        if (!hasMoved) setMovedPieceId(mid);
+        recordMoved(mid);
         setHasMoved(true);
       }
       energyDelta >= ENERGY.CAPTURE + ENERGY.MOVE ? AudioManager.play('capture') : AudioManager.play('move');
@@ -729,11 +735,12 @@ function App() {
       else if (action.to === 'g8') { rookFrom = 'h8'; rookTo = 'f8'; }
       else if (action.to === 'c8') { rookFrom = 'a8'; rookTo = 'd8'; }
 
+      const rookId = nsm[rookFrom];
       ng.remove(rookFrom);
       ng.put({type: 'r', color}, rookTo);
 
       nsm[action.to] = mid; delete nsm[action.from];
-      nsm[rookTo] = nsm[rookFrom]; delete nsm[rookFrom];
+      nsm[rookTo] = rookId; delete nsm[rookFrom];
 
       energyDelta = ENERGY.MOVE;
       let fen = updateFenCastling(ng.fen(), action.from);
@@ -741,7 +748,7 @@ function App() {
       parts[1] = color; parts[3] = '-'; parts[4] = '0';
       ng = new Chess(parts.join(' '));
       
-      if (!hasMoved) setMovedPieceId(mid);
+      recordMoved(mid, rookId);
       setHasMoved(true);
       AudioManager.play('move');
     }
@@ -764,14 +771,14 @@ function App() {
       let tempFen = updateFenCastling(ng.fen(), action.to);
       const parts = tempFen.split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
-      if (!hasMoved) setMovedPieceId(mid);
+      recordMoved(mid);
       setHasMoved(true);
       tp ? AudioManager.play('capture') : AudioManager.play('move');
     }
     else if (action.type === 'spectral_step') {
       const cost = getActualCost(ABILITY_BASE_COST.spectralStep);
       if (pts[color] < cost) { AudioManager.play('error'); return false; }
-      energyDelta = -cost; // Abilità di teletrasporto pura: non dà +1⚡ di movimento
+      energyDelta = -cost;
       ng = new Chess(game.fen());
       ng.remove(action.from);
       ng.put({type: 'b', color}, action.to);
@@ -779,15 +786,15 @@ function App() {
       let tempFen = updateFenCastling(ng.fen(), action.to);
       const parts = tempFen.split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
       ng = new Chess(parts.join(' '));
-      setMovedPieceId(mid); // Impedisce di teletrasportare di nuovo lo stesso Spettro nello stesso turno
+      recordMoved(mid);
       AudioManager.play('ability');
     }
     else if (action.type === 'swap') {
       const p1 = game.get(action.from), p2 = game.get(action.to);
+      const targetId = nsm[action.to];
       ng = new Chess(game.fen()); ng.remove(action.from); ng.remove(action.to);
       ng.put(p1, action.to); ng.put(p2, action.from);
       
-      // Lo Swap revoca i diritti di arrocco per la Torre coinvolta
       let tempFen = updateFenCastling(ng.fen(), action.from);
       tempFen = updateFenCastling(tempFen, action.to);
       const parts = tempFen.split(' '); parts[1]=color; parts[3]='-'; parts[4]='0';
@@ -811,7 +818,7 @@ function App() {
       };
       if (isAdjEnemy(action.from) || isAdjEnemy(action.to)) energyDelta += ENERGY.ADJACENT_ENEMY;
 
-      if (!hasMoved) setMovedPieceId(mid);
+      recordMoved(mid, targetId);
       setHasMoved(true);
       AudioManager.play('move');
     }
@@ -828,7 +835,7 @@ function App() {
     setSel(null); setMoves([]); setSpectralMode(false);
 
     return true;
-  }, [game, pd, sm, pts, stunned, auraGained, getActualCost, hasMoved]);
+  }, [game, pd, sm, pts, stunned, auraGained, getActualCost]);
 
   const passTurn = useCallback(() => {
     if (!hasMoved) return;
@@ -840,12 +847,17 @@ function App() {
       return ns;
     });
     
-    // Lo scudo dell'Alchimista dura durante il turno avversario e scade all'inizio del proprio turno successivo
+    // Lo scudo dell'Alchimista dura per il turno avversario e scade all'inizio del proprio turno successivo
     if (immune && pd[immune.rookId]?.color === next) {
       setImmune(null);
     }
 
-    if (ghostMarch === actualTurn) setGhostMarch(null);
+    // Marcia Fantasma scala di 1 alla fine di ogni turno del giocatore che l'ha attivata
+    setGhostMarch(prev => ({
+      ...prev,
+      [actualTurn]: Math.max(0, prev[actualTurn] - 1)
+    }));
+
     if (calcPrestige(next) >= PRESTIGE_TIERS.SILVER) {
       setPts(prev => ({...prev, [next]: prev[next] + 1}));
     }
@@ -855,7 +867,7 @@ function App() {
     setRoyalCommandUsed(false);
 
     setHasMoved(false);
-    setMovedPieceId(null);
+    setMovedPieceIds(new Set());
     setSel(null); setMoves([]);
     setCmdMode(false); setCmdSrc(null);
     setAegisMode(false); setAegisSrc(null);
@@ -867,7 +879,7 @@ function App() {
       fenParts[1] = next;
       return new Chess(fenParts.join(' '));
     });
-  }, [hasMoved, actualTurn, pd, sm, calcPrestige, ghostMarch, immune]);
+  }, [hasMoved, actualTurn, pd, sm, calcPrestige, immune]);
 
   const click = useCallback((sq) => {
     if (gameOver) return;
@@ -880,7 +892,7 @@ function App() {
         if (p?.color === color && p.type !== 'q' && !stunned.has(sm[sq])) {
           setCmdMode(false); setCmdSrc(null);
           setRoyalCommandUsed(true);
-          setSel(sq); setMoves(getMoves(sq, true, 'normal'));
+          setSel(sq); setMoves(getMoves(sq, 'normal'));
           return;
         }
       }
@@ -926,7 +938,7 @@ function App() {
       const p = game.get(sq);
       if (p?.color === color && !stunned.has(sm[sq])) {
         setSel(sq);
-        setMoves(getMoves(sq, false, 'normal'));
+        setMoves(getMoves(sq, 'normal'));
       } else {
         setSel(null); setMoves([]);
       }
@@ -976,8 +988,8 @@ function App() {
     const s = buildState(g);
     setGame(g); setPd(s.pd); setSm(s.sm); setPts({w:0,b:0});
     setSel(null); setMoves([]); setLast(null);
-    setHasMoved(false); setMovedPieceId(null); setActualTurn('w');
-    setStunned(new Set()); setImmune(null); setGhostMarch(null);
+    setHasMoved(false); setMovedPieceIds(new Set()); setActualTurn('w');
+    setStunned(new Set()); setImmune(null); setGhostMarch({w:0, b:0});
     setCmdMode(false); setCmdSrc(null); setRoyalCommandUsed(false);
     setAegisMode(false); setAegisSrc(null);
     setSpectralMode(false); setKnightAbilityUsed(false);
@@ -1015,11 +1027,18 @@ function App() {
     
     if (selPiece.type === 'p') {
       const cost = getActualCost(ABILITY_BASE_COST.ghostMarch);
-      ab.push({name: '👻 Marcia Fantasma', cost, available: energy >= cost && !ghostMarch, action: () => {
-        AudioManager.play('ability');
-        setPts(prev => ({...prev, [color]: prev[color] - cost}));
-        setGhostMarch(color); setSel(null);
-      }});
+      const isActive = ghostMarch[color] > 0;
+      ab.push({
+        name: '👻 Marcia Fantasma' + (isActive ? ' (attiva)' : ''), 
+        cost, 
+        available: energy >= cost && !isActive, 
+        action: () => {
+          AudioManager.play('ability');
+          setPts(prev => ({...prev, [color]: prev[color] - cost}));
+          setGhostMarch(prev => ({...prev, [color]: 2}));
+          setSel(null);
+        }
+      });
     }
     if (selPiece.type === 'n') {
       const cost = getActualCost(ABILITY_BASE_COST.dominate);
@@ -1040,7 +1059,7 @@ function App() {
     }
     if (selPiece.type === 'b') {
       const costSpec = getActualCost(ABILITY_BASE_COST.spectralStep);
-      const movedThisTurn = movedPieceId === selId;
+      const movedThisTurn = movedPieceIds.has(selId);
       ab.push({
         name: '🌫️ Passo Spettrale' + (movedThisTurn ? ' (già mosso)' : ''), 
         cost: costSpec, 
@@ -1048,7 +1067,7 @@ function App() {
         action: () => {
           AudioManager.play('ability');
           setSpectralMode(true);
-          setMoves(getMoves(sel, false, 'spectralStep'));
+          setMoves(getMoves(sel, 'spectralStep'));
         }
       });
     }
@@ -1081,7 +1100,7 @@ function App() {
       });
     }
     return ab;
-  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, knightAbilityUsed, royalCommandUsed, movedPieceId, selId, stunned, sel, immune]);
+  }, [hasMoved, selPiece, selData, selEffLevel, pts, ghostMarch, game, sm, getMoves, getActualCost, knightAbilityUsed, royalCommandUsed, movedPieceIds, selId, stunned, sel, immune]);
 
   const renderPanel = () => {
     if (cmdMode) return (
@@ -1110,7 +1129,11 @@ function App() {
       <React.Fragment>
         <div>
           <div className="charge-row">
-            <span>⚡ {activeColor === 'w' ? 'BIANCO' : 'NERO'}{pdBonusEnergy ? ' (+1)' : ''}{ghostMarch === activeColor ? ' 👻 Marcia' : ''}</span>
+            <span>
+              ⚡ {activeColor === 'w' ? 'BIANCO' : 'NERO'}
+              {pdBonusEnergy ? ' (+1)' : ''}
+              {ghostMarch[activeColor] > 0 ? ` 👻 Marcia (${ghostMarch[activeColor]}t)` : ''}
+            </span>
             <span style={{color: '#f1f5f9'}}>{pts[activeColor]}⚡</span>
           </div>
           <div className="charge-track">
@@ -1170,7 +1193,7 @@ function App() {
 
       <div className="player-row">
         <div className="player-label" style={{borderLeft: '3px solid #f43f5e'}}>
-          <div className="player-name">⬛ Nero</div>
+          <div className="player-name">⬛ Nero {ghostMarch.b > 0 && <span style={{fontSize: 11, color: '#22c55e'}}>👻</span>}</div>
           {last && <div className="last-move-hint">{last.from} → {last.to}</div>}
         </div>
         <div className="energy-badge" style={{borderLeft: '3px solid #f43f5e', color: pts.b > 0 ? '#22c55e' : '#94a3b8'}}>
@@ -1197,7 +1220,8 @@ function App() {
             const isAegisTarget = aegisTargets.has(sq);
             const isLastFrom = last?.from === sq;
             const isLastTo = last?.to === sq;
-            const isGhostAlly = ghostMarch === pieceColor && pieceColor === activeColor && game.get(sq)?.type === 'p' && displayLv === 2;
+            // Gli Assaltatori con Marcia Fantasma attiva restano visibili in verde per entrambi i giocatori
+            const isGhostAlly = pieceColor && ghostMarch[pieceColor] > 0 && game.get(sq)?.type === 'p' && displayLv === 2;
             const isThreatenedKing = threatenedKings.has(sq);
 
             const classes = ['cell', light ? 'light' : 'dark'];
@@ -1235,7 +1259,7 @@ function App() {
 
       <div className="player-row">
         <div className="player-label" style={{borderLeft: '3px solid #f8fafc'}}>
-          <div className="player-name">⬜ Bianco</div>
+          <div className="player-name">⬜ Bianco {ghostMarch.w > 0 && <span style={{fontSize: 11, color: '#22c55e'}}>👻</span>}</div>
           {last && <div className="last-move-hint">{last.from} → {last.to}</div>}
         </div>
         <div className="energy-badge" style={{borderLeft: '3px solid #38bdf8', color: pts.w > 0 ? '#22c55e' : '#94a3b8'}}>
